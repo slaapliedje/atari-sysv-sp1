@@ -74,6 +74,26 @@ image.
 - spl levels on this kernel are absolute MFP masks (`spl4` SCSI,
   `splstr` = `spl5`); a timeout callback should never start SCSI work.
 
+## Running it in Hatari
+
+A stock Hatari boots the kernel and stops after the banner. Four emulator
+bugs (all in code that only a Unix exercises) are fixed in the Hatari
+fork this was developed with; until they are upstream, build that:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Banner, then nothing | A `MOVES` that page-faults is completed on RTE with the previous instruction's write data (68030 cycle-exact table never recorded its data output buffer); `copyout` of the icode corrupted `moveq #59` and init's exec returned EINVAL | `cpu: 68030 MMU — MOVES records its data output buffer…` |
+| Every dynamically linked program segfaults, only with 256 MB TT-RAM | 68030 data-cache burst fill translated with the CPU privilege level, not the access's function code; a `copyin` (`MOVES` SFC=user) filled user-tagged lines from physical memory at the logical address | `cpu: 68030 data cache — burst fill translates with…` |
+| First DMA read never completes | TT-MFP interrupt line never dropped after the reset-interrupt register read; no phase-mismatch interrupt when DMA mode is armed late | `ncr5380: TT interrupt line drops…` |
+| fsck stalls in a timed wait, `lbolt` stays 0 | The MC146818 periodic interrupt was not emulated; ASV's clock is that interrupt at 128 Hz on TT-MFP GPIP6 | `nvram: MC146818 periodic interrupt…` |
+
+Then `tools/hatari-asv.sh HD0.bin 256` (the image is written to; boot a
+copy). The stock image, unpatched, boots with `16` and reaches multi-user.
+`tools/hdbg.py` drives the debugger through `--cmd-fifo` and reads kernel
+memory through the page tables. No DaynaPORT in Hatari yet: the driver
+reports "no DaynaPORT on the SCSI bus" and the system comes up without
+networking.
+
 ## Status
 
 Working, in daily use on real hardware: the patched kernel, the network
