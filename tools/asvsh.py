@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Run a shell command on the TT030 (Atari System V) over telnet.
-usage: asvsh.py 'command' [timeout]   (root; password read from .asvpass beside this script; LAN only)"""
+usage: ASV_HOST=<tt address> asvsh.py 'command' [timeout]   (root; password read from .asvpass beside this script; LAN only)"""
 import os, socket, sys, time, re
-HOST, PORT = os.environ.get('ASV_HOST', 'asv-host'), 23
+HOST, PORT = os.environ.get('ASV_HOST'), 23
+if not HOST:
+    sys.exit('set ASV_HOST to the TT\'s address (the one in its /etc/inet/hosts.net)')
 IAC, DONT, DO, WONT, WILL, SB, SE = 255, 254, 253, 252, 251, 250, 240
 def recv(s, until, timeout):
     buf = b''; end = time.time() + timeout

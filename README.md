@@ -20,7 +20,7 @@ Nothing here contains Atari or UniSoft code. You need your own ASV disk image
 | `driver-dp/` | `dp.c`, a kernel driver for the DaynaPORT SCSI/Link ethernet emulation of ZuluSCSI / BlueSCSI | ASV's only network driver is for the Riebl VME card; this gives TCP/IP (telnet, ftp, rsh, NFS) with no VME slot needed |
 | `atw800/` | `atwfb.c` — sets 640x480x256 on the ATW800/2 and draws a test pattern, from user space via `/dev/mem` | First light for the card under Unix; the basis for any further driver work |
 | `disk/` | `mklabel.py` — makes the label sectors for a new data disk | ASV's own `format` tool cannot label a blank disk (its description-file parser is broken) |
-| `tools/` | `ufs.py` (read/patch files inside an ASV image on the PC), `asvsh.py` / `asvput.py` (run commands / push files over telnet and ftp) | Working on the machine without a floppy drive |
+| `tools/` | `ufs.py` (read/patch files inside an ASV image on the PC), `asvsh.py` / `asvput.py` (run commands as root over telnet / push files over ftp as `dev`; both take the machine's address in `ASV_HOST` and the passwords from `.asvpass` / `.asvpass-dev` beside them, never committed) | Working on the machine without a floppy drive |
 | `doc/` | Design notes for the driver and the kernel facts they rest on | |
 
 ## Install
