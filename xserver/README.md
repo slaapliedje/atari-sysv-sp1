@@ -37,3 +37,14 @@ DISPLAY=noname:0 xterm &     # clients over TCP; put client hosts in /etc/X0.hos
 
 Use the machine's name (`noname:0`), not `:0`: the unix-domain path the
 R4 os layer creates on SVR4 does not take connections yet.
+
+## Status (in Hatari with the emulated card)
+
+Verified: xdm's "Welcome to Atari TT030 System V" greeter, login, the stock
+`Xsession` (mwm), WISh2, xterm, xclock, xcalc, twm; keyboard and both mouse
+buttons; the server's own view (`xwd -root` from the PC) matches the card
+output pixel for pixel including Motif's bevel shades. `ATW_DEBUG=1` logs
+IKBD packets and button events to stderr. Known: XFaceMaker2 (`xfm`) dies
+with signal 11; WISh2 places its main window at x=734, so run the server
+at `-mode 1024x768` or larger; the default screen saver blanks after
+10 min (`xset s off`); no bell.

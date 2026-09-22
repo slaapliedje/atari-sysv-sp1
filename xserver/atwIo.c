@@ -173,6 +173,8 @@ atwButton(button, down)
     xEvent xE;
 
     atwFlushMotion();
+    if (getenv("ATW_DEBUG"))
+	ErrorF("atw: button %d %s\n", button, down ? "down" : "up");
     xE.u.u.type = down ? ButtonPress : ButtonRelease;
     xE.u.u.detail = button;
     xE.u.keyButtonPointer.time = atwLastEventTime;
@@ -258,6 +260,8 @@ ProcessInputEvents()
 		bcopy((char *)buf + i, (char *)buf, have);
 		break;
 	    }
+	    if (getenv("ATW_DEBUG") && c >= 0xF6)
+		ErrorF("atw: ikbd %02x %02x %02x\n", c, buf[i + 1], buf[i + 2]);
 	    if (c >= 0xF8 && c <= 0xFB)
 		atwMousePacket(c, (int)(signed char)buf[i + 1],
 			       (int)(signed char)buf[i + 2]);
