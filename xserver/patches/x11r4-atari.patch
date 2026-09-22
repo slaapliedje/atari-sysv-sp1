@@ -1,0 +1,66 @@
+--- mit/include/Xos.h	1989-12-18 14:14:36.000000000 -0700
++++ mit/include/Xos.h	2026-09-22 13:13:40.714851680 -0600
+@@ -113,8 +113,8 @@
+ #endif /* __TIMEVAL__ */
+ #endif /* USG */
+ 
+-#ifdef macII
+-#include <sys/time.h>				/* SYSV && macII */
++#if defined(macII) || defined(atari)
++#include <sys/time.h>				/* SYSV && macII, SVR4 */
+ #endif
+ 
+ #else
+--- mit/server/ddx/mi/mispritest.h	1989-10-03 17:46:28.000000000 -0600
++++ mit/server/ddx/mi/mispritest.h	2026-09-22 13:13:40.715028935 -0600
+@@ -92,7 +92,7 @@
+  */
+ #define SPN_OVERLAP(pCbox,y,x,w) BOX_OVERLAP((pCbox),(x),(y),(x)+(w),(y))
+ 
+-#define LINE_SORT(x1,y2,x2,y2) \
++#define LINE_SORT(x1,y1,x2,y2) \
+ { int _t; \
+   if (x1 > x2) { _t = x1; x1 = x2; x2 = _t; } \
+   if (y1 > y2) { _t = y1; y1 = y2; y2 = _t; } }
+--- mit/server/include/servermd.h	1989-12-06 14:56:30.000000000 -0700
++++ mit/server/include/servermd.h	2026-09-22 13:14:33.333650663 -0600
+@@ -176,6 +176,15 @@
+ 
+ #endif /* macII */
+ 
++#ifdef atari
++
++#define IMAGE_BYTE_ORDER      	MSBFirst        /* Atari TT030, System V */
++#define BITMAP_BIT_ORDER      	MSBFirst
++#define GLYPHPADBYTES         	4
++#define GETLEFTBITS_ALIGNMENT 	1
++
++#endif /* atari */
++
+ #ifdef mips
+ 
+ #ifdef MIPSEL
+--- mit/server/os/4.2bsd/access.c	1989-11-12 13:39:31.000000000 -0700
++++ mit/server/os/4.2bsd/access.c	2026-09-22 13:14:33.333857565 -0600
+@@ -32,6 +32,9 @@
+ #include <errno.h>
+ #include <sys/socket.h>
+ #include <sys/ioctl.h>
++#ifdef atari
++#include <sys/sockio.h>
++#endif
+ 
+ #ifdef hpux
+ # include <sys/utsname.h>
+--- mit/lib/Xau/AuGetAddr.c	1989-12-12 15:15:25.000000000 -0700
++++ mit/lib/Xau/AuGetAddr.c	2026-09-22 13:15:29.757106022 -0600
+@@ -18,6 +18,9 @@
+  * Author:  Keith Packard, MIT X Consortium
+  */
+ 
++#ifdef atari
++# include <unistd.h>
++#endif
+ # include "Xauth.h"
+ # include <X11/Xos.h>
+ 
