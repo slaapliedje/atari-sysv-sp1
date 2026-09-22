@@ -9,10 +9,11 @@
 # Give the guest an address on the same subnet in /etc/inet/hosts.net
 # (tools/ufs.py can patch it in the image; keep the line the same length).
 #
-# Needs a Hatari with the four TT fixes listed in the README (the stock
+# Needs a Hatari with the TT fixes listed in the README (the stock
 # 2.x release stalls after the kernel banner): 68030 MOVES bus-fault
 # data buffer, 68030 data-cache burst function code, NCR5380 TT
-# interrupt line, MC146818 periodic interrupt. Set HATARI to its path.
+# interrupt line, MC146818 periodic interrupt, software-completed bus
+# faults. Set HATARI to its path.
 #
 # Hatari WRITES to the SCSI image (fsck alone modifies it): boot a copy.
 # TT-RAM: a stock kernel takes up to 16 MB as is; larger needs the

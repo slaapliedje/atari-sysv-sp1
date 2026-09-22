@@ -76,7 +76,7 @@ image.
 
 ## Running it in Hatari
 
-A stock Hatari boots the kernel and stops after the banner. Four emulator
+A stock Hatari boots the kernel and stops after the banner. Five emulator
 bugs (all in code that only a Unix exercises) are fixed in the Hatari
 fork this was developed with; until they are upstream, build that:
 
@@ -86,7 +86,6 @@ fork this was developed with; until they are upstream, build that:
 | Every dynamically linked program segfaults, only with 256 MB TT-RAM | 68030 data-cache burst fill translated with the CPU privilege level, not the access's function code; a `copyin` (`MOVES` SFC=user) filled user-tagged lines from physical memory at the logical address | `cpu: 68030 data cache — burst fill translates with…` |
 | First DMA read never completes | TT-MFP interrupt line never dropped after the reset-interrupt register read; no phase-mismatch interrupt when DMA mode is armed late | `ncr5380: TT interrupt line drops…` |
 | fsck stalls in a timed wait, `lbolt` stays 0 | The MC146818 periodic interrupt was not emulated; ASV's clock is that interrupt at 128 Hz on TT-MFP GPIP6 | `nvram: MC146818 periodic interrupt…` |
-
 | inetd dies at start, no telnet/ftp | The bus-error handler's "complete the access in software" (read of NULL returns 0, which 4.3BSD's inetd relies on) was discarded by the RTE, so the read re-faulted forever | `cpu: 68030 MMU — keep the access replay state…` |
 
 Then `tools/hatari-asv.sh HD0.bin 256` (the image is written to; boot a
