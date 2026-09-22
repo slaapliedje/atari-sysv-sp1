@@ -1,0 +1,7 @@
+*ident	"dp 0.1 - DaynaPORT SCSI/Link, stage 3 (STREAMS DLPI driver)"
+*
+* DP - software STREAMS driver. Flags follow the stock software STREAMS
+* drivers (llcloop, sp, ptm = fs). Needs the SCSI core, which is a required driver.
+*
+*FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
+fs	dp	41
