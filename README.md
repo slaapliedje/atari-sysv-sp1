@@ -1,5 +1,10 @@
 # Atari System V — Service Pack 1 (unofficial)
 
+Licensed under the GNU General Public License v2 (see LICENSE). The network
+driver's DLPI half was re-created from the disassembly of the stock UniSoft
+`la` driver so that it behaves identically toward the TCP/IP stack; the code
+itself is original.
+
 Fixes and additions for Atari System V Release 4.0 (UniSoft SVR4, 1991) on a
 TT030 fitted with modern hardware. Developed and tested on a TT030 with a
 256 MB TT-RAM board, an ATW800/2 graphics card and a ZuluSCSI Blaster.
