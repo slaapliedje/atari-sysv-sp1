@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Run a shell command on the TT030 (Atari System V) over telnet.
 usage: asvsh.py 'command' [timeout]   (root; password read from .asvpass beside this script; LAN only)"""
-import socket, sys, time, re
-import os
+import os, socket, sys, time, re
 HOST, PORT = os.environ.get('ASV_HOST', 'asv-host'), 23
 IAC, DONT, DO, WONT, WILL, SB, SE = 255, 254, 253, 252, 251, 250, 240
 def recv(s, until, timeout):

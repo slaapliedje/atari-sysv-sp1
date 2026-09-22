@@ -87,12 +87,20 @@ fork this was developed with; until they are upstream, build that:
 | First DMA read never completes | TT-MFP interrupt line never dropped after the reset-interrupt register read; no phase-mismatch interrupt when DMA mode is armed late | `ncr5380: TT interrupt line drops…` |
 | fsck stalls in a timed wait, `lbolt` stays 0 | The MC146818 periodic interrupt was not emulated; ASV's clock is that interrupt at 128 Hz on TT-MFP GPIP6 | `nvram: MC146818 periodic interrupt…` |
 
+| inetd dies at start, no telnet/ftp | The bus-error handler's "complete the access in software" (read of NULL returns 0, which 4.3BSD's inetd relies on) was discarded by the RTE, so the read re-faulted forever | `cpu: 68030 MMU — keep the access replay state…` |
+
 Then `tools/hatari-asv.sh HD0.bin 256` (the image is written to; boot a
 copy). The stock image, unpatched, boots with `16` and reaches multi-user.
 `tools/hdbg.py` drives the debugger through `--cmd-fifo` and reads kernel
-memory through the page tables. No DaynaPORT in Hatari yet: the driver
-reports "no DaynaPORT on the SCSI bus" and the system comes up without
-networking.
+memory through the page tables.
+
+Networking: the fork also emulates a DaynaPORT (`--scsi-net 4=tap0`, or
+`TAP=tap0 tools/hatari-asv.sh …`) on a host TAP interface, so the `dp`
+driver comes up in the emulator exactly as on the card. With the host at
+192.168.30.1/24 on the TAP and the guest at 192.168.30.20 in
+`/etc/inet/hosts.net`, `ASV_HOST=192.168.30.20 tools/asvsh.py 'uname -a'`
+gives a root shell over telnet, and `asvput.py` pushes files over ftp.
+Everything that needed the real TT switched on can now run on the PC.
 
 ## Status
 
