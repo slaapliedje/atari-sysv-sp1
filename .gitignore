@@ -3,3 +3,5 @@ __pycache__/
 .asvpass*
 amix/work/
 amix/bash/work/
+.rsyncpass
+rsync/work/

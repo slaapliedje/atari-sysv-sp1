@@ -1,27 +1,30 @@
 #!/bin/bash
-# amix-static-cc - gcc-cross-amix, but linking statically against AMIX's
-# libc.a (the wrapper links only against libc.so.1, which lacks much of
-# libc.a: select, getpwent, siglongjmp, ...). Compiles go to the wrapper
-# unchanged; links go straight to ld. A static AMIX program needs no dynamic
-# linker, so it runs on AMIX, or on Atari System V with the amx module,
-# without any of AMIX's shared libraries.
-#   AMIX_SYSROOT   the AMIX tree (usr/include, usr/ccs/lib/{crt*,values-Xa}.o,
-#                  usr/ccs/lib/libc.a)
+# asv-static-cc - gcc-cross-amix for Atari System V, linking statically
+# against ASV's libc.a (and libsocket.a etc. for -l). A static program
+# avoids the shared libc's pitfalls: the __iob copy relocation (stdio),
+# the functions only libc.a has, and errno from libc.a's syscall stubs.
+# Compiles go to the wrapper unchanged; links go straight to ld, with
+# asvstatic.o (__asv_iob for the shadow <stdio.h>, netconfig and
+# gethostname stubs).
+#   ASV_SYSROOT   the shadow ASV sysroot (../xserver-r6/mksysroot.sh)
 set -e
 : "${ASV_CROSS:=$HOME/opt/asv-cross}"
-: "${AMIX_SYSROOT:?set AMIX_SYSROOT}"
-export AMIX_SYSROOT
+: "${ASV_SYSROOT:?set ASV_SYSROOT}"
+export AMIX_SYSROOT="$ASV_SYSROOT"
+here=$(cd "$(dirname "$0")" && pwd)
 cc="$ASV_CROSS/bin/m68k-cbm-sysv4-gcc"
 ld="$ASV_CROSS/bin/m68k-cbm-sysv4-ld"
-crt="$AMIX_SYSROOT/usr/ccs/lib"
+crt="$ASV_SYSROOT/usr/ccs/lib"
 libgcc=$(ls "$ASV_CROSS"/lib/gcc-lib/m68k-cbm-sysv4/*/libgcc.a | tail -1)
 
 for a in "$@"; do
 	case "$a" in -c|-E|-S|-M|-MM) exec "$cc" "$@";; esac
 done
 
+static="${TMPDIR:-/tmp}/asvstatic.$$.o"
+"$cc" -O -c "$here/asvstatic.c" -o "$static"
 out=a.out link=() dirs=() cflags=() tmps=()
-trap 'rm -f "${tmps[@]}"' EXIT
+trap 'rm -f "${tmps[@]}" "$static"' EXIT
 # -L first, so that -l can be resolved in place: ld is single-pass, so the
 # objects and libraries keep their command-line order, as with gcc
 prev=
@@ -39,10 +42,10 @@ while [ $# -gt 0 ]; do
 	-lc|-lgcc) ;;
 	-lm) link+=("$crt/libm.a");;
 	-l*) l="${1#-l}" f=
-	     for d in "${dirs[@]}" "$crt" "$AMIX_SYSROOT/usr/lib"; do
+	     for d in "${dirs[@]}" "$crt" "$ASV_SYSROOT/usr/lib"; do
 		[ -f "$d/lib$l.a" ] && { f="$d/lib$l.a"; break; }
 	     done
-	     [ -n "$f" ] || { echo "amix-static-cc: no static lib$l.a" >&2; exit 1; }
+	     [ -n "$f" ] || { echo "asv-static-cc: no static lib$l.a" >&2; exit 1; }
 	     link+=("$f");;
 	*.c) o=$(mktemp "${TMPDIR:-/tmp}/amixs.XXXXXX.o"); tmps+=("$o")
 	     "$cc" "${cflags[@]}" -c "$1" -o "$o"; link+=("$o");;
@@ -54,4 +57,4 @@ while [ $# -gt 0 ]; do
 	shift
 done
 "$ld" -Bstatic -o "$out" "$crt/crt1.o" "$crt/crti.o" "$crt/values-Xa.o" \
-	"${link[@]}" "$crt/libc.a" "$libgcc" "$crt/crtn.o"
+	"${link[@]}" "$static" "$crt/libc.a" "$libgcc" "$crt/crtn.o"

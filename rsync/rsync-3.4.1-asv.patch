@@ -1,0 +1,165 @@
+--- a/flist.c
++++ b/flist.c
+@@ -2585,11 +2585,12 @@
+ #endif
+ 
+ 	if (inc_recurse && dir_ndx >= 0) {
++		struct file_struct *file;
+ 		if (dir_ndx >= dir_flist->used) {
+ 			rprintf(FERROR_XFER, "rsync: refusing invalid dir_ndx %u >= %u\n", dir_ndx, dir_flist->used);
+ 			exit_cleanup(RERR_PROTOCOL);
+ 		}
+-		struct file_struct *file = dir_flist->files[dir_ndx];
++		file = dir_flist->files[dir_ndx];
+ 		if (file->flags & FLAG_GOT_DIR_FLIST) {
+ 			rprintf(FERROR_XFER, "rsync: refusing malicious duplicate flist for dir %d\n", dir_ndx);
+ 			exit_cleanup(RERR_PROTOCOL);
+--- a/main.c
++++ b/main.c
+@@ -172,7 +172,7 @@
+ int shell_exec(const char *cmd)
+ {
+ 	char *shell = getenv("RSYNC_SHELL");
+-	int status;
++	int status, ret;
+ 	pid_t pid;
+ 
+ 	if (!shell)
+@@ -186,7 +186,7 @@
+ 		_exit(1);
+ 	}
+ 
+-	int ret = wait_process(pid, &status, 0);
++	ret = wait_process(pid, &status, 0);
+ 	return ret < 0 ? -1 : status;
+ }
+ 
+@@ -1710,14 +1710,15 @@
+ int main(int argc,char *argv[])
+ {
+ 	int ret;
++#if defined HAVE_SIGACTION && defined HAVE_SIGPROCMASK
++	sigset_t sigmask;
++#endif
+ 
+ 	raw_argc = argc;
+ 	raw_argv = argv;
+ 
+ #ifdef HAVE_SIGACTION
+ # ifdef HAVE_SIGPROCMASK
+-	sigset_t sigmask;
+-
+ 	sigemptyset(&sigmask);
+ # endif
+ 	sigact.sa_flags = SA_NOCLDSTOP;
+--- a/options.c
++++ b/options.c
+@@ -1289,6 +1289,8 @@
+ static void create_refuse_error(int which)
+ {
+ 	const char *msg;
++	struct poptOption *op;
++	int n;
+ 	if (am_daemon)
+ 		msg = "The server is configured to refuse";
+ 	else if (am_server)
+@@ -1297,8 +1299,8 @@
+ 		msg = "This rsync does not support";
+ 
+ 	/* The "which" value is the index + OPT_REFUSED_BASE. */
+-	struct poptOption *op = &long_options[which - OPT_REFUSED_BASE];
+-	int n = snprintf(err_buf, sizeof err_buf, "%s --%s\n", msg, op->longName) - 1;
++	op = &long_options[which - OPT_REFUSED_BASE];
++	n = snprintf(err_buf, sizeof err_buf, "%s --%s\n", msg, op->longName) - 1;
+ 	if (op->shortName)
+ 		snprintf(err_buf + n, sizeof err_buf - n, " (-%c)\n", op->shortName);
+ }
+--- a/syscall.c
++++ b/syscall.c
+@@ -739,9 +739,11 @@
+ 	if (!basedir) {
+ 		return open(relpath, flags, mode);
+ 	}
+-	char fullpath[MAXPATHLEN];
+-	pathjoin(fullpath, sizeof fullpath, basedir, relpath);
+-	return open(fullpath, flags, mode);
++	{
++		char fullpath[MAXPATHLEN];
++		pathjoin(fullpath, sizeof fullpath, basedir, relpath);
++		return open(fullpath, flags, mode);
++	}
+ #else
+ 	int dirfd = AT_FDCWD;
+ 	if (basedir != NULL) {
+--- a/util1.c
++++ b/util1.c
+@@ -1328,7 +1328,8 @@
+  */
+ int unsafe_symlink(const char *dest, const char *src)
+ {
+-	const char *name, *slash;
++	const char *name, *slash, *dest2;
++	size_t dlen;
+ 	int depth = 0;
+ 
+ 	/* all absolute and null symlinks are unsafe */
+@@ -1336,7 +1337,7 @@
+ 		return 1;
+ 
+ 	// reject destinations with /../ in the name other than at the start of the name
+-	const char *dest2 = dest;
++	dest2 = dest;
+ 	while (strncmp(dest2, "../", 3) == 0) {
+ 	    dest2 += 3;
+ 	    while (*dest2 == '/') {
+@@ -1348,7 +1349,7 @@
+ 	    return 1;
+ 
+ 	// reject if the destination ends in /..
+-	const size_t dlen = strlen(dest);
++	dlen = strlen(dest);
+ 	if (dlen > 3 && strcmp(&dest[dlen-3], "/..") == 0)
+ 	    return 1;
+ 
+--- a/popt/system.h
++++ b/popt/system.h
+@@ -64,7 +64,26 @@
+ #define __attribute__(x) 
+ #endif
+ #define UNUSED(x) x __attribute__((__unused__))
++#if defined(__GNUC__) && __GNUC__ < 3	/* no attributes before a declaration */
++#define FORMAT(a, b, c)
++#define NORETURN
++#else
+ #define FORMAT(a, b, c) __attribute__((__format__ (a, b, c)))
+ #define NORETURN __attribute__((__noreturn__))
++#endif
++
++/* no C99 snprintf in libc: use rsync's lib/snprintf.c, as rsync.h does */
++#include <stdarg.h>
++#if !defined HAVE_C99_VSNPRINTF
++#define vsnprintf rsync_vsnprintf
++int vsnprintf(char *str, size_t count, const char *fmt, va_list args);
++#define snprintf rsync_snprintf
++int snprintf(char *str, size_t count, const char *fmt, ...);
++#endif
++
++#include <errno.h>
++#if !defined(ENOTSUP) && defined(EOPNOTSUPP)
++#define ENOTSUP EOPNOTSUPP
++#endif
+ 
+ #include "popt.h"
+--- a/lib/getaddrinfo.c
++++ b/lib/getaddrinfo.c
+@@ -45,6 +45,10 @@
+ 
+ #include "rsync.h"
+ 
++/* rsync.h's strdup() is its inline my_strdup(), from ifuncs.h, which this
++ * file does not include; use the C library's */
++#undef strdup
++
+ #ifndef SMB_MALLOC
+ #define SMB_MALLOC(s) malloc(s)
+ #endif
