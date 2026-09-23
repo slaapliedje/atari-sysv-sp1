@@ -30,8 +30,36 @@ XCOMM lay out regset/ucontext by it, so no -ansi.
 #define HasGcc YES
 #define HasGcc2 YES
 #define HasGcc2ForCplusplus NO
-#define HasSharedLibraries NO
+XCOMM Shared X libraries with real SONAMEs (so no fixneeded for them), built
+XCOMM -fPIC (-fpic calls through the PLT with 16-bit offsets, too short for
+XCOMM libX11) and linked by GNU ld -shared; the static archives are kept for the
+XCOMM server. Clients find them in /usr/x11r6/lib through their RPATH, so the
+XCOMM system's X11R4 libX11.so and friends in /usr/lib are left alone.
+#define HasSharedLibraries YES
 #define ForceNormalLib YES
+#define SeparateSharedCompile YES
+#define SharedDataSeparation NO
+#define PositionIndependentCFlags -fPIC
+#define SharedLibraryLoadFlags -shared -L@ASV_SYSROOT@/usr/lib
+#define ExtraLoadFlags -rpath=/usr/x11r6/lib -rpath-link=$(BUILDLIBDIR)
+XCOMM No DT_NEEDED in our shared libraries, as in ASV's own: the system's
+XCOMM dlopen/dlsym (in libc.so.1, which is also the dynamic linker) reads a
+XCOMM library's NEEDED names with the wrong string table and faults once any
+XCOMM loaded library has them. Clients name every library they use instead.
+#define FixupLibReferences() XMULIB = $(XMULIBONLY) $(XTOOLLIB)
+#define SharedX11Reqs /**/
+#define SharedICEReqs /**/
+#define SharedXextReqs /**/
+#define SharedXtReqs /**/
+#define SharedXmuReqs /**/
+#define SharedXawReqs /**/
+#define SharedSMReqs /**/
+#define SharedXiReqs /**/
+#define SharedXtstReqs /**/
+#define SharedXieReqs /**/
+#define SharedXpReqs /**/
+#define SharedPexReqs /**/
+#define SharedOldXReqs /**/
 #define HasShm NO
 #define CcCmd env AMIX_SYSROOT=@ASV_SYSROOT@ @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
 #define ServerCcCmd env AMIX_SYSROOT=@ASV_SYSROOT@ @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
@@ -97,5 +125,4 @@ XCOMM until R6 fonts are installed, use the system's X11R4 (SNF) fonts and rgb
 #define XnestServer NO
 #define XVirtualFramebufferServer NO
 
-XCOMM static libraries only for now: no sv4Lib.rules (its XMULIB adds -z nodefs,
-XCOMM which GNU ld does not take)
+#include <sv4Lib.rules>

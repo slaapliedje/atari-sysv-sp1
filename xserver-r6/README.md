@@ -25,9 +25,12 @@ Needs gcc-cross-amix at `~/opt/asv-cross` (or `ASV_CROSS=`) with the ASV
 sysroot, plus git, curl, python3 and a host gcc and cpp. imake runs on the
 PC and generates Makefiles that call the cross compiler. The two
 generators that the build runs (`makestrs`, `makekeys`) are compiled with the host gcc.
-Built so far: libX11, Xext, Xt, Xaw, Xmu, ICE, SM, Xi, Xtst, Xp, XIE, FS,
-xkbfile, oldX, PEX5 (all static), the server, and xdpyinfo, xclock, xlogo,
-xterm, twm and xsetroot. The clients are about 0.5 to 1.2 MB each.
+Built so far: libX11, Xext, Xt, Xaw, Xmu, ICE, SM, Xi, Xtst, Xp, XIE,
+oldX and PEX5 as shared libraries (2.1 MB, SONAMEs `libX11.so.6.1` etc.,
+plus static archives), the server (static), and xdpyinfo, xclock, xlogo,
+xterm, twm and xsetroot (15-170 KB each). `work/dist/usr/x11r6` is the
+install tree. The clients carry an RPATH of `/usr/x11r6/lib`, so the
+system's X11R4 `libX11.so` and friends in `/usr/lib` are left alone.
 
 ## Run
 
@@ -65,6 +68,26 @@ PC also work against the server.
   linker for libc's `__iob` (`_dlsym`), so the executable never names it.
   This applies to anything built with gcc-cross-amix for ASV.
 
+## Shared libraries
+
+- gcc-cross-amix needs its PIC fixes: gcc's SGS output labels string
+  constants `LC%N` in PIC code and writes calls as a sizeless
+  `bsr foo@PLTPC`. GNU as rejects the first and makes the second a
+  16-bit branch, too short for libX11. The wrapper's `fix_asm` rewrites
+  both; `build.sh` refuses to run without it.
+- `-fPIC`, not `-fpic`, and `ld -shared`, not the SVR4 `-G -z text`.
+- **No DT_NEEDED in our libraries**, like ASV's own: the system's
+  `dlopen`/`dlsym` (in `libc.so.1`, which is also the dynamic linker)
+  fault as soon as any loaded library has NEEDED entries. They seem to read
+  the names with the wrong string table. Clients name every library they
+  use (imake's client macros already do; `XMULIB` also pulls in Xt).
+- `-rpath-link` to the build's library directory lets GNU ld check
+  the libraries' symbols at link time.
+- Copy relocations of the libraries' data (widget class records,
+  `XtStrings`) are fine; the data the dynamic linker relocates is copied
+  after it is relocated. `errno` and `environ` from libc are fine as well;
+  only `__iob` is special (see above).
+
 ## Other traps
 
 - The wrapper passes `-ansi` on to `ld`; asv.cf does not use it anyway.
@@ -80,6 +103,6 @@ PC also work against the server.
 
 ## Next
 
-Shared libraries (`.so` as on AMIX), R6 fonts (`bdftopcf` and `mkfontdir` built
+R6 fonts (`bdftopcf` and `mkfontdir` built
 for the host), then XView and olwm for OpenLook. Known: xterm echoes a typed
 line twice (pty modes), and `resize` is not built (`setitimer`).

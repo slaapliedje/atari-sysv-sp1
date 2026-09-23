@@ -19,6 +19,13 @@ AMIX_REV=cb61a2115659cb3ae27c649439edb2ca133131b6
 REALROOT=$CROSS/m68k-cbm-sysv4/sysroot
 CLIENTS="xdpyinfo xclock xlogo xterm twm xsetroot"
 
+# shared libraries need the wrapper's PIC fixes (gcc-cross-amix: LC%N labels
+# and long PLT calls for GNU as)
+grep -q 'PLTPC' "$CROSS/bin/m68k-cbm-sysv4-gcc" || {
+	echo "the cross gcc wrapper lacks the -fPIC fixes for GNU as; update gcc-cross-amix" >&2
+	exit 1
+}
+
 mkdir -p "$WORK"
 WORK=`cd "$WORK" && pwd`
 SYSROOT=$WORK/sysroot
@@ -85,5 +92,12 @@ done
 #    SONAME: rewrite the NEEDED entries to bare names (after the last link)
 for p in Xserver/Xatw `for c in $CLIENTS; do echo $c/$c; done`; do
 	python3 "$HERE/../xserver/fixneeded.py" programs/$p > /dev/null
-	ls -l programs/$p
 done
+
+# 7. an install tree: copy dist/usr/x11r6 to /usr/x11r6 on the machine
+D=$WORK/dist/usr/x11r6
+rm -rf "$WORK/dist"; mkdir -p $D/bin $D/lib
+cp programs/Xserver/Xatw $D/bin/
+for c in $CLIENTS; do cp programs/$c/$c $D/bin/; done
+for l in lib/*/lib*.so.[0-9]*; do cp $l $D/lib/; done
+ls -l $D/bin $D/lib
