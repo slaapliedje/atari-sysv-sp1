@@ -53,7 +53,8 @@ block-zero bootstraps, which is why `s0` is cloned raw.
 
 ## Choosing the OS
 
-`/etc/T0boot` (block 0) takes the NVRAM boot preference the ROM hands it
+`/etc/T0boot` (block 0; replaced by HDDriver's loader once HDDriver is
+installed, which behaves the same way) takes the NVRAM boot preference the ROM hands it
 in `d5`, and compares its low byte with the partition flag bytes: `0x80`
 St-boot, `0x40` Unix-boot.  Zero means "first bootable partition", which
 on this layout is TOS.  `tools/setboot` sets it from Unix through the rtc
@@ -63,10 +64,43 @@ driver's `RTCNVMACCESS` ioctl (`setboot tos|unix|none`); under TOS Atari's
 offset 0 is the preference, `00 40` for Unix, checksum `~sum, sum` of the
 first 48 bytes at 48..49).
 
-The St-boot partition needs a bootable partition boot sector (AHDI style:
-T0boot loads the partition's first sector, checks the `$1234` word
-checksum and jumps to it) — HDDriver / AHDI install one.  Until then a
-TOS preference lands on the ROM desktop with no C:.
+## The TOS side: HDDriver
+
+`partinit` leaves the two BGM partitions unformatted.  Format them on
+the host with the Atari variant of `mkfs.fat` (8 KiB logical sectors,
+2 per cluster, 24575 clusters — inside TOS 3.06's limits) and splice
+them in:
+
+```sh
+truncate -s $((786432*512)) C.fs && mkfs.fat -A -F 16 -n TOS C.fs
+truncate -s $((786432*512)) D.fs && mkfs.fat -A -F 16 -n SPARE D.fs
+dd if=C.fs of=HD0.bin bs=512 seek=2      conv=notrunc
+dd if=D.fs of=HD0.bin bs=512 seek=786434 conv=notrunc
+```
+
+Then boot TOS from the HDDriver floppy (its `AUTO\HDDRIVER.PRG` mounts
+C: and D:), run `HDDRUTIL.APP`, select C: and use *File → Install
+HDDRIVER…*.  That writes `C:\HDDRIVER.SYS` and **replaces the boot code
+in the root sector** (bytes 5–445; the partition table at 0x1C0 and the
+`$1234` checksum are kept).  T0boot is gone after this, and nothing is
+lost: HDDriver's root loader follows the same NVRAM convention.  Tested
+in Hatari (TT, TOS 3.06, HDDriver 13.01):
+
+| NVRAM preference | result |
+|---|---|
+| `00 00` (none) | HDDriver loads from C:, desktop with C: and D: |
+| `00 40` (Unix) | chains to U0boot on the UNX partition, `Console login:` |
+
+HDDRUTIL wants at least 640x200 and its menu bar does not fit ST-Medium;
+start Hatari with `--tos-res ttmed`.
+
+To update a card whose Unix partition is already in use, write only the
+TOS region (sectors 0 – 1572865) over the card's `HD0.bin`, so the live
+Unix file systems are left alone:
+
+```sh
+dd if=HD0-tos-side.bin of=/path/to/card/HD0.bin bs=512 conv=notrunc
+```
 
 ## Hatari
 
