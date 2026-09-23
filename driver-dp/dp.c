@@ -123,6 +123,7 @@ struct dpqueue {			/* one sj_tab[] entry, 72 bytes */
 
 extern char sj_tab[];
 extern int scsiinitdone;
+extern clock_t lbolt;
 extern void sj_badstart();
 extern struct scsijoblock *sj_selectjob();
 
@@ -138,6 +139,12 @@ static int dp_up;			/* interface enabled, poll running */
 static int dp_txlen;			/* a frame is staged in dptx */
 static int dp_rxwant;			/* a receive poll is due */
 static int dp_idle;			/* consecutive empty polls */
+static int dp_reinit;			/* async re-bring-up: 2 = disable due, 1 = enable due */
+static int dp_errs;			/* consecutive failed async commands */
+static clock_t dp_settle;		/* lbolt until which errors are the post-enable window */
+
+#define DP_SETTLE	(HZ / 2)	/* real hardware refuses data commands ~500 ms after ENABLE */
+#define DP_MAXERRS	3		/* consecutive failures that mean the adapter reset */
 static int dp_tid;			/* timeout id */
 
 #define DP_RXASK	1530		/* 6-byte header + a full frame */
@@ -212,7 +219,14 @@ int flag;
 	job->sj_transcount = bp->b_bcount;
 	job->sj_jobp = (unsigned char *)vtop(bp->b_un.b_addr, bp->b_proc);
 	job->sj_transp = job->sj_jobp;
-	q->q_errcnt = 0;
+	/*
+	 * sj_terminate counts retries of the head buf in q_errcnt and fails it
+	 * after five; zeroing it on a retry (flag 0) made a command the target
+	 * keeps refusing retry forever - a real DaynaPORT, which answers CHECK
+	 * CONDITION while disabled, hung the boot this way.
+	 */
+	if (flag)
+		q->q_errcnt = 0;
 	job->sj_bp = bp;
 	sj_jobentry(job);
 }
@@ -265,7 +279,12 @@ int start;
 	if (dp_busy || dp_up == 0)
 		return;
 	bp = &dpabuf;
-	if (dp_txlen) {
+	if (dp_reinit) {			/* disable, then enable (no data) */
+		bp->b_flags = B_BUSY | B_READ;
+		bp->b_blkno = DPCMD(0x0E, dp_reinit == 1 ? 0x80 : 0);
+		bp->b_un.b_addr = (caddr_t)dpdata;
+		bp->b_bcount = 0;
+	} else if (dp_txlen) {
 		bp->b_flags = B_BUSY;			/* write */
 		bp->b_blkno = DPCMD(0x0A, 0);		/* one raw frame */
 		bp->b_un.b_addr = (caddr_t)dptx;
@@ -301,6 +320,21 @@ int err;
 	mblk_t *mp;
 
 	dp_busy = 0;
+	if ((dpabuf.b_blkno >> 8) == 0x0E) {		/* re-bring-up step */
+		if (dp_reinit)
+			dp_reinit--;
+		if (dp_reinit == 0) {
+			dp_settle = lbolt + DP_SETTLE;
+			dp_errs = 0;
+			cmn_err(CE_CONT, "dp0: interface reset\n");
+		}
+		dp_kick(0);
+		return;
+	}
+	if (err && lbolt - dp_settle >= 0 && ++dp_errs >= DP_MAXERRS)
+		dp_reinit = 2;		/* keeps failing: the adapter reset under us */
+	else if (err == 0)
+		dp_errs = 0;
 	if ((dpabuf.b_blkno >> 8) == 0x0A) {		/* transmit finished */
 		dp_txlen = 0;
 		if (err)
@@ -311,7 +345,14 @@ int err;
 			en_wproc();			/* stage the next frame */
 	} else if (err == 0) {				/* receive finished */
 		n = (dprx[0] << 8) | dprx[1];
-		if (n == 0 || n > 1524) {
+		if (dprx[2] == 0xff && dprx[3] == 0xff && dprx[4] == 0xff &&
+		    dprx[5] == 0xff) {
+			/* the adapter dropped a packet and stays wedged until
+			 * it is disabled and enabled again */
+			dp_rxwant = 0;
+			dp_reinit = 2;
+			en_if.if_stats.ifs_ierrors++;
+		} else if (n == 0 || n > 1524) {
 			dp_rxwant = 0;			/* empty: wait for the timer */
 			dp_idle++;
 		} else {
@@ -393,22 +434,39 @@ dev_t dev;
 		cmn_err(CE_CONT, "dp0: no DaynaPORT on the SCSI bus\n");
 		return;
 	}
-	if (dpcmd(dev, 0x09, 0, dpdata, 18, B_READ)) {
-		cmn_err(CE_CONT, "dp0: cannot read the ethernet address\n");
-		return;
-	}
-	for (i = 0; i < 6; i++)
-		en_if.if_enaddr[i] = dpdata[i];
+	/*
+	 * Enable first: the real adapter refuses every data command while it
+	 * is disabled, and for about 500 ms after ENABLE (the emulated ones
+	 * accept both at once). The MAC read doubles as the settle probe -
+	 * TEST UNIT READY answers GOOD throughout and cannot serve. Ask for
+	 * the ROM's 22 bytes (MAC + four counters), then the emulators' 18.
+	 */
 	if (dpcmd(dev, 0x0E, 0x80, dpdata, 0, B_READ)) {
 		cmn_err(CE_CONT, "dp0: cannot enable the interface\n");
 		return;
 	}
+	for (t = 0; ; t++) {
+		if (dpcmd(dev, 0x09, 0, dpdata, 22, B_READ) == 0 ||
+		    dpcmd(dev, 0x09, 0, dpdata, 18, B_READ) == 0)
+			break;
+		if (t >= 100) {			/* 1 s: twice the settle window */
+			cmn_err(CE_CONT, "dp0: cannot read the ethernet address\n");
+			dpcmd(dev, 0x0E, 0, dpdata, 0, B_READ);
+			return;
+		}
+		delay(HZ / 100 ? HZ / 100 : 1);
+	}
+	for (i = 0; i < 6; i++)
+		en_if.if_enaddr[i] = dpdata[i];
 	cmn_err(CE_CONT, "dp0: DaynaPORT at SCSI id %d, %x:%x:%x:%x:%x:%x\n",
 	    dpjob->sj_target, en_if.if_enaddr[0], en_if.if_enaddr[1],
 	    en_if.if_enaddr[2], en_if.if_enaddr[3], en_if.if_enaddr[4],
 	    en_if.if_enaddr[5]);
 	en_if.if_flags |= ENF_RUNNING;
 	dp_idle = 0;
+	dp_reinit = 0;
+	dp_errs = 0;
+	dp_settle = lbolt;
 	dp_up = 1;
 	dp_tid = timeout(dp_poll, (caddr_t)0, HZ / 10);
 }

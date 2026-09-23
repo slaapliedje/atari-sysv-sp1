@@ -79,8 +79,9 @@ as `llcloop`), device node `/dev/dp0` via the clone convention LA uses.
 - State: one static tx buffer and one static rx buffer (1536 bytes each, kernel
   data, so no DMA-reach questions — transfers use the core's PIO path unless
   `USEDMA` proves necessary), flags `TXBUSY`/`RXBUSY`, a small mblk tx queue.
-- `dp_linit` (first DL_BIND): cmd `0x09` -> MAC into `if_enaddr`; cmd `0x0E`
-  enable; start the poll timer.
+- `dp_linit` (first DL_BIND): cmd `0x0E` enable, then cmd `0x09` -> MAC into
+  `if_enaddr`, retried for up to 1 s (see *Real adapters* below); start the
+  poll timer.
 - `dp_xmit(mp)`: flatten the mblk chain into the tx buffer, pad to 60, issue
   `0x0A` with `cdb[5]=0` (one frame per command — simplest mode the firmware
   has). If a job is in flight, queue the mblk; `dpSTART(done)` sends the next.
@@ -103,6 +104,41 @@ declares them, so `ifstats` and the `slink`/`ifconfig` ioctls see what they
 expect. Promiscuous/multicast: multicast add maps to cmd `0x0D`; the rest
 returns the same errors LA returns.
 
+## Real adapters (the Dayna ROM) vs the emulated ones
+
+The first version was written against ZuluSCSI, which accepts every command
+at any time. A real SCSI/Link (ROM v2.0, per the SCSI/Link implementor's
+guide) does not, and against it that version **hung the boot**:
+
+- While disabled the ROM answers CHECK CONDITION to every data command. The
+  driver read the MAC before enabling. And `dpSTART` zeroed `q_errcnt` on every
+  call, including `sj_terminate`'s retries (`START(job, 0)`). `sj_terminate`
+  fails a buf after five retries counted in that byte, so the refused command
+  was retried forever. Now `q_errcnt` is reset only for a new buf (`flag`
+  set).
+- For about 500 ms after ENABLE the ROM refuses data commands again, while
+  TEST UNIT READY answers GOOD. Bring-up is now: enable, then retry the MAC
+  read (22 bytes as the ROM answers, then the emulators' 18) every 10 ms for
+  up to 1 s.
+- After it drops a packet (about 6 KB of buffer), the ROM answers every receive
+  with the four bytes after the length all `0xFF` until it is disabled and
+  enabled again. That header is now recognised and triggers an asynchronous
+  disable/enable (`dp_reinit`). So do three consecutive failed commands outside
+  the post-enable window (`DP_MAXERRS`), which covers an adapter that reset
+  itself underneath the driver.
+- Transmit already pads to the 60-byte minimum (the driver's job; not every
+  adapter pads).
+- Multicast: ASV's 1990 `sys/dlpi.h` has no multicast primitives, so cmd `0x0D`
+  is never needed.
+
+All of this is testable without the hardware. The Hatari fork's DaynaPORT
+takes `--scsi-net 4=tap0,rom` (ROM command gating and the settle window) and
+`,wedge=<n>` (the dropped-packet state after n received frames).
+`TAP=tap0,rom,wedge=40 tools/hatari-asv.sh …` with a 400-packet ping gave 11
+wedges and 11 recoveries, 2.5% loss and no panic. The same boot in the default
+mode loses nothing. The first version under `,rom` stops for good after the
+TCP banner.
+
 ## Risks, in the order I expect them to bite
 
 1. **Short DATA IN transfers.** The core must end a job cleanly when the target
@@ -110,7 +146,8 @@ returns the same errors LA returns.
    find which flag (`CMDRET`? plain residual) and mirror TP. FIRST experiment.
 2. **Bus sharing with the root disk.** One initiator, one bus: a poll blocks
    disk I/O for its duration. Mitigated by single-packet reads + back-off.
-3. **No emulator.** Hatari has no DaynaPORT, so every run is on the real TT.
+3. **No emulator.** (Since solved: the Hatari fork emulates it, including
+   the ROM's behaviour; see above.) Hatari has no DaynaPORT, so every run is on the real TT.
    Mitigation: build the driver in stages, each provable from the console:
    stage 1 = claim target + print MAC at boot (no STREAMS at all);
    stage 2 = raw tx/rx self-test (send an ARP who-has, print what comes back);
