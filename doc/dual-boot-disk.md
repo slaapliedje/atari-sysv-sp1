@@ -59,7 +59,12 @@ in `d5`, and compares its low byte with the partition flag bytes: `0x80`
 St-boot, `0x40` Unix-boot.  Zero means "first bootable partition", which
 on this layout is TOS.  `tools/setboot` sets it from Unix through the rtc
 driver's `RTCNVMACCESS` ioctl (`setboot tos|unix|none`); under TOS Atari's
-`SETBOOT.PRG` does the same.  In Hatari the NVRAM lives in
+`SETBOOT.PRG` does the same.  That is Atari's SetBoot 1.1 (H.-M. Kroeber,
+1992; GEM, XBIOS `NVMaccess`), shipped on **disk 11 of the ASV floppy set**
+together with its `SETBOOT.RSC` and the Mark Williams C source.  Copy both
+`SETBOOT.PRG` and `SETBOOT.RSC` to C:.  *Boot → Set boot preference →
+Atari System V → OK → Reboot* comes back up at the Unix login; tested in
+Hatari on the HDDriver disk below.  In Hatari the NVRAM lives in
 `~/.config/hatari/hatari.nvram` (user bytes 14..63; the word at file
 offset 0 is the preference, `00 40` for Unix, checksum `~sum, sum` of the
 first 48 bytes at 48..49).
