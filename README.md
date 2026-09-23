@@ -78,7 +78,17 @@ image.
 
 A stock Hatari boots the kernel and stops after the banner. Nine emulator
 bugs (all in code that only a Unix exercises) are fixed in the Hatari
-fork this was developed with; until they are upstream, build that:
+fork this was developed with — branch `et4000` of
+<https://github.com/slaapliedje/hatari> (it also carries the ATW800/2 and
+DaynaPORT emulation). Fixes 1-5 are open upstream as hatari/hatari PRs
+#38-#40 and tonioni/WinUAE #499-#500; until they are merged, build that:
+
+```sh
+git clone -b et4000 https://github.com/slaapliedje/hatari.git
+cmake -S hatari -B hatari/build && cmake --build hatari/build -j
+HATARI=$PWD/hatari/build/src/hatari tools/hatari-asv.sh HD0.bin 256
+```
+
 
 | Symptom | Cause | Fix |
 |---|---|---|
