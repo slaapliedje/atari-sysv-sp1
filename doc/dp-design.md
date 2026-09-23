@@ -146,8 +146,9 @@ TCP banner.
    find which flag (`CMDRET`? plain residual) and mirror TP. FIRST experiment.
 2. **Bus sharing with the root disk.** One initiator, one bus: a poll blocks
    disk I/O for its duration. Mitigated by single-packet reads + back-off.
-3. **No emulator.** (Since solved: the Hatari fork emulates it, including
-   the ROM's behaviour; see above.) Hatari has no DaynaPORT, so every run is on the real TT.
+3. **No emulator** (solved since: the Hatari fork emulates the adapter,
+   the ROM's behaviour included; see above). At the time Hatari had no
+   DaynaPORT, so every run was on the real TT.
    Mitigation: build the driver in stages, each provable from the console:
    stage 1 = claim target + print MAC at boot (no STREAMS at all);
    stage 2 = raw tx/rx self-test (send an ARP who-has, print what comes back);
