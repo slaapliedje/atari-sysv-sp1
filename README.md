@@ -24,6 +24,7 @@ Nothing here contains Atari or UniSoft code. You need your own ASV disk image
 | `xserver/` | `Xatw`, an X11R4 server for the ATW800/2 (cfb, 8-bit PseudoColor, keyboard and mouse from `/dev/ikbd`) | The stock `XatariServer` drives only the TT's own screen |
 | `xserver-r6/` | X11R6.3 for ASV: `Xatw` on R6.3, the shared client libraries, R6 fonts, xterm/twm/xdm and friends, and an xdm login screen with the Fuji from the TOS boot screen | A current X: R6 extensions, shared libraries, and the base the OpenLook toolkit needs |
 | `xview/` | XView 3.2p1.4 (the OPEN LOOK toolkit) with olwm, cmdtool and clock, on top of `xserver-r6` | Sun's OpenLook desktop on the TT |
+| `driver-amix/`, `amix/` | `amx`, a kernel module that runs AMIX (Amiga UNIX) binaries: a `trap #0` gate plus translation of signals, `stat`, termios, errno and the rest of the two ABIs' differences; tools for AMIX's packages and libraries; a build of GNU bash 5.2 | AMIX is the same SVR4 for the 68030, with a larger software collection; and a current bash |
 | `doc/` | Design notes for the driver and the kernel facts they rest on | |
 
 ## Install
@@ -65,6 +66,13 @@ Then, from the PC, `python3 disk/mklabel.py 1024 768 > label.bin`, and on the
 TT follow the commands at the top of `mklabel.py`. Add the slices to
 `/etc/vfstab`. Do NOT mount over `/usr/local`: it has content on the stock
 image.
+
+### 4. AMIX programs and bash (optional)
+
+`driver-amix/` installs like `driver-dp/` (`sh install.sh`, then `init 6`).
+Then see `amix/README.md`: AMIX's shared libraries go in `/usr/amx`, AMIX
+programs are pointed there with `amixify.py`, and `amix/bash/build.sh`
+cross-builds bash 5.2 as a static AMIX program.
 
 ## Driver notes (the parts that cost the most to learn)
 

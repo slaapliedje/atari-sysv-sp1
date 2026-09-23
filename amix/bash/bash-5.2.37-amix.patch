@@ -1,0 +1,131 @@
+diff -ruN a/arrayfunc.c b/arrayfunc.c
+--- a/arrayfunc.c
++++ b/arrayfunc.c
+@@ -31,6 +31,7 @@
+ 
+ #include "shell.h"
+ #include "execute_cmd.h"
++#include "typemax.h"
+ #include "pathexp.h"
+ 
+ #include "shmbutil.h"
+diff -ruN a/externs.h b/externs.h
+--- a/externs.h
++++ b/externs.h
+@@ -238,7 +238,7 @@
+ #endif /* NEED_FPURGE_DECL */
+ 
+ /* Declarations for functions defined in lib/sh/getcwd.c */
+-#if !defined (HAVE_GETCWD)
++#if !defined (HAVE_GETCWD) && !defined (__amix)
+ extern char *getcwd PARAMS((char *, size_t));
+ #endif
+ 
+diff -ruN a/include/posixselect.h b/include/posixselect.h
+--- a/include/posixselect.h
++++ b/include/posixselect.h
+@@ -33,6 +33,7 @@
+ #if defined (HAVE_SYS_SELECT_H)
+ #  include <sys/select.h>
+ #endif
++#include <signal.h>	/* sigset_t, for pselect-style prototypes */
+ 
+ #ifndef USEC_PER_SEC
+ #  define USEC_PER_SEC 1000000
+diff -ruN a/include/posixtime.h b/include/posixtime.h
+--- a/include/posixtime.h
++++ b/include/posixtime.h
+@@ -49,6 +49,7 @@
+ #endif
+ 
+ #if !HAVE_GETTIMEOFDAY
++#include "stdc.h"
+ extern int gettimeofday PARAMS((struct timeval *, void *));
+ #endif
+ 
+diff -ruN a/lib/readline/posixselect.h b/lib/readline/posixselect.h
+--- a/lib/readline/posixselect.h
++++ b/lib/readline/posixselect.h
+@@ -33,6 +33,7 @@
+ #if defined (HAVE_SYS_SELECT_H)
+ #  include <sys/select.h>
+ #endif
++#include <signal.h>	/* sigset_t, for pselect-style prototypes */
+ 
+ #ifndef USEC_PER_SEC
+ #  define USEC_PER_SEC 1000000
+diff -ruN a/lib/readline/posixtime.h b/lib/readline/posixtime.h
+--- a/lib/readline/posixtime.h
++++ b/lib/readline/posixtime.h
+@@ -49,7 +49,7 @@
+ #endif
+ 
+ #if !HAVE_GETTIMEOFDAY
+-extern int gettimeofday PARAMS((struct timeval *, void *));
++extern int gettimeofday ();	/* no PARAMS here: readline is built without stdc.h */
+ #endif
+ 
+ /* These exist on BSD systems, at least. */
+diff -ruN a/lib/sh/getcwd.c b/lib/sh/getcwd.c
+--- a/lib/sh/getcwd.c
++++ b/lib/sh/getcwd.c
+@@ -102,7 +102,10 @@
+    an array is allocated with `malloc'; the array is SIZE
+    bytes long, unless SIZE <= 0, in which case it is as
+    big as necessary.  */
+-#if defined (__STDC__)
++#if defined (__amix)	/* <stdlib.h>: char *getcwd(char *, int) */
++char *
++getcwd (char *buf, int size)
++#elif defined (__STDC__)
+ char *
+ getcwd (char *buf, size_t size)
+ #else /* !__STDC__ */
+diff -ruN a/lib/sh/oslib.c b/lib/sh/oslib.c
+--- a/lib/sh/oslib.c
++++ b/lib/sh/oslib.c
+@@ -197,7 +197,7 @@
+ int
+ gethostname (name, namelen)
+      char *name;
+-     size_t namelen;
++     int namelen;
+ {
+   int i;
+   struct utsname ut;
+diff -ruN a/lib/sh/timers.c b/lib/sh/timers.c
+--- a/lib/sh/timers.c
++++ b/lib/sh/timers.c
+@@ -31,6 +31,9 @@
+ #  include "posixselect.h"
+ #  include "stat-time.h"
+ #endif
++#ifndef USEC_PER_SEC
++#  define USEC_PER_SEC 1000000
++#endif
+ 
+ #include "sig.h"
+ #include "bashjmp.h"
+diff -ruN a/parse.y b/parse.y
+--- a/parse.y
++++ b/parse.y
+@@ -2649,7 +2649,7 @@
+ 	     read_token_word() will perform, since we're extending the index */
+ 	  RESIZE_MALLOCED_BUFFER (shell_input_line, shell_input_line_index, 2, shell_input_line_size, 16);
+           shell_input_line[++shell_input_line_index] = '\0';	/* XXX */
+-#else
++#elif defined (HANDLE_MULTIBYTE)
+ 	  shell_input_line_property[shell_input_line_index - 1] = 1;
+ #endif
+ 	}
+diff -ruN a/siglist.c b/siglist.c
+--- a/siglist.c
++++ b/siglist.c
+@@ -23,6 +23,7 @@
+ #if !defined (HAVE_SYS_SIGLIST) && !defined (HAVE_UNDER_SYS_SIGLIST) && !defined (HAVE_STRSIGNAL)
+ 
+ #include <stdio.h>
++#include "bashtypes.h"
+ #include "command.h"
+ #include "general.h"
+ #include <signal.h>
