@@ -1,0 +1,18 @@
+XCOMM Xatw: the ATW800/2 "Seurat" card under Atari System V
+#include <Server.tmpl>
+
+SRCS = atwInit.c atwIo.c atwKMap.c atwCompat.c
+OFILES = atwInit.o
+OBJS = atwIo.o atwKMap.o atwCompat.o
+
+   INCLUDES = -I. -I../../mfb -I../../cfb -I../../mi -I../../include \
+	      -I$(XINCLUDESRC) -I$(FONTINCSRC)
+    DEFINES = ServerOSDefines
+
+NormalLibraryObjectRule()
+
+all:: $(OFILES)
+
+NormalLibraryTarget(atw,$(OBJS))
+
+DependTarget()

@@ -1,0 +1,94 @@
+XCOMM Atari System V Release 4 (UniSoft SVR4 for the TT030), cross-built on a
+XCOMM Linux PC with gcc-cross-amix (the same ABI as AMIX). Derived from amix.cf.
+XCOMM Stage 1: the Xatw server only, a static link over TCP.
+
+#define OSMajorVersion 4
+#define OSMinorVersion 0
+#define OSTeenyVersion 0
+#define OSName Atari System V Release 4.0
+#define OSVendor "Atari"
+XCOMM NOT -Dm68k: with m68k defined, ASV stdio.h maps stderr to __stderrb, a
+XCOMM stale copy libc never updates, and every write to stderr fails
+#define OSDefines -DASV -Um68k
+#define OSRelease -DSVR4
+
+#define SystemV4 YES
+
+#define BootstrapCFlags -DASV_CROSS
+#define StandardDefines OSDefines OSRelease -ansi
+#define StandardCppDefines -undef -traditional OSDefines OSRelease
+
+#define ProjectRoot /usr/x11r6
+#define UsrLibDir /usr/x11r6/lib
+#define LibDir /usr/x11r6/lib/X11
+#define IncRoot /usr/x11r6/include
+#define BinDir /usr/x11r6/bin
+#define ManDirectoryRoot /usr/x11r6/man
+
+#define HasGcc YES
+#define HasGcc2 YES
+#define HasGcc2ForCplusplus NO
+#define HasSharedLibraries NO
+#define ForceNormalLib YES
+#define HasShm NO
+#define CcCmd @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
+#define ServerCcCmd @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
+#define DefaultCCOptions /**/
+#define DefaultCDebugFlags -O
+#define OptimizedCDebugFlags -O
+#define CppCmd /usr/bin/cpp
+#define RawCppCmd /usr/bin/cpp -undef
+#define PreProcessCmd /usr/bin/cpp
+#define UnixCpp YES
+#define XawI18nDefines -DUSE_XWCHAR_STRING -DUSE_XMBTOWC
+
+#define ArCmdBase @ASV_CROSS@/bin/m68k-cbm-sysv4-ar
+#define RanlibCmd @ASV_CROSS@/bin/m68k-cbm-sysv4-ranlib
+#define AsCmd @ASV_CROSS@/bin/m68k-cbm-sysv4-as
+#define LdCmd @ASV_CROSS@/bin/m68k-cbm-sysv4-ld
+#define LexCmd lex
+#define MakeCmd make
+#define YaccCmd yacc
+#define DependCmd true
+
+#define ConnectionFlags -DTCPCONN
+#define HasSockets YES
+#define NeedBerklib YES
+#define SocketLibraries -lsocket -lsockhost -lnsl
+#define ExtraLibraries SocketLibraries
+XCOMM libm's sqrt calls libc.a's fpset helpers, but the cross wrapper links
+XCOMM archives before -l libraries, so they are linked in as objects
+#define AsvFpsetObjs $(TOP)/config/asv/fpsetrnd.o $(TOP)/config/asv/fpsetmask.o $(TOP)/config/asv/fpsetsticky.o
+#define ServerExtraSysLibs AsvFpsetObjs SocketLibraries -lgen -lm
+#define HasSecureRPC NO
+#define HasPutenv YES
+#define HasStrcasecmp NO
+#ifdef StrcasecmpDefines
+#undef StrcasecmpDefines
+#endif
+#define StrcasecmpDefines -DNEED_STRCASECMP
+
+#define BuildPexExt NO
+#define BuildXIE NO
+#define BuildLBX NO
+#define BuildXKB NO
+#define BuildXKBlib NO
+#define BuildXInputExt NO
+#define BuildDBE YES
+#define BuildRECORD NO
+#define BuildXCSecurity NO
+#define BuildAppgroup NO
+#define BuildFontServer NO
+#define BuildSpeedo NO
+#define BuildType1 NO
+#define XAtwServer YES
+XCOMM until R6 fonts are installed, use the system's X11R4 (SNF) fonts and rgb
+#define DefaultFontPath /usr/lib/X11/fonts/misc/,/usr/lib/X11/fonts/75dpi/,/usr/lib/X11/fonts/100dpi/
+#define DefaultRGBDatabase /usr/lib/X11/rgb
+#define XAmixServer NO
+#define XprtServer NO
+#define BuildXprint NO
+#define XnestServer NO
+#define XVirtualFramebufferServer NO
+
+#include <sv4Lib.rules>

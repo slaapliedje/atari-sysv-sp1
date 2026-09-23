@@ -1,0 +1,102 @@
+diff --git a/config/cf/Imake.cf b/config/cf/Imake.cf
+index 59a50dd..34fb609 100644
+--- a/config/cf/Imake.cf
++++ b/config/cf/Imake.cf
+@@ -18,6 +18,19 @@ XCOMM $TOG: Imake.cf /main/28 1997/06/25 08:31:36 barstow $
+  *     4.  Create a .cf file with the name given by MacroFile.
+  */
+ 
++#ifdef ASV
++# define MacroIncludeFile <asv.cf>
++# define MacroFile asv.cf
++# undef ASV
++# define ASVArchitecture
++# ifdef SVR4
++#  undef SVR4
++# endif
++# ifdef m68k
++#  undef m68k
++#  define M68kArchitecture
++# endif
++#endif /* ASV */
+ #ifdef AMIX
+ # define MacroIncludeFile <amix.cf>
+ # define MacroFile amix.cf
+diff --git a/config/imake/imakemdep.h b/config/imake/imakemdep.h
+index 7541727..4185e50 100644
+--- a/config/imake/imakemdep.h
++++ b/config/imake/imakemdep.h
+@@ -217,6 +217,9 @@ in this Software without prior written authorization from the X Consortium.
+ #ifdef AMIX
+ #define DEFAULT_CPP "/usr/public/lib/gcc-cpp"
+ #endif
++#ifdef ASV_CROSS	/* imake on a Linux PC, generating for Atari System V */
++#define DEFAULT_CPP "/usr/bin/cpp"
++#endif
+ #ifdef hpux
+ #define USE_CC_E
+ #endif
+@@ -286,6 +289,13 @@ char *cpp_argv[ARGUMENTS] = {
+ #ifdef unix
+ 	"-Uunix",	/* remove unix symbol so that filename unix.c okay */
+ #endif
++#ifdef ASV_CROSS
++	"-undef",	/* none of the host's predefines */
++	"-traditional",
++	"-DASV",
++	"-DSVR4",
++	"-Dm68k",
++#endif
+ #ifdef AMIX
+ 	"-traditional",
+ 	"-DAMIX",
+diff --git a/programs/Xserver/Imakefile b/programs/Xserver/Imakefile
+index c169673..addc550 100644
+--- a/programs/Xserver/Imakefile
++++ b/programs/Xserver/Imakefile
+@@ -198,6 +198,23 @@ ServerTarget(Xzz9000,$(AMIXDIRS),$(AMIXOBJS),$(AMIXLIBS),$(SYSLIBS))
+ #endif
+ #endif /* XAmixServer */
+ 
++#if XAtwServer
++XCOMM
++XCOMM Atari System V: the ATW800/2 "Seurat" card, 8-bit PseudoColor over cfb.
++XCOMM
++MFBDIR   = mfb
++CFB8DIR  = cfb
++DDXDIR1  = hw/atw
++ATWDIRS  = include dix os mi $(EXTDIRS) $(MFBDIR) $(CFB8DIR) \
++           $(DDXDIR1) $(DEPDIRS)
++ATWOBJS  = hw/atw/atwInit.o
++ATWLIBS  = hw/atw/LibraryTargetName(atw) CFB8Libs
++ServerTarget(Xatw,$(ATWDIRS),$(ATWOBJS),$(ATWLIBS),$(SYSLIBS))
++#ifndef ServerToInstall
++#define ServerToInstall Xatw
++#endif
++#endif /* XAtwServer */
++
+ #if XdecServer
+ XCOMM
+ XCOMM Digital MIPS based WS server (ultrix 4.2 and beyond)
+diff --git a/programs/Xserver/include/servermd.h b/programs/Xserver/include/servermd.h
+index 19fe3cd..cafcdc3 100644
+--- a/programs/Xserver/include/servermd.h
++++ b/programs/Xserver/include/servermd.h
+@@ -307,7 +307,7 @@ SOFTWARE.
+ 
+ #endif /* luna */
+ 
+-#ifdef AMIX
++#if defined(AMIX) || defined(ASV)
+ 
+ #define IMAGE_BYTE_ORDER        MSBFirst
+ #define BITMAP_BIT_ORDER        MSBFirst
+@@ -315,7 +315,7 @@ SOFTWARE.
+ #define GLYPHPADBYTES           4
+ #define GETLEFTBITS_ALIGNMENT   1
+ 
+-#endif /* AMIX */
++#endif /* AMIX || ASV */
+ 
+ #if ((defined(SVR4) && defined(i386)) || \
+      (defined(SYSV) && defined(i386)) || \
