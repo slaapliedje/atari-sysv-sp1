@@ -21,6 +21,9 @@ Nothing here contains Atari or UniSoft code. You need your own ASV disk image
 | `atw800/` | `atwfb.c` — sets 640x480x256 on the ATW800/2 and draws a test pattern, from user space via `/dev/mem` | First light for the card under Unix; the basis for any further driver work |
 | `disk/` | `mklabel.py` — makes the label sectors for a new data disk | ASV's own `format` tool cannot label a blank disk (its description-file parser is broken) |
 | `tools/` | `ufs.py` (read/patch files inside an ASV image on the PC), `asvsh.py` / `asvput.py` (run commands as root over telnet / push files over ftp as `dev`; both take the machine's address in `ASV_HOST` and the passwords from `.asvpass` / `.asvpass-dev` beside them, never committed) | Working on the machine without a floppy drive |
+| `xserver/` | `Xatw`, an X11R4 server for the ATW800/2 (cfb, 8-bit PseudoColor, keyboard and mouse from `/dev/ikbd`) | The stock `XatariServer` drives only the TT's own screen |
+| `xserver-r6/` | X11R6.3 for ASV: `Xatw` on R6.3, the shared client libraries, R6 fonts, xterm/twm/xdm and friends, and an xdm login screen with the Fuji from the TOS boot screen | A current X: R6 extensions, shared libraries, and the base the OpenLook toolkit needs |
+| `xview/` | XView 3.2p1.4 (the OPEN LOOK toolkit) with olwm, cmdtool and clock, on top of `xserver-r6` | Sun's OpenLook desktop on the TT |
 | `doc/` | Design notes for the driver and the kernel facts they rest on | |
 
 ## Install

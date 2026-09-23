@@ -1,0 +1,231 @@
+diff --git a/bitmaps/Imakefile b/bitmaps/Imakefile
+index a4684f0..06b2e73 100644
+--- a/bitmaps/Imakefile
++++ b/bitmaps/Imakefile
+@@ -34,7 +34,7 @@ SRCS =  \
+ 
+ ALLFILES = $(BITMAPS) 
+ 
+-all: $(SRCS)
++all:: $(SRCS)
+ 
+ BuildIncludes($(INCLUDES_SRCS),$(BITMAP_INCDIR),/**/)
+ 
+diff --git a/config/XView.cf b/config/XView.cf
+index 0633dbb..c4dbf09 100644
+--- a/config/XView.cf
++++ b/config/XView.cf
+@@ -206,6 +206,9 @@
+ # if PreR4Server
+ # define LibXViewDefines -DPRE_R4_ICCCM
+ # else
++#  ifdef ASVArchitecture
++#   define LibXViewDefines -I$(OPENWINHOME)/include -DX11R6 -DOPENWINHOME_DEFAULT=\"$(OPENWINHOME)\"
++#  else
+ #  ifdef __linux
+ #   ifdef __i386
+ #    define LibXViewDefines -I$(OPENWINHOME)/include -DX11R6 -Di386 -DOPENWINHOME_DEFAULT=\"$(OPENWINHOME)\"
+@@ -215,6 +218,7 @@
+ #  else
+ #   define LibXViewDefines -DFULL_R5 -I$(OPENWINHOME)/include -DSUNOS41 -DX11R6
+ #  endif
++#  endif
+ # endif
+ #endif
+ /*
+diff --git a/config/XView.rules b/config/XView.rules
+index 9cc40ec..e25aab5 100644
+--- a/config/XView.rules
++++ b/config/XView.rules
+@@ -169,7 +169,7 @@ lib/**/libname.so.rev:: solist 						@@\
+ 	$(RM) $@~ sodir/lib/**/libname.so.xs.o				@@\
+ 	@if [ -f xstrings ]; then \                                     @@\
+         	$(RM) strings; $(CP) xstrings strings; fi               @@\
+-	(cd sodir; $(LD) -o ../$@~ $(SHLIBLDFLAGS) ?*.o)		@@\
++	(cd sodir; $(LD) -o ../$@~ $(SHLIBLDFLAGS) -h $@ ?*.o)		@@\
+ 	-@if [ -f strings~ ]; then $(RM) strings~; else exit 0; fi	@@\
+ 	$(RM) $@  							@@\
+ 	$(MV) $@~ $@							@@\
+diff --git a/images/Imakefile b/images/Imakefile
+index 199e744..00112db 100644
+--- a/images/Imakefile
++++ b/images/Imakefile
+@@ -99,7 +99,7 @@ SRCS =  \
+ 
+ ALLFILES = $(BITMAPS) $(ICONS) $(PIXRECTS) $(CURSORS) $(IMAGES)
+ 
+-all: $(SRCS)
++all:: $(SRCS)
+ 
+ BuildIncludes($(INCLUDES_SRCS),$(IMAGE_INCDIR),/**/)
+ 
+diff --git a/lib/libxview/file_chooser/file_list.c b/lib/libxview/file_chooser/file_list.c
+index 8f830e1..9398966 100644
+--- a/lib/libxview/file_chooser/file_list.c
++++ b/lib/libxview/file_chooser/file_list.c
+@@ -1171,7 +1171,7 @@ flist_update_list( private, rows, num_rows )
+  * ifdef'd for SVR4 because it causes the 4.x MIT build to fail, not just print
+  * warnings.
+  */
+-#ifdef SVR4
++#if defined(SVR4) && !defined(ASV)	/* ASV's regexp.h defines these itself */
+ static int	sed, nbra, circf;
+ static char	*loc1, *loc2, *locs;
+ static int 	advance();
+diff --git a/lib/libxview/misc/wckind.c b/lib/libxview/misc/wckind.c
+index 4105b83..e802047 100644
+--- a/lib/libxview/misc/wckind.c
++++ b/lib/libxview/misc/wckind.c
+@@ -36,6 +36,11 @@ static char sccsid[] = "@(#)wckind.c 1.793/06/28 Copyr 1992 SMI";
+ #include	<widec.h>
+ #include	<dlfcn.h>
+ #include	<sys/param.h>	/* to get MAXPATHLEN */
++#ifdef ASV	/* ASV's libc has the dl calls only under their _ names */
++#define dlopen	_dlopen
++#define dlsym	_dlsym
++#define dlclose	_dlclose
++#endif
+ 
+ 
+ #ifndef OPTIMIZED
+diff --git a/lib/libxview/notify/linux_select.c b/lib/libxview/notify/linux_select.c
+index 839b16f..2938e14 100644
+--- a/lib/libxview/notify/linux_select.c
++++ b/lib/libxview/notify/linux_select.c
+@@ -1,3 +1,4 @@
++#ifdef __linux	/* Linux only: SVR4 uses notify_select() over poll(2) */
+ /* Function for calling the select(2) system call in linux.
+  * Linux doesn't have a syscall() function, this replaces it
+  * for select(), fcntl() and read().
+@@ -61,3 +62,5 @@ _syscall3(int, sys_fcntl, int, fildes, int, cmd, int, arg);
+ /* Replacement for syscall(SYS_read,...) */
+ _syscall3(int, sys_read, int, fildes, char *, buf, off_t, cnt);
+ 
++
++#endif /* __linux */
+diff --git a/lib/libxview/notify/ndet_loop.c b/lib/libxview/notify/ndet_loop.c
+index 83d63df..87a212f 100644
+--- a/lib/libxview/notify/ndet_loop.c
++++ b/lib/libxview/notify/ndet_loop.c
+@@ -86,10 +86,14 @@ static int      ndet_signal_code;
+ static struct sigcontext *ndet_signal_context;
+ #else SVR4
+ pkg_private_data struct sigaction ndet_sigvec =
++#ifdef ASV	/* ASV: { handler, mask, flags } */
++	{ndet_signal_catcher, {{0, 0}}, SA_RESTART};
++#else
+ #ifndef __linux
+ 	{SA_RESTART, {ndet_signal_catcher}, {0}, {0,0}};
+ #else
+ 	{ndet_signal_catcher,0,SA_RESTART,NULL}; /* handler,mask,flags,restorer */
++#endif
+ #endif
+ 	static int      ndet_signal_code;
+ 	static ucontext_t *ndet_signal_context;
+diff --git a/lib/libxview/notify/ntfy.h b/lib/libxview/notify/ntfy.h
+index 939736e..8e2e324 100644
+--- a/lib/libxview/notify/ntfy.h
++++ b/lib/libxview/notify/ntfy.h
+@@ -185,8 +185,12 @@ extern	sigset_t ntfy_sigs_delayed;/* Bit mask of signals received while in
+ 				      critical section */
+ 
+ #ifdef SVR4
++#ifdef ASV	/* ASV's sigset_t is { unsigned long s[2]; } */
++#define sigisempty(set) (!(((set)->s[0]) | ((set)->s[1])))
++#else
+ #define sigisempty(s)   (!(((s)->__sigbits[0]) | ((s)->__sigbits[1])   \
+                         | ((s)->__sigbits[2]) | ((s)->__sigbits[3])))
++#endif
+ #else
+ #define sigisempty(s)   (!(*(s)))
+ #endif
+diff --git a/lib/libxview/notify/sys_select.c b/lib/libxview/notify/sys_select.c
+index d1ef083..8ab8dab 100644
+--- a/lib/libxview/notify/sys_select.c
++++ b/lib/libxview/notify/sys_select.c
+@@ -124,6 +124,27 @@ notify_select(nfds, in0, out0, ex0, tv)
+ 	    ex++;
+     }
+ done:
++#ifdef ASV
++    /*
++     * ASV's timers tick at 1/128 s, so the time left to the next itimer
++     * expiry can come out as a full 1000000 us or a little below zero;
++     * Solaris never produced either, and the checks below would fail the
++     * whole notifier with EINVAL. Carry whole seconds, and treat an
++     * expiry already passed as "poll now".
++     */
++    if (tv != NULL) {
++	    static struct timeval ntv;
++
++	    ntv = *tv;
++	    while (ntv.tv_usec >= 1000000) {
++		    ntv.tv_usec -= 1000000;
++		    ntv.tv_sec++;
++	    }
++	    if (ntv.tv_sec < 0 || ntv.tv_usec < 0)
++		    ntv.tv_sec = ntv.tv_usec = 0;
++	    tv = &ntv;
++    }
++#endif
+     /*
+      * Convert timeval to a number of millseconds.
+      * Test for zero cases to avoid doing arithmetic.
+diff --git a/lib/libxview/sel/sel_agent.c b/lib/libxview/sel/sel_agent.c
+index c790f93..76a890e 100644
+--- a/lib/libxview/sel/sel_agent.c
++++ b/lib/libxview/sel/sel_agent.c
+@@ -1556,7 +1556,7 @@ waitforReadableTimeout(display, timeout)
+ 	result = select(max_fds, &select_ibits,
+ 			(fd_set *) NULL, (fd_set *) NULL, timeout);
+ #else SVR4
+-	result = select(display->fd + 1, &select_ibits, NULL, NULL, timeout);
++	result = select(ConnectionNumber(display) + 1, &select_ibits, NULL, NULL, timeout);
+ #endif SVR4
+ 	if (result == -1 && errno != EINTR)
+ 	{
+diff --git a/lib/libxview/textsw/txt_e_menu.c b/lib/libxview/textsw/txt_e_menu.c
+index e264cef..102b6e8 100644
+--- a/lib/libxview/textsw/txt_e_menu.c
++++ b/lib/libxview/textsw/txt_e_menu.c
+@@ -26,6 +26,7 @@ static char     sccsid[] = "@(#)txt_e_menu.c 20.50 93/06/28";
+  * Much of this code was borrowed from the suntools dynamic rootmenu code.
+  */
+ 
++#include <sys/types.h>	/* ASV: sys/file.h needs it first */
+ #include <sys/file.h>
+ #include <xview_private/primal.h>
+ #include <xview_private/txt_impl.h>
+diff --git a/lib/libxview/ttysw/tty.c b/lib/libxview/ttysw/tty.c
+index 148349f..e9e3a6b 100644
+--- a/lib/libxview/ttysw/tty.c
++++ b/lib/libxview/ttysw/tty.c
+@@ -33,7 +33,7 @@ static char     sccsid[] = "@(#)tty.c 20.64 93/06/28";
+ #include <xview/scrollbar.h>
+ #include <xview_private/charscreen.h>
+ 
+-#ifdef SVR4
++#if defined(SVR4) && !defined(ASV)	/* ASV: no Sun console redirection */
+ #include <sys/suntty.h>
+ #include <sys/strredir.h>
+ #endif
+diff --git a/lib/libxview/ttysw/tty_init.c b/lib/libxview/ttysw/tty_init.c
+index 5675f64..a4e11c4 100644
+--- a/lib/libxview/ttysw/tty_init.c
++++ b/lib/libxview/ttysw/tty_init.c
+@@ -909,11 +909,13 @@ gotpty:
+ 
+     if ((tty = open(ptsname(pty),O_RDWR))<0)
+         return XV_ERROR;
+-    if (ioctl(tty, I_PUSH, "ptem") == -1) {
++    /* only if not already there: ASV autopushes ptem and ldterm */
++    if (ioctl(tty, I_FIND, "ptem") == 0 && ioctl(tty, I_PUSH, "ptem") == -1) {
+         perror("push ptem");
+ 	return XV_ERROR;
+     }
+-    if (ioctl(tty, I_PUSH, "ldterm") == -1) {
++    /* only if not already there: ASV autopushes ptem and ldterm */
++    if (ioctl(tty, I_FIND, "ldterm") == 0 && ioctl(tty, I_PUSH, "ldterm") == -1) {
+         perror("push ldterm");
+ 	return XV_ERROR;
+     }

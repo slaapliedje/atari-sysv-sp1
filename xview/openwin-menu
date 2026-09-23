@@ -1,0 +1,7 @@
+"Workspace"	TITLE
+"Shell Tool"	DEFAULT exec cmdtool
+"Clock"		exec clock
+"xterm"		exec /usr/x11r6/bin/xterm
+SEPARATOR
+"Refresh"	REFRESH
+"Exit"		EXIT
