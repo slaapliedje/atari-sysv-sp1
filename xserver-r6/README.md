@@ -31,7 +31,7 @@ Built so far: libX11, Xext, Xt, Xaw, Xmu, ICE, SM, Xi, Xtst, Xp, XIE,
 oldX and PEX5 as shared libraries (2.1 MB, SONAMEs `libX11.so.6.1` etc.,
 plus static archives), the server (static), and xdpyinfo, xclock, xlogo,
 xset, xlsfonts, xfd, xrdb, xauth, xdm,
-xterm, twm and xsetroot (15-170 KB each). `work/dist/usr/x11r6` is the
+xterm, resize, twm and xsetroot (15-200 KB each). `work/dist/usr/x11r6` is the
 install tree. The clients carry an RPATH of `/usr/x11r6/lib`, so the
 system's X11R4 `libX11.so` and friends in `/usr/lib` are left alone.
 
@@ -142,7 +142,10 @@ PC also work against the server.
 
 ## Next
 
-Known: `resize` is not built. (xterm used to echo every typed line: it
+`resize` is built too. On SVR4 it prints nothing: it sets the tty's window
+size (`TIOCSWINSZ`) from xterm's cursor report, which is where SVR4 programs
+look. (`resize -s` is Sun emulation, for cmdtool, and times out in xterm.)
+(xterm used to echo every typed line: it
 pushed a second `ldterm` onto ASV's autopushed pts stack. `strconf` inside
 the window shows the stack.) xdm replaces the system's R4 xdm only when started
 by hand or from your own rc script.

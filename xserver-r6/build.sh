@@ -98,10 +98,13 @@ done
 for c in $CLIENTS; do
 	(cd programs/$c && make $c) > "programs/$c/build.log" 2>&1 || { echo "build failed: $c"; exit 1; }
 done
+# resize: xterm's second program (on SVR4 it prints nothing; it sets the
+# tty's window size with TIOCSWINSZ from xterm's cursor-position report)
+(cd programs/xterm && make resize) > programs/xterm/resize.log 2>&1 || { echo "build failed: resize"; exit 1; }
 
 # 6. the wrapper hands ld absolute library paths and ASV's .so files have no
 #    SONAME: rewrite the NEEDED entries to bare names (after the last link)
-for p in Xserver/Xatw `for c in $CLIENTS; do echo $c/$c; done`; do
+for p in Xserver/Xatw xterm/resize `for c in $CLIENTS; do echo $c/$c; done`; do
 	python3 "$HERE/../xserver/fixneeded.py" programs/$p > /dev/null
 done
 
@@ -117,6 +120,7 @@ D=$WORK/dist/usr/x11r6
 rm -rf "$WORK/dist"; mkdir -p $D/bin $D/lib
 cp programs/Xserver/Xatw $D/bin/
 for c in $CLIENTS; do cp programs/$c/$c $D/bin/; done
+cp programs/xterm/resize $D/bin/
 for l in lib/*/lib*.so.[0-9]*; do cp $l $D/lib/; done
 
 # xdm: the ASV configuration, xfuji, and the Fuji itself - taken from your
