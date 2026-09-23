@@ -1,0 +1,6 @@
+*ident	"amx 0.2 - AMIX (Amiga UNIX) binaries: trap #0 gate and ABI translation"
+*
+* AMX - no device; amxinit() installs the gate at boot. Flags as kma/ipc.
+*
+*FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
+ox	amx
