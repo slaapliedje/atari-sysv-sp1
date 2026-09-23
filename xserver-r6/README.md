@@ -1,56 +1,85 @@
-# Xatw on X11R6.3
+# X11R6.3 for Atari System V
 
-The ATW800/2 server moved from MIT X11R4 onto X11R6.3, on top of
-isoriano1968's [X11R6.3 port for AMIX](https://github.com/isoriano1968/x11r6.3-amix)
+The ATW800/2 server and the X11R6.3 client libraries and clients, cross-built
+for Atari System V on top of isoriano1968's
+[X11R6.3 port for AMIX](https://github.com/isoriano1968/x11r6.3-amix)
 (Amiga UNIX is the same UniSoft SVR4/m68k and uses the same gcc-cross-amix
 toolchain). This directory holds only what Atari System V adds:
 
 | Path | What |
 |---|---|
-| `config/asv.cf` | imake platform file: cross compiler, static server over TCP, no XKB/SHM/PEX/XIE/LBX/Xprint/Xnest |
-| `patches/x11r6.3-asv.patch` | `Imake.cf` selects `asv.cf` for `-DASV`; host imake passes `-undef` so the PC's predefines stay out; `servermd.h` takes the AMIX (big-endian, MSB-first) block; `Xatw` server target |
-| `hw/atw/` | the ddx, ported from `../xserver`: R6's `mieq` event queue and `miPointerScreenFuncRec`; keymap and libc shims are shared with the R4 server |
-| `build.sh` | fetch the pinned overlay, let its `install.sh` download and verify the X.Org sources, apply the above, build `Xatw` |
+| `build.sh` | fetch the pinned overlay (its `install.sh` downloads and verifies the X.Org sources), apply the rest, build everything |
+| `mksysroot.sh` | a "fixincluded" shadow of the ASV sysroot for the compiler (see below) |
+| `config/asv.cf` | imake platform file: the cross compiler, static X libraries, TCP, no XKB server/SHM/PEX/XIE/LBX/Xprint/Xnest/Xvfb |
+| `config/asviob.c` | `stdin`/`stdout`/`stderr` for every program (see below) |
+| `patches/x11r6.3-asv.patch` | `Imake.cf` selects `asv.cf` for `-DASV`; host imake passes `-undef`; `servermd.h` takes the AMIX (big-endian) block; the `Xatw` target; `twm` back in the build; `xterm` without utmp |
+| `hw/atw/` | the ddx, ported from `../xserver` to R6's `mieq` event queue and `miPointerScreenFuncRec`; the keymap and the BSD-name shims (`atwCompat.c`) are shared with the R4 server |
 
 ## Build
 
 ```sh
-sh build.sh            # -> work/xc/programs/Xserver/Xatw (~920 KB)
+sh build.sh     # -> work/xc: programs/Xserver/Xatw, lib/*, programs/{xterm,twm,...}
 ```
 
-Needs gcc-cross-amix at `~/opt/asv-cross` (or `ASV_CROSS=`), with the
-ASV sysroot, and a host gcc, cpp, curl and python3. imake runs on the PC
-and generates Makefiles that call the cross compiler. The `fpset*`
-objects `libm` needs are extracted from the sysroot's `libc.a` during the build.
+Needs gcc-cross-amix at `~/opt/asv-cross` (or `ASV_CROSS=`) with the ASV
+sysroot, plus git, curl, python3 and a host gcc and cpp. imake runs on the
+PC and generates Makefiles that call the cross compiler. The two
+generators that the build runs (`makestrs`, `makekeys`) are compiled with the host gcc.
+Built so far: libX11, Xext, Xt, Xaw, Xmu, ICE, SM, Xi, Xtst, Xp, XIE, FS,
+xkbfile, oldX, PEX5 (all static), the server, and xdpyinfo, xclock, xlogo,
+xterm, twm and xsetroot. The clients are about 0.5 to 1.2 MB each.
 
 ## Run
 
 ```sh
-Xatw :0 -mode 1024x768 &      # add -ac to allow any host while testing
-DISPLAY=noname:0 xterm &
+Xatw :0 -mode 1024x768 &      # -ac to allow any host while testing
+DISPLAY=noname:0 twm &        # or the system's own R4 clients
 ```
 
-Until R6 fonts are installed, the server uses the system's X11R4 SNF
-fonts and `rgb` database (`DefaultFontPath` in `asv.cf`). Tested in
-Hatari with the emulated card: xdpyinfo from the PC reports vendor release
-6300 with BIG-REQUESTS, DOUBLE-BUFFER, SHAPE, SYNC, XC-MISC and XTEST. The
-system's own R4 twm, xterm and xclock, and a modern xlogo from the PC over
-TCP, all run. Keyboard input and focus-follows-mouse through the IKBD both work.
+Until R6 fonts are installed, the server uses the system's X11R4 SNF fonts
+and `rgb` database. Tested in Hatari with the emulated card. The first
+session was R6.3 end to end: `xsetroot`, `twm`, `xterm` (typing, with
+`$TERM` passed to the shell), `xclock` and `xlogo`. `xdpyinfo` reports
+vendor release 6300. The system's R4 clients and a modern `xlogo` from the
+PC also work against the server.
 
-## Traps found on the way
+## Why a shadow sysroot
 
-- **Never define `m68k` when compiling for ASV.** With `m68k` set, ASV's
-  `<stdio.h>` maps `stderr` to `__stderrb`, a copy that libc's stdio never
-  updates. Every write to stderr then fails with `EINVAL` and a garbage
-  length, so the server exits with status 1 and no message. This affects
-  anything built with gcc-cross-amix for ASV; `asv.cf` passes `-Um68k`.
-- The cross wrapper passes `-ansi` on to `ld`, which rejects it, so
-  `asv.cf` keeps `-ansi` in the defines (compile only), not in `CCOPTIONS`.
-- R6.3 builds `Xprt`, `Xnest` and `Xvfb` by default; the last two need
-  the client libraries, which are the next stage.
+- **`__STDC__`**: ASV's headers were written for AT&T cc in `-Xa` mode,
+  where `__STDC__` is 0. gcc sets it to 1, so every
+  `#if __STDC__ - 0 == 0` block disappears: `sigset_t` (and with it
+  `<setjmp.h>`), and many extended declarations. A native gcc install gets
+  this rewritten by fixincludes; `mksysroot.sh` does the same to a copy of
+  `usr/include` (the other directories are symlinks), and `asv.cf` points
+  the wrapper at it with `AMIX_SYSROOT`. `m68k` stays defined and there is
+  no `-ansi`: the headers lay out `regset`/`ucontext`/`jmp_buf` by `m68k`.
+  (`-D__STDC__=0` instead would also switch X's own sources to their K&R
+  paths.)
+- **stdio**: `libc.so.1` works on its own `__iob`. Any reference to `__iob`
+  from an executable, even through the GOT, makes GNU ld copy the table into
+  the program, which leaves the program and libc with two `stdout`s over one
+  buffer. Writes to stderr fail with `EINVAL`, and `printf` mixed with
+  `putchar` scrambles the output. (With `m68k` defined, `stdio.h` names 16-byte aliases,
+  `__stderrb`, which fail the same way.) The fixed `stdio.h` defines the
+  three streams as `__asv_iob()[n]`, and `asviob.c` asks the dynamic
+  linker for libc's `__iob` (`_dlsym`), so the executable never names it.
+  This applies to anything built with gcc-cross-amix for ASV.
+
+## Other traps
+
+- The wrapper passes `-ansi` on to `ld`; asv.cf does not use it anyway.
+- ASV's libc exports the BSD calls only as `_abi_*`, and `libsocket`/`libnsl`
+  need the plain names: `asvcompat.o` (the R4 server's `atwCompat.c`) goes
+  into every link. So do `libc.a`'s `fpset*` objects that `libm` needs, as
+  plain objects, because the wrapper orders archives before `-l` libraries.
+- utmp(x) functions and `environ` exist only in the static `libc.a`. The
+  shared libc exports `_environ`, so xterm is built with
+  `-Denviron=_environ` and without `-DUTMP` for now.
+- `fixneeded.py` must run after the last link: a later `make` relinks and
+  brings back the host library paths.
 
 ## Next
 
-The client side: Xlib/Xt/Xaw/Xmu for ASV. The host helper tools
-(`makestrs`, `makekeys`) must be built with the host compiler. Then XView
-and olwm for OpenLook.
+Shared libraries (`.so` as on AMIX), R6 fonts (`bdftopcf` and `mkfontdir` built
+for the host), then XView and olwm for OpenLook. Known: xterm echoes a typed
+line twice (pty modes), and `resize` is not built (`setitimer`).

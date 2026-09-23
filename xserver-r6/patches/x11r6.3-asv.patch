@@ -50,6 +50,22 @@ index 7541727..4185e50 100644
  #ifdef AMIX
  	"-traditional",
  	"-DAMIX",
+diff --git a/programs/Imakefile b/programs/Imakefile
+index 75944a1..456a289 100644
+--- a/programs/Imakefile
++++ b/programs/Imakefile
+@@ -25,7 +25,11 @@ XCOMM $XConsortium: Imakefile /main/83 1996/12/18 16:29:30 lehors $
+   PROXYMGRSRCDIR = proxymngr
+     RSTARTSRCDIR =
+    SMPROXYSRCDIR =
++#ifdef ASVArchitecture
++       TWMSRCDIR = twm
++#else
+        TWMSRCDIR =
++#endif
+   XCONSOLESRCDIR = xconsole
+        XDMSRCDIR = xdm
+ XFINDPROXYSRCDIR = xfindproxy
 diff --git a/programs/Xserver/Imakefile b/programs/Xserver/Imakefile
 index c169673..addc550 100644
 --- a/programs/Xserver/Imakefile
@@ -100,3 +116,31 @@ index 19fe3cd..cafcdc3 100644
  
  #if ((defined(SVR4) && defined(i386)) || \
       (defined(SYSV) && defined(i386)) || \
+diff --git a/programs/xterm/Imakefile b/programs/xterm/Imakefile
+index d9fbf4a..1a52bfb 100644
+--- a/programs/xterm/Imakefile
++++ b/programs/xterm/Imakefile
+@@ -23,10 +23,21 @@ XCOMM
+  OSMAJORVERSION = OSMajorVersion
+  OSMINORVERSION = OSMinorVersion
+ 
+-   MAIN_DEFINES = -DUTMP $(TTYGROUPDEF) $(PUCCPTYDDEF) \
++#ifdef ASVArchitecture
++XCOMM ASV: the utmp(x) functions and environ live only in the static libc.a;
++XCOMM the shared libc exports _environ
++     UTMP_DEFINE = -Denviron=_environ
++#else
++     UTMP_DEFINE = -DUTMP
++#endif
++   MAIN_DEFINES = $(UTMP_DEFINE) $(TTYGROUPDEF) $(PUCCPTYDDEF) \
+ 		  -DOSMAJORVERSION=$(OSMAJORVERSION) \
+ 		  -DOSMINORVERSION=$(OSMINORVERSION)
+-   MISC_DEFINES = /* -DALLOWLOGFILEEXEC */ 
++#ifdef ASVArchitecture
++   MISC_DEFINES = -Denviron=_environ
++#else
++   MISC_DEFINES = /* -DALLOWLOGFILEEXEC */
++#endif
+     XKB_DEFINES = XkbClientDefines
+         DEFINES = $(XKB_DEFINES)
+           SRCS1 = button.c charproc.c cursor.c data.c input.c \

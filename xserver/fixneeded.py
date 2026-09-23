@@ -26,7 +26,8 @@ for o in range(dyn[2], dyn[2] + dyn[3], 8):
         so = dynstr[2] + val
         s = d[so:]
         name = s[:s.index(b'\0')].decode()
-        if name.startswith('/home/'):
+        # a host path (any absolute path that is not ASV's own /usr/lib)
+        if name.startswith('/') and not name.startswith('/usr/lib/'):
             base = name.rsplit('/', 1)[1].encode() + b'\0'
             d[so:so + len(base)] = base
             print('NEEDED %s -> %s' % (name, base[:-1].decode()))

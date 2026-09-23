@@ -7,15 +7,17 @@ XCOMM Stage 1: the Xatw server only, a static link over TCP.
 #define OSTeenyVersion 0
 #define OSName Atari System V Release 4.0
 #define OSVendor "Atari"
-XCOMM NOT -Dm68k: with m68k defined, ASV stdio.h maps stderr to __stderrb, a
-XCOMM stale copy libc never updates, and every write to stderr fails
-#define OSDefines -DASV -Um68k
+#define OSDefines -DASV
 #define OSRelease -DSVR4
 
 #define SystemV4 YES
 
 #define BootstrapCFlags -DASV_CROSS
-#define StandardDefines OSDefines OSRelease -ansi
+XCOMM The compiler sees a fixincluded shadow of the sysroot (mksysroot.sh):
+XCOMM ASV's headers assume AT&T cc -Xa (__STDC__ == 0), and stdio.h's m68k
+XCOMM stream aliases break under GNU ld. m68k stays predefined, as the headers
+XCOMM lay out regset/ucontext by it, so no -ansi.
+#define StandardDefines OSDefines OSRelease
 #define StandardCppDefines -undef -traditional OSDefines OSRelease
 
 #define ProjectRoot /usr/x11r6
@@ -31,8 +33,8 @@ XCOMM stale copy libc never updates, and every write to stderr fails
 #define HasSharedLibraries NO
 #define ForceNormalLib YES
 #define HasShm NO
-#define CcCmd @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
-#define ServerCcCmd @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
+#define CcCmd env AMIX_SYSROOT=@ASV_SYSROOT@ @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
+#define ServerCcCmd env AMIX_SYSROOT=@ASV_SYSROOT@ @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
 #define DefaultCCOptions /**/
 #define DefaultCDebugFlags -O
 #define OptimizedCDebugFlags -O
@@ -50,16 +52,20 @@ XCOMM stale copy libc never updates, and every write to stderr fails
 #define MakeCmd make
 #define YaccCmd yacc
 #define DependCmd true
+#define TermcapLibrary @ASV_SYSROOT@/usr/ccs/lib/libtermcap.a
 
 #define ConnectionFlags -DTCPCONN
 #define HasSockets YES
 #define NeedBerklib YES
 #define SocketLibraries -lsocket -lsockhost -lnsl
-#define ExtraLibraries SocketLibraries
-XCOMM libm's sqrt calls libc.a's fpset helpers, but the cross wrapper links
-XCOMM archives before -l libraries, so they are linked in as objects
-#define AsvFpsetObjs $(TOP)/config/asv/fpsetrnd.o $(TOP)/config/asv/fpsetmask.o $(TOP)/config/asv/fpsetsticky.o
-#define ServerExtraSysLibs AsvFpsetObjs SocketLibraries -lgen -lm
+XCOMM Linked into everything as plain objects (the cross wrapper puts archives
+XCOMM before -l libraries): libm's sqrt needs libc.a's fpset helpers, and
+XCOMM asviob.o is stdio's stdin/stdout/stderr (see mksysroot.sh), and
+XCOMM asvcompat.o supplies the BSD names (select, syslog, getgrent, ...)
+XCOMM that libsocket/libnsl call but ASV's libc exports only as _abi_*
+#define AsvFpsetObjs $(TOP)/config/asv/fpsetrnd.o $(TOP)/config/asv/fpsetmask.o $(TOP)/config/asv/fpsetsticky.o $(TOP)/config/asv/asvcompat.o $(TOP)/config/asv/asviob.o
+#define ExtraLibraries SocketLibraries AsvFpsetObjs
+#define ServerExtraSysLibs -lgen -lm
 #define HasSecureRPC NO
 #define HasPutenv YES
 #define HasStrcasecmp NO
@@ -72,7 +78,7 @@ XCOMM archives before -l libraries, so they are linked in as objects
 #define BuildXIE NO
 #define BuildLBX NO
 #define BuildXKB NO
-#define BuildXKBlib NO
+#define BuildXKBlib YES
 #define BuildXInputExt NO
 #define BuildDBE YES
 #define BuildRECORD NO
@@ -91,4 +97,5 @@ XCOMM until R6 fonts are installed, use the system's X11R4 (SNF) fonts and rgb
 #define XnestServer NO
 #define XVirtualFramebufferServer NO
 
-#include <sv4Lib.rules>
+XCOMM static libraries only for now: no sv4Lib.rules (its XMULIB adds -z nodefs,
+XCOMM which GNU ld does not take)
