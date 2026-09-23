@@ -76,7 +76,7 @@ image.
 
 ## Running it in Hatari
 
-A stock Hatari boots the kernel and stops after the banner. Five emulator
+A stock Hatari boots the kernel and stops after the banner. Nine emulator
 bugs (all in code that only a Unix exercises) are fixed in the Hatari
 fork this was developed with; until they are upstream, build that:
 
@@ -87,6 +87,10 @@ fork this was developed with; until they are upstream, build that:
 | First DMA read never completes | TT-MFP interrupt line never dropped after the reset-interrupt register read; no phase-mismatch interrupt when DMA mode is armed late | `ncr5380: TT interrupt line drops…` |
 | fsck stalls in a timed wait, `lbolt` stays 0 | The MC146818 periodic interrupt was not emulated; ASV's clock is that interrupt at 128 Hz on TT-MFP GPIP6 | `nvram: MC146818 periodic interrupt…` |
 | inetd dies at start, no telnet/ftp | The bus-error handler's "complete the access in software" (read of NULL returns 0, which 4.3BSD's inetd relies on) was discarded by the RTE, so the read re-faulted forever | `cpu: 68030 MMU — keep the access replay state…` |
+| Random `PANIC: unexpected kernel trap` and reboot, any time a `copyin` buffer ends 2 bytes before an unmapped kernel page | The RTE that replays a frame $A write left its stage B opcode armed; when the replayed write faulted again the new handler's first instruction was replaced by it and a push was lost, so `trap()` read the vector from the wrong offset | `cpu: 68030 MMU — drop the stage B opcode when an exception is taken` (WinUAE 6115d64, Toni Wilen) |
+| Same panic, now as a format error | The nested frame recorded the RTE's own opcode as the instruction to resume; the kernel's RTE then executed an RTE at copyin's PC on an empty stack | `cpu: 68030 MMU — a frame $A RTE leaves the next opcode in IRC…` |
+| `SIGBUS` at a PLT call: a `bsr.l` whose displacement straddles a page boundary branches to PC+1 | A prefetch fault deferred behind a branch was never taken when the branch's own displacement word was consumed; it read back as $FFFF | `cpu: 68030 MMU — a deferred prefetch fault is taken when the word is consumed` |
+| XFaceMaker2 `SIGSEGV` in `XrmStringToQuark`: an extra, unwritten slot in an argument list | `MOVE.L …,-(SP)` at the last words of a page prefetches the next opcode after the pre-decrement; the fault discarded the register fixup and the restart decremented SP twice | `cpu: 68030 MMU — undo address register fixups when a prefetch fault restarts…` |
 
 Then `tools/hatari-asv.sh HD0.bin 256` (the image is written to; boot a
 copy). The stock image, unpatched, boots with `16` and reaches multi-user.
