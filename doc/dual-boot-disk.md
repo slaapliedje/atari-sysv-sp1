@@ -64,7 +64,12 @@ driver's `RTCNVMACCESS` ioctl (`setboot tos|unix|none`); under TOS Atari's
 together with its `SETBOOT.RSC` and the Mark Williams C source.  Copy both
 `SETBOOT.PRG` and `SETBOOT.RSC` to C:.  *Boot → Set boot preference →
 Atari System V → OK → Reboot* comes back up at the Unix login; tested in
-Hatari on the HDDriver disk below.  In Hatari the NVRAM lives in
+Hatari on the HDDriver disk below.  Uwe Seimet's BOOTCONF.APP 1.30 (1996, freely
+distributed; mirrored in the `SYSTEM/BOOTCONF` folder of milan.kovac.cc's
+Atari archive) does the same from a single dialog, with a *TT SVR4* button
+next to MagiC/Linux/NetBSD, and also sets the SCSI initiator ID and bus
+arbitration. Its video, language and date fields only matter on a
+Falcon.  In Hatari the NVRAM lives in
 `~/.config/hatari/hatari.nvram` (user bytes 14..63; the word at file
 offset 0 is the preference, `00 40` for Unix, checksum `~sum, sum` of the
 first 48 bytes at 48..49).
