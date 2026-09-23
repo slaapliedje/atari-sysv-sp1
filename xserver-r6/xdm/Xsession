@@ -1,0 +1,9 @@
+#!/bin/sh
+# an OpenLook session; the session ends when olwm exits (Workspace menu: Exit)
+OPENWINHOME=/usr/openwin; export OPENWINHOME
+PATH=/usr/openwin/bin:/usr/x11r6/bin:$PATH; export PATH
+test -x $HOME/.xsession && exec $HOME/.xsession
+xsetroot -solid '#5f7f9f'
+cmdtool -Wp 30 30 &
+clock -Wp 850 30 &
+exec olwm

@@ -1,0 +1,18 @@
+! xdm for Atari System V: the ATW800/2 server, an OpenLook session, and the
+! Fuji from the TOS boot screen above the login box
+DisplayManager.errorLogFile:	/usr/x11r6/lib/X11/xdm/xdm-errors
+DisplayManager.pidFile:		/usr/x11r6/lib/X11/xdm/xdm-pid
+DisplayManager.keyFile:		/usr/x11r6/lib/X11/xdm/xdm-keys
+DisplayManager.servers:		/usr/x11r6/lib/X11/xdm/Xservers
+DisplayManager.accessFile:	/usr/x11r6/lib/X11/xdm/Xaccess
+! no XDMCP: local display only
+DisplayManager.requestPort:	0
+DisplayManager*resources:	/usr/x11r6/lib/X11/xdm/Xresources
+! the system may have no cpp: load resources without it
+DisplayManager*xrdb:		/usr/x11r6/lib/X11/xdm/xrdb-nocpp
+DisplayManager*setup:		/usr/x11r6/lib/X11/xdm/Xsetup_0
+DisplayManager*startup:		/usr/x11r6/lib/X11/xdm/Xstartup
+DisplayManager*session:		/usr/x11r6/lib/X11/xdm/Xsession
+DisplayManager*authorize:	true
+DisplayManager*userPath:	/usr/openwin/bin:/usr/x11r6/bin:/usr/bin:/bin:/usr/ucb
+DisplayManager*systemPath:	/usr/x11r6/bin:/usr/sbin:/usr/bin:/bin:/etc

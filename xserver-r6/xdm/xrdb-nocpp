@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/x11r6/bin/xrdb -nocpp "$@"

@@ -1,0 +1,5 @@
+#!/bin/sh
+# login screen: a TT-blue root and the Fuji from the TOS boot screen
+/usr/x11r6/bin/xsetroot -solid '#2e4a73'
+/usr/x11r6/lib/X11/xdm/xfuji -fg white &
+echo $! > /usr/x11r6/lib/X11/xdm/xfuji.pid

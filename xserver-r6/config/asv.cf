@@ -61,8 +61,11 @@ XCOMM loaded library has them. Clients name every library they use instead.
 #define SharedPexReqs /**/
 #define SharedOldXReqs /**/
 #define HasShm NO
-#define CcCmd env AMIX_SYSROOT=@ASV_SYSROOT@ @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
-#define ServerCcCmd env AMIX_SYSROOT=@ASV_SYSROOT@ @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
+XCOMM AMIX_RETURN_D0_TO_A0: every function returns its value in a0 as well as
+XCOMM d0, for code that calls integer-returning functions through pointer-
+XCOMM returning prototypes (the m68k SVR4 ABI keeps them apart; XView needs it)
+#define CcCmd env AMIX_SYSROOT=@ASV_SYSROOT@ AMIX_RETURN_D0_TO_A0=1 @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
+#define ServerCcCmd env AMIX_SYSROOT=@ASV_SYSROOT@ AMIX_RETURN_D0_TO_A0=1 @ASV_CROSS@/bin/m68k-cbm-sysv4-gcc
 #define DefaultCCOptions /**/
 #define DefaultCDebugFlags -O
 #define OptimizedCDebugFlags -O
@@ -87,11 +90,15 @@ XCOMM loaded library has them. Clients name every library they use instead.
 #define NeedBerklib YES
 #define SocketLibraries -lsocket -lsockhost -lnsl
 XCOMM Linked into everything as plain objects (the cross wrapper puts archives
-XCOMM before -l libraries): libm's sqrt needs libc.a's fpset helpers, and
-XCOMM asviob.o is stdio's stdin/stdout/stderr (see mksysroot.sh), and
-XCOMM asvcompat.o supplies the BSD names (select, syslog, getgrent, ...)
-XCOMM that libsocket/libnsl call but ASV's libc exports only as _abi_*
-#define AsvFpsetObjs $(TOP)/config/asv/fpsetrnd.o $(TOP)/config/asv/fpsetmask.o $(TOP)/config/asv/fpsetsticky.o $(TOP)/config/asv/asvcompat.o $(TOP)/config/asv/asviob.o
+XCOMM before -l libraries, and shared libraries resolve them from the program):
+XCOMM - libcextra.o: what ASV's libc.so.1 leaves to the static libc.a - setitimer,
+XCOMM   sys_errlist, syscall, vfork, cfree, libm's fpset helpers - extracted by
+XCOMM   build.sh with libcextra.py (following their own dependencies), ld -r;
+XCOMM - asvcompat.o: the BSD names libsocket/libnsl call (select, syslog,
+XCOMM   getgrent ...) that libc exports only as _abi_*;
+XCOMM - asviob.o: stdio's stdin/stdout/stderr (see mksysroot.sh).
+#define AsvLibcObjs $(TOP)/config/asv/libcextra.o
+#define AsvFpsetObjs AsvLibcObjs $(TOP)/config/asv/asvcompat.o $(TOP)/config/asv/asviob.o
 #define ExtraLibraries SocketLibraries AsvFpsetObjs
 #define ServerExtraSysLibs -lgen -lm
 #define HasSecureRPC NO
@@ -116,8 +123,11 @@ XCOMM that libsocket/libnsl call but ASV's libc exports only as _abi_*
 #define BuildSpeedo NO
 #define BuildType1 NO
 #define XAtwServer YES
-XCOMM until R6 fonts are installed, use the system's X11R4 (SNF) fonts and rgb
-#define DefaultFontPath /usr/lib/X11/fonts/misc/,/usr/lib/X11/fonts/75dpi/,/usr/lib/X11/fonts/100dpi/
+XCOMM xdm's greeter linked in, not dlopen()ed as on other SVR4 systems
+#define SharedLibXdmGreet NO
+XCOMM the R6 fonts (PCF, built on the host by build.sh) first, then the
+XCOMM system's X11R4 SNF fonts; the system's rgb database
+#define DefaultFontPath /usr/x11r6/lib/X11/fonts/misc/,/usr/x11r6/lib/X11/fonts/75dpi/,/usr/x11r6/lib/X11/fonts/100dpi/,/usr/lib/X11/fonts/misc/,/usr/lib/X11/fonts/75dpi/,/usr/lib/X11/fonts/100dpi/
 #define DefaultRGBDatabase /usr/lib/X11/rgb
 #define XAmixServer NO
 #define XprtServer NO

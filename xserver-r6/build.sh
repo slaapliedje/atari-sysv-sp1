@@ -5,7 +5,7 @@
 #   sh build.sh [WORKDIR]        (default: ./work)
 #
 # Needs gcc-cross-amix in ~/opt/asv-cross (or ASV_CROSS=<prefix>) with the
-# ASV sysroot, plus git, curl, python3 and a host gcc and cpp. Fetches the
+# ASV sysroot, plus git, curl, python3, a host gcc and cpp, and bdftopcf/mkfontdir. Fetches the
 # X11R6.3 AMIX overlay at a pinned commit, whose install.sh downloads and
 # checks the X.Org sources, then adds the ASV platform and the ATW800/2 ddx.
 # Everything is linked statically against the X libraries; ASV's own
@@ -17,12 +17,12 @@ CROSS=${ASV_CROSS:-$HOME/opt/asv-cross}
 AMIX_REPO=https://github.com/isoriano1968/x11r6.3-amix.git
 AMIX_REV=cb61a2115659cb3ae27c649439edb2ca133131b6
 REALROOT=$CROSS/m68k-cbm-sysv4/sysroot
-CLIENTS="xdpyinfo xclock xlogo xterm twm xsetroot"
+CLIENTS="xdpyinfo xclock xlogo xterm twm xsetroot xset xlsfonts xfd xrdb xauth xdm"
 
-# shared libraries need the wrapper's PIC fixes (gcc-cross-amix: LC%N labels
-# and long PLT calls for GNU as)
-grep -q 'PLTPC' "$CROSS/bin/m68k-cbm-sysv4-gcc" || {
-	echo "the cross gcc wrapper lacks the -fPIC fixes for GNU as; update gcc-cross-amix" >&2
+# the gcc-cross-amix wrapper must have the PIC fixes for GNU as (LC%N
+# labels, long PLT calls) and AMIX_RETURN_D0_TO_A0
+grep -q 'AMIX_RETURN_D0_TO_A0' "$CROSS/bin/m68k-cbm-sysv4-gcc" || {
+	echo "the cross gcc wrapper lacks the PIC and return-register fixes; update gcc-cross-amix" >&2
 	exit 1
 }
 
@@ -33,7 +33,7 @@ cd "$WORK"
 
 # 1. a fixincluded shadow of the sysroot (see mksysroot.sh)
 [ -d "$SYSROOT" ] || sh "$HERE/mksysroot.sh" "$REALROOT" "$SYSROOT"
-CC="env AMIX_SYSROOT=$SYSROOT $CROSS/bin/m68k-cbm-sysv4-gcc"
+CC="env AMIX_SYSROOT=$SYSROOT AMIX_RETURN_D0_TO_A0=1 $CROSS/bin/m68k-cbm-sysv4-gcc"
 
 # 2. the sources: pinned AMIX overlay + X.Org archives + our changes
 if [ ! -d x11r6.3-amix ]; then
@@ -53,12 +53,23 @@ if [ ! -d xc ]; then
 fi
 cd xc
 
-# 3. objects every program links (asv.cf: AsvFpsetObjs): libc.a's fpset
-#    helpers for libm, the BSD-name shims, and the stdio streams
+# 3. objects every program links (asv.cf: AsvFpsetObjs):
+#    - libcextra.o: what ASV's libc.so.1 leaves to the static libc.a (setitimer,
+#      sys_errlist, cfree, crypt, the shadow and utmp calls, libm's fpset
+#      helpers), with everything those need,
+#      combined with ld -r
+#    - asvcompat.o: BSD names over libc's _abi_* exports, syscall (ERESTART ->
+#      EINTR), vfork, killpg
+#    - asviob.o: stdio's stdin/stdout/stderr (see mksysroot.sh)
 mkdir -p config/asv
 if [ ! -f config/asv/asviob.o ]; then
-	(cd config/asv && "$CROSS/bin/m68k-cbm-sysv4-ar" x "$REALROOT/usr/lib/libc.a" \
-		fpsetrnd.o fpsetmask.o fpsetsticky.o)
+	M=`PATH=$CROSS/bin:$PATH python3 "$HERE/libcextra.py" "$REALROOT/usr/lib/libc.a" \
+		"$REALROOT/usr/lib/libc.so.1" _fpsetround _fpsetmask _fpsetsticky _fpgetround \
+		setitimer getitimer sys_errlist sys_nerr cfree \
+		crypt getspnam setspent endspent setutent getutid pututline endutent utmpname | grep -v -x -E 'syscall.o|vfork.o'`
+	rm -rf config/asv/libc; mkdir -p config/asv/libc
+	(cd config/asv/libc && "$CROSS/bin/m68k-cbm-sysv4-ar" x "$REALROOT/usr/lib/libc.a" $M &&
+		"$CROSS/bin/m68k-cbm-sysv4-ld" -r -o ../libcextra.o *.o)
 	cp "$HERE/../xserver/atwCompat.c" config/asv/asvcompat.c
 	cp "$HERE/config/asviob.c" config/asv/
 	(cd config/asv && $CC -O -c asvcompat.c && $CC -O -c asviob.c)
@@ -94,10 +105,58 @@ for p in Xserver/Xatw `for c in $CLIENTS; do echo $c/$c; done`; do
 	python3 "$HERE/../xserver/fixneeded.py" programs/$p > /dev/null
 done
 
+# xfuji: the Fuji on xdm's login screen
+$CC -O -Iexports/include -c "$HERE/xdm/xfuji.c" -o programs/xfuji.o
+$CC -o programs/xfuji programs/xfuji.o -Lexports/lib -lXext -lX11 \
+	-lsocket -lsockhost -lnsl config/asv/libcextra.o config/asv/asvcompat.o \
+	config/asv/asviob.o -rpath=/usr/x11r6/lib -rpath-link=exports/lib
+python3 "$HERE/../xserver/fixneeded.py" programs/xfuji > /dev/null
+
 # 7. an install tree: copy dist/usr/x11r6 to /usr/x11r6 on the machine
 D=$WORK/dist/usr/x11r6
 rm -rf "$WORK/dist"; mkdir -p $D/bin $D/lib
 cp programs/Xserver/Xatw $D/bin/
 for c in $CLIENTS; do cp programs/$c/$c $D/bin/; done
 for l in lib/*/lib*.so.[0-9]*; do cp $l $D/lib/; done
-ls -l $D/bin $D/lib
+
+# xdm: the ASV configuration, xfuji, and the Fuji itself - taken from your
+# own TOS ROM (TOS=path; a Hatari install's ROM if you have one), since the
+# art is Atari's and does not ship with sp1. Without one there is no logo.
+X=$D/lib/X11/xdm
+mkdir -p $X
+for f in xdm-config Xservers Xaccess Xresources Xsetup_0 Xstartup Xsession xrdb-nocpp; do
+	cp "$HERE/xdm/$f" $X/
+done
+cp programs/xfuji $X/
+if [ -z "$TOS" ]; then
+	for t in /usr/share/hatari/tos306*.img /usr/share/hatari/tos206*.img \
+		 /usr/share/hatari/tos404*.img; do
+		[ -f "$t" ] && { TOS=$t; break; }
+	done
+fi
+if [ -n "$TOS" ]; then
+	python3 "$HERE/xdm/fuji-from-tos.py" "$TOS" $X/fuji.xbm
+else
+	echo "no TOS ROM given (TOS=...): the login screen will have no Fuji"
+fi
+
+# 8. fonts: the R6.3 BDF sources as PCF, compiled with the host's bdftopcf
+#    and mkfontdir (PCF records its own byte and bit order). Uncompressed:
+#    the server's gzip support would need zlib on the target.
+for d in misc 75dpi 100dpi; do
+	F=$D/lib/X11/fonts/$d
+	mkdir -p $F
+	for f in fonts/bdf/$d/*.bdf; do
+		bdftopcf -t -o $F/`basename $f .bdf`.pcf $f
+	done
+	cp fonts/bdf/$d/fonts.alias $F/ 2>/dev/null || true
+	mkfontdir $F
+done
+# ASV's tar cannot read GNU-format archives: pack V7, numeric owners. Two
+# archives, each under the 16 MB a process may write by default (ULIMIT):
+# the fonts, and everything else.
+tar --format=v7 --owner=0 --group=0 -C $WORK/dist -cf $WORK/x11r6-asv.tar \
+	--exclude=usr/x11r6/lib/X11/fonts usr
+tar --format=v7 --owner=0 --group=0 -C $WORK/dist -cf $WORK/x11r6-fonts-asv.tar \
+	usr/x11r6/lib/X11/fonts
+ls -l $D/bin $D/lib $WORK/x11r6-asv.tar $WORK/x11r6-fonts-asv.tar

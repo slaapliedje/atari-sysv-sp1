@@ -1,0 +1,19 @@
+xlogin*login.translations: #override\
+	Ctrl<Key>R: abort-display()\n\
+	<Key>F1: set-session-argument(failsafe) finish-field()\n\
+	Ctrl<Key>Return: set-session-argument(failsafe) finish-field()\n\
+	<Key>Return: set-session-argument() finish-field()
+xlogin*borderWidth: 2
+xlogin*greeting: Atari System V
+xlogin*namePrompt: login:\040
+xlogin*passwdPrompt: password:\040
+xlogin*fail: Login incorrect
+xlogin*greetFont: -adobe-helvetica-bold-r-normal--24-240-75-75-p-*-iso8859-1
+xlogin*font: -adobe-helvetica-medium-r-normal--14-140-75-75-p-*-iso8859-1
+xlogin*promptFont: -adobe-helvetica-bold-r-normal--14-140-75-75-p-*-iso8859-1
+xlogin*failFont: -adobe-helvetica-bold-o-normal--14-140-75-75-p-*-iso8859-1
+xlogin*greetColor: #1f3a60
+xlogin*failColor: #b00000
+xlogin*Foreground: black
+xlogin*Background: #d8d8d8
+xlogin*login.y: 290

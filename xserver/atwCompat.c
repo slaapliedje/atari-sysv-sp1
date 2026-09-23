@@ -139,3 +139,56 @@ syslog(pri, fmt, a1, a2, a3, a4, a5, a6)
 {
     return _abi_syslog(pri, fmt, a1, a2, a3, a4, a5, a6);
 }
+
+/* BSD: signal a process group (libucb has it; libc does not) */
+int
+killpg(pgrp, sig)
+    int pgrp, sig;
+{
+    return kill(-pgrp, sig);
+}
+
+/*
+ * syscall() and vfork(): libc.a's stubs report errors through libc's
+ * _cerror, which only works when called from inside libc.so.1 - from a
+ * program it leaves errno holding garbage (XView's notifier read an
+ * address as errno and gave up). The shared libc exports a working
+ * _abi_syscall; vfork becomes fork.
+ */
+extern int _abi_syscall();
+extern int errno;
+
+/*
+ * Through the indirect syscall entry the kernel's internal ERESTART (91)
+ * reaches the caller when a signal interrupts the call; the direct entries
+ * turn it into EINTR (or a restart). Do the same, or XView's notifier
+ * takes an interrupted poll for a failure and gives up.
+ */
+#define ASV_ERESTART	91
+#define ASV_EINTR	4
+
+int
+syscall(n, a1, a2, a3, a4, a5, a6)
+    int n;
+    long a1, a2, a3, a4, a5, a6;
+{
+    int r = _abi_syscall(n, a1, a2, a3, a4, a5, a6);
+
+    if (r == -1 && errno == ASV_ERESTART)
+	errno = ASV_EINTR;
+    return r;
+}
+
+int
+_syscall(n, a1, a2, a3, a4, a5, a6)
+    int n;
+    long a1, a2, a3, a4, a5, a6;
+{
+    return syscall(n, a1, a2, a3, a4, a5, a6);
+}
+
+int
+vfork()
+{
+    return fork();
+}

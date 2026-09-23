@@ -10,8 +10,10 @@ toolchain). This directory holds only what Atari System V adds:
 |---|---|
 | `build.sh` | fetch the pinned overlay (its `install.sh` downloads and verifies the X.Org sources), apply the rest, build everything |
 | `mksysroot.sh` | a "fixincluded" shadow of the ASV sysroot for the compiler (see below) |
-| `config/asv.cf` | imake platform file: the cross compiler, static X libraries, TCP, no XKB server/SHM/PEX/XIE/LBX/Xprint/Xnest/Xvfb |
+| `config/asv.cf` | imake platform file: the cross compiler, shared X libraries, TCP, no XKB server/SHM/PEX/XIE/LBX/Xprint/Xnest/Xvfb |
 | `config/asviob.c` | `stdin`/`stdout`/`stderr` for every program (see below) |
+| `libcextra.py` | picks the `libc.a` members a program needs that ASV's shared libc lacks |
+| `xdm/` | the login screen: ASV xdm configuration, `xfuji.c`, and `fuji-from-tos.py` |
 | `patches/x11r6.3-asv.patch` | `Imake.cf` selects `asv.cf` for `-DASV`; host imake passes `-undef`; `servermd.h` takes the AMIX (big-endian) block; the `Xatw` target; `twm` back in the build; `xterm` without utmp |
 | `hw/atw/` | the ddx, ported from `../xserver` to R6's `mieq` event queue and `miPointerScreenFuncRec`; the keymap and the BSD-name shims (`atwCompat.c`) are shared with the R4 server |
 
@@ -28,9 +30,29 @@ generators that the build runs (`makestrs`, `makekeys`) are compiled with the ho
 Built so far: libX11, Xext, Xt, Xaw, Xmu, ICE, SM, Xi, Xtst, Xp, XIE,
 oldX and PEX5 as shared libraries (2.1 MB, SONAMEs `libX11.so.6.1` etc.,
 plus static archives), the server (static), and xdpyinfo, xclock, xlogo,
+xset, xlsfonts, xfd, xrdb, xauth, xdm,
 xterm, twm and xsetroot (15-170 KB each). `work/dist/usr/x11r6` is the
 install tree. The clients carry an RPATH of `/usr/x11r6/lib`, so the
 system's X11R4 `libX11.so` and friends in `/usr/lib` are left alone.
+
+## The login screen
+
+xdm shows the Atari Fuji from the TOS boot screen above an "Atari System
+V" login box, and logs you into an OpenLook session (`../xview`). The Fuji
+is Atari's art, so it is not in this repository: `build.sh` takes it from
+your own TOS ROM (`TOS=/path/to/tos306us.img sh build.sh`, or a Hatari
+install's ROM if there is one). TOS 2.06, 3.06 and 4.04 all carry the
+same 96x86 bitmap uncompressed (0x35FE8 in 3.06 US); `fuji-from-tos.py`
+finds it by content. `xfuji` waits for the login box and draws the logo,
+doubled, in the space above it, shaped (SHAPE extension) so that only the
+logo covers the root.
+
+Start it with `/usr/x11r6/bin/xdm -config /usr/x11r6/lib/X11/xdm/xdm-config`
+(from an rc script, instead of the system's X11R4 xdm). Two details:
+resources load through `xrdb -nocpp` (there may be no cpp), and `Xstartup`
+copies the server's cookie into the user's `.Xauthority`: xdm keys its
+user entries by local interface addresses it cannot list on ASV, and left
+the file empty, so every client in the session was refused.
 
 ## Run
 
@@ -39,8 +61,14 @@ Xatw :0 -mode 1024x768 &      # -ac to allow any host while testing
 DISPLAY=noname:0 twm &        # or the system's own R4 clients
 ```
 
-Until R6 fonts are installed, the server uses the system's X11R4 SNF fonts
-and `rgb` database. Tested in Hatari with the emulated card. The first
+Fonts: `build.sh` compiles R6.3's BDF sources (misc, 75dpi, 100dpi: 472
+fonts, 15 MB) to PCF with the host's `bdftopcf`/`mkfontdir`; the server's
+default path puts them first and keeps the system's X11R4 SNF fonts after
+them, and uses the system's `rgb` database. Everything ships as
+`work/x11r6-asv.tar` and `work/x11r6-fonts-asv.tar`, in the V7 tar format
+(ASV's `tar` cannot read GNU archives) and each under 16 MB (the most a
+process may write by default: a larger file is cut off there):
+`cd / && tar xf x11r6-asv.tar && tar xf x11r6-fonts-asv.tar`. Tested in Hatari with the emulated card. The first
 session was R6.3 end to end: `xsetroot`, `twm`, `xterm` (typing, with
 `$TERM` passed to the shell), `xclock` and `xlogo`. `xdpyinfo` reports
 vendor release 6300. The system's R4 clients and a modern `xlogo` from the
@@ -100,9 +128,20 @@ PC also work against the server.
   `-Denviron=_environ` and without `-DUTMP` for now.
 - `fixneeded.py` must run after the last link: a later `make` relinks and
   brings back the host library paths.
+- Much of the system's C library exists only in the static `libc.a`:
+  `setitimer`, `sys_errlist`, `cfree`, `crypt`, the shadow and utmp calls,
+  libm's `fpset` helpers. `libcextra.py` picks those members and whatever
+  they need in turn (stopping at what `libc.so.1` exports), and `build.sh`
+  joins them into one `libcextra.o` (`ld -r`) that every program links.
+  Two members are left out on purpose: `libc.a`'s `syscall()` and `vfork()`
+  report errors through a libc-internal routine that corrupts `errno` when
+  called from a program. `asvcompat.o` provides them instead, over libc's
+  `_abi_syscall`, and turns the kernel's internal ERESTART into EINTR.
+- Return values: see `../xview/README.md` (AMIX_RETURN_D0_TO_A0); the X
+  tree is built with it too.
 
 ## Next
 
-R6 fonts (`bdftopcf` and `mkfontdir` built
-for the host), then XView and olwm for OpenLook. Known: xterm echoes a typed
-line twice (pty modes), and `resize` is not built (`setitimer`).
+Known: xterm echoes a typed line twice (pty modes; `cmdtool` does not),
+`resize` is not built. xdm replaces the system's R4 xdm only when started
+by hand or from your own rc script.

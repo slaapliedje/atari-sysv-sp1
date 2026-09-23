@@ -1,0 +1,16 @@
+#!/bin/sh
+# logged in (xdm runs this as root before the session):
+# - the Fuji goes
+f=/usr/x11r6/lib/X11/xdm/xfuji.pid
+test -f $f && kill `cat $f` 2>/dev/null
+rm -f $f
+# - xdm leaves the user's .Xauthority empty here (its entries are keyed by
+#   local interface addresses it cannot list on this system), so hand over
+#   the server's own entry from XAUTHORITY: a wildcard-address cookie, which
+#   also covers the TCP connection clients make to noname:0
+if test -n "$XAUTHORITY" -a -n "$HOME" -a -n "$USER"; then
+	/usr/x11r6/bin/xauth -f "$XAUTHORITY" nlist |
+		/usr/x11r6/bin/xauth -f "$HOME/.Xauthority" nmerge -
+	chown "$USER" "$HOME/.Xauthority"
+fi
+exit 0
