@@ -14,7 +14,7 @@ toolchain). This directory holds only what Atari System V adds:
 | `config/asviob.c` | `stdin`/`stdout`/`stderr` for every program (see below) |
 | `libcextra.py` | picks the `libc.a` members a program needs that ASV's shared libc lacks |
 | `xdm/` | the login screen: ASV xdm configuration, `xfuji.c`, and `fuji-from-tos.py` |
-| `patches/x11r6.3-asv.patch` | `Imake.cf` selects `asv.cf` for `-DASV`; host imake passes `-undef`; `servermd.h` takes the AMIX (big-endian) block; the `Xatw` target; `twm` back in the build; `xterm` without utmp |
+| `patches/x11r6.3-asv.patch` | `Imake.cf` selects `asv.cf` for `-DASV`; host imake passes `-undef`; `servermd.h` takes the AMIX (big-endian) block; the `Xatw` target; `twm` back in the build; `xterm` without utmp, and pushing `ptem`/`ldterm`/`ttcompat` only when missing (ASV autopushes `ptem gls ldterm` onto every pts: a second `ldterm` echoed every line twice) |
 | `hw/atw/` | the ddx, ported from `../xserver` to R6's `mieq` event queue and `miPointerScreenFuncRec`; the keymap and the BSD-name shims (`atwCompat.c`) are shared with the R4 server |
 
 ## Build
@@ -142,6 +142,7 @@ PC also work against the server.
 
 ## Next
 
-Known: xterm echoes a typed line twice (pty modes; `cmdtool` does not),
-`resize` is not built. xdm replaces the system's R4 xdm only when started
+Known: `resize` is not built. (xterm used to echo every typed line: it
+pushed a second `ldterm` onto ASV's autopushed pts stack. `strconf` inside
+the window shows the stack.) xdm replaces the system's R4 xdm only when started
 by hand or from your own rc script.

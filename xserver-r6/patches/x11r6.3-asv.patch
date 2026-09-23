@@ -144,3 +144,37 @@ index d9fbf4a..1a52bfb 100644
      XKB_DEFINES = XkbClientDefines
          DEFINES = $(XKB_DEFINES)
            SRCS1 = button.c charproc.c cursor.c data.c input.c \
+diff --git a/programs/xterm/main.c b/programs/xterm/main.c
+--- a/programs/xterm/main.c
++++ b/programs/xterm/main.c
+@@ -2104,7 +2104,13 @@
+ 		if ((ptyfd = open (ptsname(screen->respond), O_RDWR)) < 0) {
+ 		    SysError (1);
+ 		}
+-		if (ioctl (ptyfd, I_PUSH, "ptem") < 0) {
++		/*
++		 * Push the terminal modules only if the system has not: Atari
++		 * System V autopushes ptem, gls and ldterm onto every pts, and a
++		 * second ldterm echoes every character twice.
++		 */
++		if (ioctl (ptyfd, I_FIND, "ptem") == 0 &&
++		    ioctl (ptyfd, I_PUSH, "ptem") < 0) {
+ 		    SysError (2);
+ 		}
+ #if !defined(SVR4) && !(defined(SYSV) && defined(i386))
+@@ -2112,11 +2118,13 @@
+ 		    SysError (3);
+ 		}
+ #endif /* !SVR4 */
+-		if (ioctl (ptyfd, I_PUSH, "ldterm") < 0) {
++		if (ioctl (ptyfd, I_FIND, "ldterm") == 0 &&
++		    ioctl (ptyfd, I_PUSH, "ldterm") < 0) {
+ 		    SysError (4);
+ 		}
+ #ifdef SVR4			/* from Sony */
+-		if (ioctl (ptyfd, I_PUSH, "ttcompat") < 0) {
++		if (ioctl (ptyfd, I_FIND, "ttcompat") == 0 &&
++		    ioctl (ptyfd, I_PUSH, "ttcompat") < 0) {
+ 		    SysError (5);
+ 		}
+ #endif /* SVR4 */

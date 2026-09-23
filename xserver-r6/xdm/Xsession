@@ -2,6 +2,9 @@
 # an OpenLook session; the session ends when olwm exits (Workspace menu: Exit)
 OPENWINHOME=/usr/openwin; export OPENWINHOME
 PATH=/usr/openwin/bin:/usr/x11r6/bin:$PATH; export PATH
+# an empty shell field in /etc/passwd (root's, on ASV) means /bin/sh, but
+# xdm passes it on as an empty SHELL, and cmdtool then fails to start one
+test -n "$SHELL" || { SHELL=/bin/sh; export SHELL; }
 test -x $HOME/.xsession && exec $HOME/.xsession
 xsetroot -solid '#5f7f9f'
 cmdtool -Wp 30 30 &
