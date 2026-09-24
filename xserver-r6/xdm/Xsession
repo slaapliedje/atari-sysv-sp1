@@ -1,5 +1,6 @@
 #!/bin/sh
-# an OpenLook session; the session ends when olwm exits (Workspace menu: Exit)
+# an OpenLook session; it ends when the window manager exits (Workspace
+# menu: Exit)
 OPENWINHOME=/usr/openwin; export OPENWINHOME
 # XView's Help key: its built-in default is /usr/lib/help, the system's
 HELPPATH=$OPENWINHOME/lib/help; export HELPPATH
@@ -11,4 +12,7 @@ test -x $HOME/.xsession && exec $HOME/.xsession
 xsetroot -solid '#5f7f9f'
 cmdtool -Wp 30 30 &
 clock -Wp 850 30 &
+# olvwm (olwm with a virtual desktop) if it is installed; a ~/.xsession
+# of your own can exec olwm instead
+test -x $OPENWINHOME/bin/olvwm && exec olvwm
 exec olwm

@@ -319,3 +319,104 @@ diff --git a/clients/props/l10n_read.c b/clients/props/l10n_read.c
  #ifndef ultrix
  extern char	*malloc();
  #endif
+diff --git a/clients/olvwm-4.1/Imakefile b/clients/olvwm-4.1/Imakefile
+--- a/clients/olvwm-4.1/Imakefile
++++ b/clients/olvwm-4.1/Imakefile
+@@ -50,8 +50,13 @@
+ /**/# For a generic Solaris 2.x system, I'd suggest
+ /**/#MORECCFLAGS=-DOW_I18N_L3 -DSHAPE -DSVR4 -DSYSV -DIDENT -x O4
+ 
++#ifdef ASVArchitecture
++/**/# Atari System V: SVR4, no XPM library
++MORECCFLAGS=-DOW_I18N_L3 -DSHAPE -DSVR4 -DSYSV -DXVIEW32
++#else
+ /**/# Linux/ELF
+ MORECCFLAGS=-DOW_I18N_L3 -DSHAPE -DXPM -DXVIEW32 -DMAXPID=32768 -I/usr/include/bsd -include /usr/include/bsd/bsd.h -I$(INCROOT)/X11
++#endif
+ 
+ /**/#
+ /**/# Set MORELDFLAGS to any link options you want.  Be sure to add -lxpm if you
+@@ -63,9 +68,17 @@
+ /**/#MORELDFLAGS=-L${OPENWINHOME}/lib -R ${OPENWINHOME}/lib -lintl
+ /**/#SYS_LIBRARIES = -ll -lm
+ 
++#ifdef ASVArchitecture
++MORELDFLAGS=
++#else
+ /**/# Linux/ELF
+ MORELDFLAGS=-lbsd -lXpm
++#endif
++#ifdef ASVArchitecture
++SYS_LIBRARIES = $(LEXLIB) -lm	/* yywrap for the flex-made parse.c */
++#else
+ SYS_LIBRARIES = -lfl -lm
++#endif
+ 
+ /**/# No more changes needed
+ 
+diff --git a/clients/olvwm-4.1/defaults.c b/clients/olvwm-4.1/defaults.c
+--- a/clients/olvwm-4.1/defaults.c
++++ b/clients/olvwm-4.1/defaults.c
+@@ -14,6 +14,7 @@
+ #ifdef SYSV
+ #include <sys/types.h>
+ #ifdef SVR4
++#include <sys/utsname.h>	/* ASV: SYS_NMLN for systeminfo.h */
+ #include <sys/systeminfo.h>
+ #endif
+ #endif
+diff --git a/clients/olvwm-4.1/gettext.c b/clients/olvwm-4.1/gettext.c
+--- a/clients/olvwm-4.1/gettext.c
++++ b/clients/olvwm-4.1/gettext.c
+@@ -24,7 +24,8 @@
+ char *fgets(), *getenv();
+ caddr_t mmap(), calloc();
+ 
+-#ifdef NOT
++/* ASV: libc has no gettext; use this one, as olwm does */
++#if defined(NOT) || defined(ASV)
+ static struct domain_binding *firstbind=0, *lastbind=0;
+ 
+ static void
+diff --git a/contrib/examples/fonts/disp_fonts.c b/contrib/examples/fonts/disp_fonts.c
+--- a/contrib/examples/fonts/disp_fonts.c
++++ b/contrib/examples/fonts/disp_fonts.c
+@@ -8,7 +8,7 @@
+ #include <xview/font.h>
+ #include <xview/xv_xrect.h>
+ 
+-#ifdef SVR4
++#if defined(SVR4) && !defined(ASV)	/* ASV: asvcompat has random() */
+ #define srandom( SEED )		srand( SEED )
+ #define random( SEED )		rand( SEED )
+ #endif
+diff --git a/contrib/examples/ttysw/Imakefile b/contrib/examples/ttysw/Imakefile
+--- a/contrib/examples/ttysw/Imakefile
++++ b/contrib/examples/ttysw/Imakefile
+@@ -12,7 +12,11 @@
+ INCLUDES = -I. -I$(HEADER_DEST) -I$(TOP)
+ DEPLIBS = XViewClientDepLibs
+ LOCAL_LIBRARIES = XViewClientLibs
++#ifdef CursesLibrary
++CURSES_LIBS = CursesLibrary
++#else
+ CURSES_LIBS = -lcurses
++#endif
+ 
+ MAKEFILE_SIMPLE = Makefile.customer
+ SRCS = sample_tty.c textsw_to_ttysw.c \
+diff --git a/contrib/examples/textsw/Imakefile b/contrib/examples/textsw/Imakefile
+--- a/contrib/examples/textsw/Imakefile
++++ b/contrib/examples/textsw/Imakefile
+@@ -12,7 +12,11 @@
+ INCLUDES = -I. -I$(HEADER_DEST) -I$(TOP)
+ DEPLIBS = XViewClientDepLibs
+ LOCAL_LIBRARIES = XViewClientLibs
++#ifdef CursesLibrary
++CURSES_LIBS = CursesLibrary
++#else
+ CURSES_LIBS = -lcurses
++#endif
+ 
+ MAKEFILE_SIMPLE = Makefile.customer
+ SRCS = sample_tty.c textsw.c textsw.font.c textsw_to_ttysw.c \

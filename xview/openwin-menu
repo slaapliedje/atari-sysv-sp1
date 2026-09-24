@@ -3,6 +3,18 @@
 "Text Editor"	exec textedit
 "Clock"		exec clock
 "xterm"		exec /usr/x11r6/bin/xterm
+"XView Demos"	MENU
+	"Color Logo"	exec /usr/openwin/demo/xview/color/color_logo
+	"Color Animation" exec /usr/openwin/demo/xview/color/color_animate
+	"Fonts"		exec /usr/openwin/demo/xview/fonts/disp_fonts
+	"Icons"		exec /usr/openwin/demo/xview/icons/icon_demo
+	"Pinnable Menu"	exec /usr/openwin/demo/xview/menus/pin_menu
+	"Panel Items"	exec /usr/openwin/demo/xview/panels/choices
+	"Sliders"	exec /usr/openwin/demo/xview/panels/slider
+	"Split Views"	exec /usr/openwin/demo/xview/canvas/split_views
+	"Notice"	exec /usr/openwin/demo/xview/notice/notice
+	"Drag and Drop"	exec /usr/openwin/demo/xview/dnd/dest
+"XView Demos"	END
 SEPARATOR
 "Properties..."	PROPERTIES
 "Refresh"	REFRESH

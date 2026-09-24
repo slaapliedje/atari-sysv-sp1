@@ -1,8 +1,9 @@
 # XView and OpenLook for Atari System V
 
 Sun's XView 3.2 toolkit (the OPEN LOOK look and feel) with its window
-manager `olwm`, the shell window `cmdtool`, `textedit`, `props` and `clock`,
-cross-built for
+window managers `olwm` and `olvwm` (olwm with a virtual desktop), the
+shell window `cmdtool`, `textedit`, `props`, `clock` and the 97 XView example
+programs, cross-built for
 Atari System V on top of the X11R6.3 build in `../xserver-r6`. The source
 is the Linux patchlevel 4 of XView 3.2p1-X11R6 (ibiblio), whose SVR4 code
 paths date from Sun's Solaris 2 port: that is the side ASV follows.
@@ -14,9 +15,11 @@ sh build.sh                         # -> work/xview-asv.tar (/usr/openwin)
 
 Install both tarballs from `/` (`tar xf`); the programs find their
 libraries through an RPATH of `/usr/openwin/lib:/usr/x11r6/lib`. The xdm
-session in `../xserver-r6/xdm/Xsession` starts `olwm`, `cmdtool` and
-`clock`; `olwm`'s Workspace menu is `openwin-menu` (Shell Tool, Text
-Editor, Clock, xterm, Properties, Refresh, Exit). Also installed: the Help
+session in `../xserver-r6/xdm/Xsession` starts `cmdtool`, `clock` and
+`olvwm` (or `olwm`, from a `~/.xsession`); the Workspace menu is
+`openwin-menu` (Shell Tool, Text Editor, Clock, xterm, XView Demos,
+Properties, Refresh, Exit). The examples from `contrib/examples` are in
+`/usr/openwin/demo/xview/<category>/`, each beside its source. Also installed: the Help
 key's texts in `/usr/openwin/lib/help` (the session sets `HELPPATH`; XView's
 default is the system's `/usr/lib/help`), a text Extras menu for ASV
 (`text_extras_menu`: Sun's ran SunOS filters, this one `fmt`, `tr`, `sed`,
@@ -45,6 +48,15 @@ source; `build.sh` makes it for seven of ASV's locales).
   regexp state itself; `txt_e_menu.c`: `<sys/types.h>` before
   `<sys/file.h>`; `wckind.c`: libc has the dl calls as `_dlopen` etc.;
   `linux_select.c`: Linux only; `images`/`bitmaps`: `all::` for GNU make.
+- `olvwm-4.1`: its Imakefile hard-wires Linux (`-DXPM`, `-lbsd -lXpm`,
+  `-lfl`); an ASV branch uses `-DSVR4 -DSYSV`, no XPM, and `$(LEXLIB)`
+  (`asv.cf` now names ASV's `libl.a` and `libcurses.a` by path: the
+  wrapper does not search `usr/ccs/lib`); its `gettext.c` was compiled out
+  for glibc and is compiled in on ASV; `<sys/utsname.h>` before
+  `<sys/systeminfo.h>`. Not in `clients/Imakefile`: `build.sh` makes it on
+  its own.
+- contrib: `disp_fonts.c` defined `random` as a one-argument macro for
+  SVR4 (asvcompat has the real one); `ttycurses` links `CursesLibrary`.
 - `textedit.c`, `l10n_read.c` (props): SVR4 branches beside the Linux ones
   (`<string.h>`, `<dirent.h>` for `MAXNAMLEN`, `sigaction`/`signal` for the
   BSD `sigvec`, libc's own `malloc` declarations). `asvcompat.o` gained
@@ -74,4 +86,7 @@ Two problems were not XView's and are fixed below it, for every program:
 logged-in user, OPEN LOOK scrollbar and pop-up menus), `clock`; five clocks
 started together all run, and the whole session starts from xdm and exits
 back to it. `textedit` and `props` start clean (menu, help and locale data
-found). Not yet: the contrib clients and `olvwm`.
+found). `olvwm` manages windows and shows its Virtual Desktop (Hatari);
+all 97 examples build. `contrib/misc` is not installed: `owplaces` needs
+`xtoolplaces`, `openwin` is Sun's xinit starter, and the alternative menus
+start Sun applications ASV does not have.

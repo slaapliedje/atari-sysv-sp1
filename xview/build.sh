@@ -76,17 +76,41 @@ for c in $CLIENTS; do
 	(cd clients/$c && make) > clients/$c/build.log 2>&1 || { echo "build failed: $c"; exit 1; }
 	python3 "$HERE/../xserver/fixneeded.py" clients/$c/$c > /dev/null
 done
+# olvwm, olwm with a virtual desktop: not in clients/Imakefile's SUBDIRS
+(cd clients/olvwm-4.1 && imake -DTOPDIR=../.. -DCURDIR=./clients/olvwm-4.1 && make) \
+	> clients/olvwm-4.1/build.log 2>&1 || { echo "build failed: olvwm"; exit 1; }
+python3 "$HERE/../xserver/fixneeded.py" clients/olvwm-4.1/olvwm > /dev/null
+# contrib: the XView example programs
+(cd contrib && imake -DTOPDIR=.. -DCURDIR=./contrib && make Makefiles && make) \
+	> contrib/build.log 2>&1
+# imake's subdirectory loop does not pass a failure up: look for one
+if grep 'Error [0-9]' contrib/build.log > /dev/null; then
+	grep 'Error [0-9]' contrib/build.log; echo "build failed: contrib, see contrib/build.log"; exit 1
+fi
+EXAMPLES=`cd contrib/examples && find . -type f -perm -u+x ! -name '*.[cho]' ! -name 'Makefile*' ! -name Imakefile | sed 's|^\./||' | sort`
+for e in $EXAMPLES; do
+	python3 "$HERE/../xserver/fixneeded.py" contrib/examples/$e > /dev/null
+done
 
 D=$WORK/dist/usr/openwin
 rm -rf $WORK/dist; mkdir -p $D/bin $D/lib
 cp lib/libxview/libxview.so.3 lib/libolgx/libolgx.so.3 $D/lib/
 for c in $CLIENTS; do cp clients/$c/$c $D/bin/; done
+cp clients/olvwm-4.1/olvwm $D/bin/
+# the examples by category, each program beside its source (some names
+# repeat across categories)
+for e in $EXAMPLES; do
+	c=`dirname $e`
+	mkdir -p $D/demo/xview/$c
+	cp contrib/examples/$e $D/demo/xview/$c/
+	cp contrib/examples/$c/*.c $D/demo/xview/$c/ 2>/dev/null || true
+done
 # olwm's Workspace menu (Shell Tool, Text Editor, Clock, xterm, Properties...)
 cp "$HERE/openwin-menu" $D/lib/
 # the Help key's texts (Xsession sets HELPPATH here: XView's default,
 # /usr/lib/help, is the system's), and the text windows' Extras menu
 mkdir -p $D/lib/help $D/lib/locale/C/xview
-cp misc/support/*.info $D/lib/help/
+cp misc/support/*.info clients/olvwm-4.1/olvwm.info $D/lib/help/
 cp "$HERE/text_extras_menu" $D/lib/locale/C/xview/.text_extras_menu
 # props' Localization category reads $OPENWINHOME/share/locale/<LC_MESSAGES>/
 # props/basic_setting and .../<chosen locale>; Sun's OpenWindows shipped

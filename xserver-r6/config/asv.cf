@@ -84,6 +84,8 @@ XCOMM returning prototypes (the m68k SVR4 ABI keeps them apart; XView needs it)
 #define YaccCmd yacc
 #define DependCmd true
 #define TermcapLibrary @ASV_SYSROOT@/usr/ccs/lib/libtermcap.a
+#define LexLib	 @ASV_SYSROOT@/usr/ccs/lib/libl.a
+#define CursesLibrary @ASV_SYSROOT@/usr/ccs/lib/libcurses.a
 
 #define ConnectionFlags -DTCPCONN
 #define HasSockets YES
