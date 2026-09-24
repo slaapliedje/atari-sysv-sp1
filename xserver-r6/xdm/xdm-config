@@ -14,5 +14,5 @@ DisplayManager*setup:		/usr/x11r6/lib/X11/xdm/Xsetup_0
 DisplayManager*startup:		/usr/x11r6/lib/X11/xdm/Xstartup
 DisplayManager*session:		/usr/x11r6/lib/X11/xdm/Xsession
 DisplayManager*authorize:	true
-DisplayManager*userPath:	/usr/openwin/bin:/usr/x11r6/bin:/usr/bin:/bin:/usr/ucb
+DisplayManager*userPath:	/usr/openwin/bin:/usr/x11r6/bin:/usr/bin:/bin:/usr/ucb:/usr/local/bin
 DisplayManager*systemPath:	/usr/x11r6/bin:/usr/sbin:/usr/bin:/bin:/etc

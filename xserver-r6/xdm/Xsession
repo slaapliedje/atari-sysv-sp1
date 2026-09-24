@@ -4,10 +4,16 @@
 OPENWINHOME=/usr/openwin; export OPENWINHOME
 # XView's Help key: its built-in default is /usr/lib/help, the system's
 HELPPATH=$OPENWINHOME/lib/help; export HELPPATH
-PATH=/usr/openwin/bin:/usr/x11r6/bin:$PATH; export PATH
+PATH=/usr/openwin/bin:/usr/x11r6/bin:$PATH:/usr/local/bin; export PATH
 # an empty shell field in /etc/passwd (root's, on ASV) means /bin/sh, but
-# xdm passes it on as an empty SHELL, and cmdtool then fails to start one
-test -n "$SHELL" || { SHELL=/bin/sh; export SHELL; }
+# xdm passes it on as an empty SHELL, and cmdtool then fails to start one.
+# bash, when it is installed and runs (it is an AMIX program: it needs the
+# amx module), else /bin/sh
+if test -z "$SHELL"; then
+	SHELL=/bin/sh
+	/usr/local/bin/bash -c true 2>/dev/null && SHELL=/usr/local/bin/bash
+	export SHELL
+fi
 test -x $HOME/.xsession && exec $HOME/.xsession
 xsetroot -solid '#5f7f9f'
 cmdtool -Wp 30 30 &
