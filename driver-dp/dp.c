@@ -132,7 +132,7 @@ int dpdevflag = 0;
 static struct scsijoblock *dpjob;
 static struct buf dpbuf;
 static unsigned char dpdata[64];
-static unsigned char dptx[1600], dprx[1600];
+static unsigned char dptx[1600], dprx[3100];
 static struct buf dpabuf;		/* the one ASYNC command */
 static int dp_busy;			/* dpabuf is queued or in flight */
 static int dp_up;			/* interface enabled, poll running */
@@ -147,7 +147,15 @@ static clock_t dp_settle;		/* lbolt until which errors are the post-enable windo
 #define DP_MAXERRS	3		/* consecutive failures that mean the adapter reset */
 static int dp_tid;			/* timeout id */
 
-#define DP_RXASK	1530		/* 6-byte header + a full frame */
+/*
+ * Receive in multi-packet ("blind") mode, READ(6) ctl 0xC0: the adapter
+ * returns up to two frames per command, each behind a 6-byte header whose
+ * last byte has 0x10 set when another frame follows. (0x80, single-packet
+ * mode, is for Macs whose VM pager must get at the bus between frames.)
+ */
+#define DP_RXASK	3072		/* room for two headers + full frames */
+#define DP_RXMODE	0xC0
+#define DP_RXMORE	0x10		/* header[5]: another frame follows */
 #define DP_NMINOR	8
 #define DPCMD(op, ctl)	(((op) << 8) | (ctl))	/* rides in b_blkno */
 
@@ -291,7 +299,7 @@ int start;
 		bp->b_bcount = dp_txlen;
 	} else if (dp_rxwant) {
 		bp->b_flags = B_BUSY | B_READ;
-		bp->b_blkno = DPCMD(0x08, 0x80);	/* single-packet mode */
+		bp->b_blkno = DPCMD(0x08, DP_RXMODE);
 		bp->b_un.b_addr = (caddr_t)dprx;
 		bp->b_bcount = DP_RXASK;
 		dprx[0] = dprx[1] = 0;
@@ -343,28 +351,47 @@ int err;
 			en_if.if_stats.ifs_opackets++;
 		if (en_if.if_wqcnt)
 			en_wproc();			/* stage the next frame */
+		/*
+		 * The answer to what was just sent (a TCP ack, an echo reply) is
+		 * probably on its way: look for it now rather than at the next
+		 * tick. A staged frame still goes first (dp_kick), so this reads
+		 * only when the sender has nothing more to send, i.e. is waiting.
+		 */
+		dp_rxwant = 1;
 	} else if (err == 0) {				/* receive finished */
-		n = (dprx[0] << 8) | dprx[1];
-		if (dprx[2] == 0xff && dprx[3] == 0xff && dprx[4] == 0xff &&
-		    dprx[5] == 0xff) {
-			/* the adapter dropped a packet and stays wedged until
-			 * it is disabled and enabled again */
-			dp_rxwant = 0;
-			dp_reinit = 2;
-			en_if.if_stats.ifs_ierrors++;
-		} else if (n == 0 || n > 1524) {
-			dp_rxwant = 0;			/* empty: wait for the timer */
-			dp_idle++;
-		} else {
-			dp_idle = 0;			/* more may be queued: go again */
-			n -= 4;				/* the device appends the CRC */
-			if (n >= 14 && (mp = allocb(n, BPRI_MED)) != (mblk_t *)0) {
-				bcopy((caddr_t)(dprx + 6), (caddr_t)mp->b_wptr, n);
-				mp->b_wptr += n;
+		unsigned char *h = dprx;
+		int got = 0, more;
+
+		do {
+			n = (h[0] << 8) | h[1];
+			if (h[2] == 0xff && h[3] == 0xff && h[4] == 0xff &&
+			    h[5] == 0xff) {
+				/* the adapter dropped a packet and stays wedged
+				 * until it is disabled and enabled again */
+				dp_rxwant = 0;
+				dp_reinit = 2;
+				en_if.if_stats.ifs_ierrors++;
+				break;
+			}
+			if (n == 0 || n > 1524)
+				break;			/* no (further) frame */
+			more = h[5] & DP_RXMORE;
+			got++;
+			if (n - 4 >= 14 && (mp = allocb(n - 4, BPRI_MED)) != (mblk_t *)0) {
+				/* n - 4: the device appends the CRC */
+				bcopy((caddr_t)(h + 6), (caddr_t)mp->b_wptr, n - 4);
+				mp->b_wptr += n - 4;
 				en_if.if_stats.ifs_ipackets++;
 				en_rproc(mp);
 			} else
 				en_if.if_stats.ifs_ierrors++;
+			h += 6 + n;
+		} while (more && h + 6 <= dprx + DP_RXASK);
+		if (got)
+			dp_idle = 0;			/* more may be queued: go again */
+		else if (dp_reinit == 0) {
+			dp_rxwant = 0;			/* empty: wait for the timer */
+			dp_idle++;
 		}
 	} else {
 		dp_rxwant = 0;
@@ -391,7 +418,8 @@ dp_poll()
 		return;
 	if (dp_pollq != (queue_t *)0)
 		qenable(dp_pollq);
-	ticks = (dp_idle > 100) ? HZ / 10 : HZ / 50;
+	/* every tick while there is traffic; after ~100 empty polls, slower */
+	ticks = (dp_idle > 100) ? HZ / 20 : 1;
 	if (ticks < 1)
 		ticks = 1;
 	dp_tid = timeout(dp_poll, (caddr_t)0, ticks);

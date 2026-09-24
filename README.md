@@ -87,8 +87,19 @@ cross-builds bash 5.2 as a static AMIX program.
   "start the queue head"; the core itself dequeues and `biodone()`s a
   finished request. Flag 0 means "retry the same request", not completion.
 - The DaynaPORT raises no interrupt; `dp` polls from a STREAMS service
-  procedure at 50 Hz while traffic flows, 10 Hz when idle. Received frames
+  procedure every clock tick (128 Hz) while traffic flows, ~21 Hz after
+  ~100 empty polls, and at once after each transmit (so a TCP ack or echo
+  reply is picked up while the sender waits for it, not at the next tick).
+  Reads use multi-packet mode (READ(6) ctl 0xC0: up to two frames per
+  command, header byte 5 bit 0x10 = another follows). Received frames
   carry a 4-byte CRC trailer that the driver strips.
+- Speed, 1 MB by ftp over a ZuluSCSI Blaster on Wi-Fi (2026-09-23):
+  TT to PC 57.8 s -> 36.4 s, PC to TT 28.5 s -> 25.9 s. What is left is
+  not the driver: receiving keeps the 030 ~75% busy in the kernel (SCSI,
+  TCP, copies); sending leaves it ~50% idle waiting for acks, with pings
+  of 15-190 ms across the two Wi-Fi hops. A bigger socket send buffer
+  (rsync's `socket options = SO_SNDBUF=32768`) made no measurable
+  difference.
 - spl levels on this kernel are absolute MFP masks (`spl4` SCSI,
   `splstr` = `spl5`); a timeout callback should never start SCSI work.
 
