@@ -59,7 +59,25 @@ the file empty, so every client in the session was refused.
 ```sh
 Xatw :0 -mode 1024x768 &      # -ac to allow any host while testing
 DISPLAY=noname:0 twm &        # or the system's own R4 clients
+Xatw -listmodes               # the modes this card offers; safe while X runs
 ```
+
+### Modes and the 4 MB card
+
+Built in are the VESA 60 Hz modes 640x480, 800x600, 1024x768 and
+1280x1024 at 8 bpp, and the first three at 32 bpp; the PLL settings are
+computed from each mode's pixel clock (`atwPll` in `hw/atw/atwInit.c`).
+
+At startup Xatw finds the card's memory (measured on a real card). With both
+jumpers A0/A1 closed (TT, CPLD firmware 2+) the card decodes 4 MB at
+0xFEA00000 but starts in a 2 MB layout, the upper half mirroring the
+lower; register 15 = 3 switches to the full 4 MB, with the FPGA structures
+at the top of it. A mode that does not fit the card is refused.
+
+Only 8 bpp for now. The 16/32 bpp modes need their pixel byte order
+confirmed on a real card first: the manual gives 16 bpp as a little-endian
+RGB565 word, which from the 68030's side splits green across both bytes -
+not something cfb16 can draw directly. `tools/atw/` has the test programs.
 
 Fonts: `build.sh` compiles R6.3's BDF sources (misc, 75dpi, 100dpi: 472
 fonts, 15 MB) to PCF with the host's `bdftopcf`/`mkfontdir`; the server's
