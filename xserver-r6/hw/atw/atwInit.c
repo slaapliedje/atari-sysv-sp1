@@ -433,6 +433,7 @@ atwScreenInit(index, pScreen, argc, argv)
 	return FALSE;
 
     atwScreen.installedMap = NULL;
+    atwAccelInit(m);
     return cfbCreateDefColormap(pScreen);
 }
 
@@ -534,6 +535,7 @@ atwListModesExit()
 /*
  * -mode WxH       one of the VESA modes
  * -depth N        its bits per pixel: 8 (the default) or 32
+ * -noaccel        draw everything with the CPU (no 2D engine)
  * -listmodes      print the modes and exit
  */
 int
@@ -553,6 +555,10 @@ ddxProcessArgument(argc, argv, i)
 	atwWantBpp = atoi(argv[i + 1]);
 	return 2;
     }
+    if (strcmp(argv[i], "-noaccel") == 0) {
+	atwNoAccel = 1;
+	return 1;
+    }
     if (strcmp(argv[i], "-listmodes") == 0) {
 	atwListModesExit();
 	return 1;
@@ -565,5 +571,6 @@ ddxUseMsg()
 {
     ErrorF("-mode WxH              ATW800/2 video mode (default 640x480)\n");
     ErrorF("-depth N               bits per pixel, 8 or 32 (8)\n");
+    ErrorF("-noaccel               no 2D engine: the CPU draws everything\n");
     ErrorF("-listmodes             list the modes and exit\n");
 }

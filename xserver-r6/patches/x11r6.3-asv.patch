@@ -96,6 +96,101 @@ index c169673..addc550 100644
  #if XdecServer
  XCOMM
  XCOMM Digital MIPS based WS server (ultrix 4.2 and beyond)
+diff --git a/programs/Xserver/cfb/cfb.h b/programs/Xserver/cfb/cfb.h
+--- a/programs/Xserver/cfb/cfb.h
++++ b/programs/Xserver/cfb/cfb.h
+@@ -902,6 +902,30 @@
+ #endif
+ );
+ 
++/*
++ * Hardware acceleration of on-screen drawing, for a ddx whose card has a
++ * 2D engine. Called for WINDOW drawables only (on screen), with GXcopy
++ * and all planes; each returns TRUE when it has done the work, FALSE to
++ * let cfb draw. NULL (the default) = no acceleration. The fill word is
++ * the PFILL()ed pixel.
++ */
++extern int (*cfbScreenBlitHook)(
++#if NeedFunctionPrototypes
++    DrawablePtr /*pSrc*/,
++    DrawablePtr /*pDst*/,
++    RegionPtr /*prgnDst*/,
++    DDXPointPtr /*pptSrc*/
++#endif
++);
++extern int (*cfbScreenFillHook)(
++#if NeedFunctionPrototypes
++    DrawablePtr /*pDrawable*/,
++    int /*nBox*/,
++    BoxPtr /*pBox*/,
++    unsigned long /*fill*/
++#endif
++);
++
+ extern void cfbFillBoxSolid(
+ #if NeedFunctionPrototypes
+     DrawablePtr /*pDrawable*/,
+diff --git a/programs/Xserver/cfb/cfbbitblt.c b/programs/Xserver/cfb/cfbbitblt.c
+--- a/programs/Xserver/cfb/cfbbitblt.c
++++ b/programs/Xserver/cfb/cfbbitblt.c
+@@ -300,6 +300,10 @@
+ }
+ 
+ 
++/* see cfb.h; tentative definitions: the cfb and cfb32 copies are one */
++int (*cfbScreenBlitHook)();
++int (*cfbScreenFillHook)();
++
+ void
+ cfbDoBitblt (pSrc, pDst, alu, prgnDst, pptSrc, planemask)
+     DrawablePtr	    pSrc, pDst;
+diff --git a/programs/Xserver/cfb/cfbblt.c b/programs/Xserver/cfb/cfbblt.c
+--- a/programs/Xserver/cfb/cfbblt.c
++++ b/programs/Xserver/cfb/cfbblt.c
+@@ -104,6 +104,13 @@
+     int careful;
+     int tmpSrc;
+ 
++#if MROP == Mcopy
++    if (cfbScreenBlitHook && pSrc->type == DRAWABLE_WINDOW &&
++	pDst->type == DRAWABLE_WINDOW && (planemask & PMSK) == PMSK &&
++	(*cfbScreenBlitHook)(pSrc, pDst, prgnDst, pptSrc))
++	return;
++#endif
++
+     MROP_INITIALIZE(alu,planemask);
+ 
+     cfbGetLongWidthAndPointer (pSrc, widthSrc, psrcBase)
+diff --git a/programs/Xserver/cfb/cfbpntwin.c b/programs/Xserver/cfb/cfbpntwin.c
+--- a/programs/Xserver/cfb/cfbpntwin.c
++++ b/programs/Xserver/cfb/cfbpntwin.c
+@@ -202,6 +202,10 @@
+     register int    m;
+     int		    w;
+ 
++    if (cfbScreenFillHook && pDrawable->type == DRAWABLE_WINDOW &&
++	(*cfbScreenFillHook)(pDrawable, nBox, pBox, PFILL(pixel)))
++	return;
++
+     cfbGetLongWidthAndPointer(pDrawable, widthDst, pdstBase);
+ 
+     rrop_xor = PFILL(pixel);
+diff --git a/programs/Xserver/cfb/cfbsolid.c b/programs/Xserver/cfb/cfbsolid.c
+--- a/programs/Xserver/cfb/cfbsolid.c
++++ b/programs/Xserver/cfb/cfbsolid.c
+@@ -130,6 +130,12 @@
+ 
+     devPriv = cfbGetGCPrivate(pGC);
+ 
++#if RROP == GXcopy
++    if (cfbScreenFillHook && pDrawable->type == DRAWABLE_WINDOW &&
++	(*cfbScreenFillHook)(pDrawable, nBox, pBox, devPriv->xor))
++	return;
++#endif
++
+     cfbGetLongWidthAndPointer (pDrawable, widthDst, pdstBase)
+ 
+     RROP_FETCH_GC(pGC)
 diff --git a/programs/Xserver/include/servermd.h b/programs/Xserver/include/servermd.h
 index 19fe3cd..cafcdc3 100644
 --- a/programs/Xserver/include/servermd.h

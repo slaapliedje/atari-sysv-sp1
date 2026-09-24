@@ -21,3 +21,17 @@ server runs leaves that server drawing into memory the card is not showing.
 Results on the real V0205 card (2026-09-24): **16 bpp column 1** (little-
 endian RGB565, as the manual says) and **32 bpp column 3** (bytes R, G, B,
 x). The Hatari fork had guessed B, G, R, x for 32 bpp and was corrected.
+
+## The 2D engine (blitter)
+
+Read-back tests: off-screen video memory above 3.25 MB only, register 15
+untouched, so they are safe with X running - but they need the 4 MB
+layout, i.e. X at `-depth 32`.
+
+| program | what it tells |
+|---|---|
+| `atwblit` | the copy (1 ascending, 3 descending from the last byte) and fill (5) commands, byte-checked, and that the old model (3 set up ascending) is wrong |
+| `atwblstat` | the register window reads back one status word at every offset; bit 0 = busy while the engine runs |
+| `atwblspeed` | throughput: V0205 measured 38 MB/s copy, 58 MB/s fill; the CPU 0.9 / 1.8 MB/s |
+| `atwfill` | a fill takes the first 64 source bytes, then repeats the second 32-byte block |
+| `atwtorture` | 300 random unaligned copies both ways and fills against a CPU model: all byte-exact on the real card |

@@ -86,6 +86,15 @@ olvwm and OpenUA all run on it. 16 bpp is not offered: the card's
 little-endian RGB565 splits green across both bytes from the 68030's side,
 which no TrueColor visual can describe; it would need a shadow framebuffer.
 
+The card's 2D engine does on-screen copies (moving windows, scrolling)
+and solid fills (window backgrounds, clears) at 8 and 32 bpp:
+`hw/atw/atwAccel.c`, called from cfb through two hooks the patch adds
+(`cfbScreenBlitHook`, `cfbScreenFillHook` in `cfb.h`; NULL in any other
+server). Measured on a V0205 card the engine is ~40x the CPU over the VME
+bus. `-noaccel` turns it off; in Hatari a scripted scene of fills,
+overlapping scrolls and window moves renders pixel-identical with and
+without it (and a deliberately broken copy direction does not).
+
 Fonts: `build.sh` compiles R6.3's BDF sources (misc, 75dpi, 100dpi: 472
 fonts, 15 MB) to PCF with the host's `bdftopcf`/`mkfontdir`; the server's
 default path puts them first and keeps the system's X11R4 SNF fonts after

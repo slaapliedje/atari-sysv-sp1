@@ -85,6 +85,9 @@ extern void atwInitModMap();
 extern void atwReadInput();
 extern miPointerScreenFuncRec atwPointerScreenFuncs;
 
+extern int  atwNoAccel;
+extern void atwAccelInit();
+
 /* IKBD packet codes */
 #define IKBD_RELMOUSE	0xF8		/* 0xF8..0xFB: buttons in bits 0-1 */
 #define IKBD_ABSMOUSE	0xF7
