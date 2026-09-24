@@ -3,7 +3,9 @@
 #   OUT/sysroot  an AMIX sysroot for gcc-cross-amix: usr/include (from Cdev),
 #                usr/lib (core) and usr/ccs/lib (Cdev: crt*.o, values-X*.o,
 #                libc.a...), with the headers' `__STDC__ == 0' tests fixed for
-#                gcc as mksysroot.sh does for ASV
+#                gcc as mksysroot.sh does for ASV; and X11 (Xdev, Xcore) in
+#                usr/X, reachable as <X11/...>, with its implicit-int
+#                declarations made explicit (GCC 14+ rejects them)
 #   OUT/amx      AMIX's shared C library, patched by amixify.py to live in
 #                /usr/amx on Atari System V: libc.so.1 (also the dynamic
 #                linker), ld.so.1, libsocket.so, libnsl.so ...
@@ -33,10 +35,12 @@ fetch() {	# name (catalog field 1)
 	echo "$f"
 }
 
-core=$(fetch core); cdev=$(fetch cdev)
+core=$(fetch core); cdev=$(fetch cdev); xdev=$(fetch xdev); xcore=$(fetch xcore)
 rm -rf "$out/x" "$out/sysroot" "$out/amx"
 python3 "$here/unpkg.py" "$core" "$out/x/core"
 python3 "$here/unpkg.py" "$cdev" "$out/x/cdev"
+python3 "$here/unpkg.py" "$xdev" "$out/x/xdev"
+python3 "$here/unpkg.py" "$xcore" "$out/x/xcore"
 
 mkdir -p "$out/sysroot"
 for p in core cdev; do
@@ -44,12 +48,26 @@ for p in core cdev; do
 		[ -d "$part/root" ] && cp -a "$part/root/." "$out/sysroot/"
 	done
 done
+for p in xcore xdev; do
+	for part in "$out/x/$p"/part*; do
+		[ -d "$part/root/usr/X" ] && cp -a "$part/root/usr/X" "$out/sysroot/usr/"
+	done
+done
 chmod -R u+rw "$out/sysroot"
+ln -sfn ../X/include "$out/sysroot/usr/include/X11"
+# "extern XFoo(" -> "extern int XFoo(", but not "extern int (*XFoo(" /
+# "extern Status (*XFoo(" (functions returning function pointers)
+for f in "$out"/sysroot/usr/X/include/*.h; do
+	sed -i -E -e 's/^extern +([A-Za-z_][A-Za-z_0-9]*) *\(/extern int \1(/' \
+		-e 's/^extern int int\(\*/extern int (*/' \
+		-e 's/^extern int ([A-Z][A-Za-z_]*)\(\*/extern \1 (*/' "$f"
+done
 # the headers were written for AT&T cc -Xa, where __STDC__ is 0; gcc sets 1
 grep -rlE '__STDC__ *(- *0 *)?== *0' "$out/sysroot/usr/include" | while read f; do
 	sed -i -E 's/__STDC__ *(- *0 *)?== *0/1/g' "$f"
 done
-for f in usr/include/stdio.h usr/lib/libc.so.1 usr/ccs/lib/crt1.o usr/ccs/lib/libc.a; do
+for f in usr/include/stdio.h usr/lib/libc.so.1 usr/ccs/lib/crt1.o usr/ccs/lib/libc.a \
+	usr/X/include/Xlib.h usr/X/lib/libX11.a; do
 	[ -f "$out/sysroot/$f" ] || { echo "sysroot lacks $f" >&2; exit 1; }
 done
 
