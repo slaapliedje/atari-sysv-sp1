@@ -1,7 +1,8 @@
 # XView and OpenLook for Atari System V
 
 Sun's XView 3.2 toolkit (the OPEN LOOK look and feel) with its window
-manager `olwm`, the shell window `cmdtool` and `clock`, cross-built for
+manager `olwm`, the shell window `cmdtool`, `textedit`, `props` and `clock`,
+cross-built for
 Atari System V on top of the X11R6.3 build in `../xserver-r6`. The source
 is the Linux patchlevel 4 of XView 3.2p1-X11R6 (ibiblio), whose SVR4 code
 paths date from Sun's Solaris 2 port: that is the side ASV follows.
@@ -14,12 +15,18 @@ sh build.sh                         # -> work/xview-asv.tar (/usr/openwin)
 Install both tarballs from `/` (`tar xf`); the programs find their
 libraries through an RPATH of `/usr/openwin/lib:/usr/x11r6/lib`. The xdm
 session in `../xserver-r6/xdm/Xsession` starts `olwm`, `cmdtool` and
-`clock`; `olwm`'s Workspace menu is `openwin-menu` (Shell Tool, Clock,
-xterm, Refresh, Exit).
+`clock`; `olwm`'s Workspace menu is `openwin-menu` (Shell Tool, Text
+Editor, Clock, xterm, Properties, Refresh, Exit). Also installed: the Help
+key's texts in `/usr/openwin/lib/help` (the session sets `HELPPATH`; XView's
+default is the system's `/usr/lib/help`), a text Extras menu for ASV
+(`text_extras_menu`: Sun's ran SunOS filters, this one `fmt`, `tr`, `sed`,
+`sort`, `expand`), and the Localization data `props` reads from
+`share/locale/<locale>/props` (from Sun's OpenWindows, not in the free
+source; `build.sh` makes it for seven of ASV's locales).
 
 ## What ASV needed
 
-`patches/xview-3.2p1.4-asv.patch` (14 files) and two compat headers:
+`patches/xview-3.2p1.4-asv.patch` (16 files) and two compat headers:
 
 - `config/XView.cf`: an ASV branch (`-DX11R6`, `OPENWINHOME=/usr/openwin`);
   `XView.rules`: shared libraries get a SONAME (`ld -h`).
@@ -38,6 +45,10 @@ xterm, Refresh, Exit).
   regexp state itself; `txt_e_menu.c`: `<sys/types.h>` before
   `<sys/file.h>`; `wckind.c`: libc has the dl calls as `_dlopen` etc.;
   `linux_select.c`: Linux only; `images`/`bitmaps`: `all::` for GNU make.
+- `textedit.c`, `l10n_read.c` (props): SVR4 branches beside the Linux ones
+  (`<string.h>`, `<dirent.h>` for `MAXNAMLEN`, `sigaction`/`signal` for the
+  BSD `sigvec`, libc's own `malloc` declarations). `asvcompat.o` gained
+  `index`, `rindex` and `getwd`.
 - `-lintl -ldl` are dropped (XView carries its own gettext), and
   `environ` is `_environ`.
 
@@ -57,11 +68,10 @@ Two problems were not XView's and are fixed below it, for every program:
   internal ERESTART (91) reaches the caller. `asvcompat.o` provides
   `syscall()` on libc's `_abi_syscall` and turns ERESTART into EINTR.
 
-## Status (Hatari, emulated ATW800/2)
+## Status (real TT with the ATW800/2, and Hatari)
 
 `olwm` with its Workspace menu and exit notice, `cmdtool` (a shell as the
 logged-in user, OPEN LOOK scrollbar and pop-up menus), `clock`; five clocks
 started together all run, and the whole session starts from xdm and exits
-back to it. Not yet: `textedit`, `props` and the contrib clients, OpenLook
-help and locale files (`/usr/lib/.text_extras_menu` is looked for and
-missing), `olvwm`.
+back to it. `textedit` and `props` start clean (menu, help and locale data
+found). Not yet: the contrib clients and `olvwm`.

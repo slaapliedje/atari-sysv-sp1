@@ -229,3 +229,93 @@ index 5675f64..a4e11c4 100644
          perror("push ldterm");
  	return XV_ERROR;
      }
+diff --git a/clients/textedit/textedit.c b/clients/textedit/textedit.c
+--- a/clients/textedit/textedit.c
++++ b/clients/textedit/textedit.c
+@@ -13,11 +13,18 @@
+ 
+ #include <sys/param.h> /* MAXPATHLEN (include types.h if removed) */
+ #include <sys/dir.h>   /* MAXNAMLEN */
++#ifdef SVR4
++#include <dirent.h>    /* MAXNAMLEN, on SVR4 */
++#endif
+ #include <sys/stat.h>
+ 
+ #include <fcntl.h>
+ #include <stdio.h>
++#ifndef SVR4
+ #include <strings.h>
++#else
++#include <string.h>
++#endif
+ #include <X11/X.h>
+ #include <xview/defaults.h>
+ #include <xview/font.h>
+@@ -41,7 +48,7 @@
+ long	textsw_store_file();
+ */
+ char	*getwd();
+-#ifndef __linux
++#if !defined(__linux) && !defined(SVR4)
+ char *sprintf();
+ #endif
+ void	frame_cmdline_help();
+@@ -911,9 +918,9 @@
+ 	char			 name_to_use[MAXNAMLEN];
+ 	int			 pid = getpid();
+ 	int			 was_SIGILL = (sig == SIGILL);
+-#ifndef __linux
++#if !defined(__linux) && !defined(SVR4)
+ 	struct sigvec vec;
+-#else
++#elif !defined(SVR4)
+ 	struct sigaction vec;
+ #endif
+ 
+@@ -957,12 +964,22 @@
+ Die:
+ 	(void)fprintf(stderr, "aborting for post-mortem ...\n");
+ 	(void)fflush(stderr);
++#ifdef SVR4
++	{
++	    sigset_t none;
++	    sigemptyset(&none);
++	    (void)sigprocmask(SIG_SETMASK, &none, (sigset_t *)0);
++	}
++#else
+ 	(void)sigsetmask(0);		/* Make sure signals get through */
++#endif
+ 	if (was_SIGILL) {
+ #ifndef lint
+ 	    char	dummy, *bad_ptr = 0;
+ 	    /* (void)signal(SIGSEGV, SIG_DFL);	/* Make sure 0 deref dumps. */
+-#ifndef __linux
++#if defined(SVR4)
++	    (void)signal(SIGSEGV, SIG_DFL);
++#elif !defined(__linux)
+ 	    vec.sv_handler = SIG_DFL;
+ 	    vec.sv_mask = vec.sv_onstack = 0;
+ 	    sigvec(SIGSEGV, &vec, 0);
+@@ -977,7 +994,9 @@
+ #endif
+ 	} else {
+ 	    /* (void)signal(SIGILL, SIG_DFL);	/* Make sure abort() dumps. */
+-#ifndef __linux
++#if defined(SVR4)
++	    (void)signal(SIGILL, SIG_DFL);
++#elif !defined(__linux)
+             vec.sv_handler = SIG_DFL; 
+ 	    vec.sv_mask = vec.sv_onstack = 0; 
+             sigvec(SIGILL, &vec, 0);
+diff --git a/clients/props/l10n_read.c b/clients/props/l10n_read.c
+--- a/clients/props/l10n_read.c
++++ b/clients/props/l10n_read.c
+@@ -25,7 +25,7 @@
+ #define	ITEM_SEPARATOR		';'
+ 
+ 
+-#ifndef __linux
++#if !defined(__linux) && !defined(SVR4)
+ #ifndef ultrix
+ extern char	*malloc();
+ #endif

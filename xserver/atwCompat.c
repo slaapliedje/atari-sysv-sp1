@@ -192,3 +192,33 @@ vfork()
 {
     return fork();
 }
+
+/* BSD string and directory names, for the XView clients (textedit) */
+char *
+index(s, c)
+    char *s;
+    int c;
+{
+    return strchr(s, c);
+}
+
+char *
+rindex(s, c)
+    char *s;
+    int c;
+{
+    return strrchr(s, c);
+}
+
+extern char *getcwd();
+
+char *
+getwd(buf)			/* buf holds MAXPATHLEN (1024) bytes */
+    char *buf;
+{
+    if (getcwd(buf, 1024) == (char *)0) {
+	strcpy(buf, "getwd: cannot get the current directory");
+	return (char *)0;
+    }
+    return buf;
+}

@@ -1,7 +1,9 @@
 "Workspace"	TITLE
 "Shell Tool"	DEFAULT exec cmdtool
+"Text Editor"	exec textedit
 "Clock"		exec clock
 "xterm"		exec /usr/x11r6/bin/xterm
 SEPARATOR
+"Properties..."	PROPERTIES
 "Refresh"	REFRESH
 "Exit"		EXIT

@@ -70,10 +70,12 @@ if [ ! -f config/asv/asviob.o ]; then
 	rm -rf config/asv/libc; mkdir -p config/asv/libc
 	(cd config/asv/libc && "$CROSS/bin/m68k-cbm-sysv4-ar" x "$REALROOT/usr/lib/libc.a" $M &&
 		"$CROSS/bin/m68k-cbm-sysv4-ld" -r -o ../libcextra.o *.o)
-	cp "$HERE/../xserver/atwCompat.c" config/asv/asvcompat.c
 	cp "$HERE/config/asviob.c" config/asv/
-	(cd config/asv && $CC -O -c asvcompat.c && $CC -O -c asviob.c)
+	(cd config/asv && $CC -O -c asviob.c)
 fi
+# every run: atwCompat.c grows as programs need more BSD names
+cp "$HERE/../xserver/atwCompat.c" config/asv/asvcompat.c
+(cd config/asv && $CC -O -c asvcompat.c)
 
 # 4. host tools: imake, and the two generators the build runs on the PC
 if [ ! -x config/imake/imake ]; then

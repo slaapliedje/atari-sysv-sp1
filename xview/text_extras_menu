@@ -1,0 +1,40 @@
+#
+#	Text "Extras" menu for Atari System V: textedit and cmdtool's
+#	Extras item pipes the selection through the command and replaces
+#	it with the output. Sun's original ran SunOS filters (capitalize,
+#	shift_lines, insert_brackets...) that ASV does not have; these use
+#	tools that are on the system.
+#	Installed as $OPENWINHOME/lib/locale/C/xview/.text_extras_menu;
+#	a ~/.text_extras_menu of your own takes precedence.
+#
+"Format"		fmt
+
+"Case"			MENU
+	"abcd -> ABCD"	tr '[a-z]' '[A-Z]'
+	"ABCD -> abcd"	tr '[A-Z]' '[a-z]'
+"Case"			END
+
+"Shift Lines"		MENU
+	"Right"		sed 's/^/	/'
+	"Left"		sed 's/^	//'
+"Shift Lines"		END
+
+"Sort Lines"		MENU
+	"Ascending"	sort
+	"Descending"	sort -r
+	"Unique"	sort -u
+"Sort Lines"		END
+
+"Tabs -> Spaces"	/usr/ucb/expand
+
+"Insert Brackets"	MENU
+	"   (   )"	sed -e '1s/^/(/' -e '$s/$/)/'
+	"   [   ]"	sed -e '1s/^/[/' -e '$s/$/]/'
+	"   {   }"	sed -e '1s/^/{/' -e '$s/$/}/'
+"Insert Brackets"	END
+
+"Comment Lines"		MENU
+	"# shell"	sed 's/^/# /'
+	"/* C */"	sed -e 's,^,/* ,' -e 's,$, */,'
+	"Uncomment #"	sed 's/^# \{0,1\}//'
+"Comment Lines"		END

@@ -16,7 +16,7 @@ XC=$XWORK/xc
 A=$XC/config/asv
 SRC_URL=https://www.ibiblio.org/pub/Linux/libs/X/xview/xview-3.2p1.4.src.tar.gz
 SRC_SHA256=fcc88f884a6cb05789ed800edea24d9c4cf1f60cb7d61f3ce7f10de677ef9e8d
-CLIENTS="clock olwm olwmslave cmdtool"
+CLIENTS="clock olwm olwmslave cmdtool textedit props"
 
 [ -x $XC/config/imake/imake ] || { echo "build ../xserver-r6 first ($XC)" >&2; exit 1; }
 mkdir -p "$WORK"
@@ -81,7 +81,40 @@ D=$WORK/dist/usr/openwin
 rm -rf $WORK/dist; mkdir -p $D/bin $D/lib
 cp lib/libxview/libxview.so.3 lib/libolgx/libolgx.so.3 $D/lib/
 for c in $CLIENTS; do cp clients/$c/$c $D/bin/; done
-# olwm's Workspace menu (Shell Tool, Clock, xterm, Refresh, Exit)
+# olwm's Workspace menu (Shell Tool, Text Editor, Clock, xterm, Properties...)
 cp "$HERE/openwin-menu" $D/lib/
+# the Help key's texts (Xsession sets HELPPATH here: XView's default,
+# /usr/lib/help, is the system's), and the text windows' Extras menu
+mkdir -p $D/lib/help $D/lib/locale/C/xview
+cp misc/support/*.info $D/lib/help/
+cp "$HERE/text_extras_menu" $D/lib/locale/C/xview/.text_extras_menu
+# props' Localization category reads $OPENWINHOME/share/locale/<LC_MESSAGES>/
+# props/basic_setting and .../<chosen locale>; Sun's OpenWindows shipped
+# those, the free XView source does not. Made here for the locales ASV has
+# (/usr/lib/locale), each offering all of them. The line must fit props'
+# 256-byte buffer.
+# props reads 256-byte lines, so basic_setting offers a subset
+LOCALES="C english_usa english_uk german_germany french_france italian_italy
+ spanish_spain"
+label() {
+	case $1 in
+	C) echo "C (POSIX)";;
+	*_usa) echo "English (USA)";;
+	*_uk) echo "English (UK)";;
+	*) echo "$1" | sed 's/_/ (/; s/$/)/' | awk '{print toupper(substr($0,1,1)) substr($0,2)}' |
+		sed 's/(\(.\)/(\u\1/';;
+	esac
+}
+for m in $LOCALES; do
+	P=$D/share/locale/$m/props
+	mkdir -p $P
+	{ printf 'basic_setting=%s' $m
+	  for l in $LOCALES; do printf ';%s|%s' $l "`label $l`"; done; echo; } > $P/basic_setting
+	for b in $LOCALES; do
+		for c in input_language display_language time_format numeric_format; do
+			printf '%s=%s;%s|%s\n' $c $b $b "`label $b`"
+		done > $P/$b
+	done
+done
 tar --format=v7 --owner=0 --group=0 -C $WORK/dist -cf $WORK/xview-asv.tar usr
 ls -l $D/bin $D/lib $WORK/xview-asv.tar
