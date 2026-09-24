@@ -17,7 +17,7 @@ CROSS=${ASV_CROSS:-$HOME/opt/asv-cross}
 AMIX_REPO=https://github.com/isoriano1968/x11r6.3-amix.git
 AMIX_REV=cb61a2115659cb3ae27c649439edb2ca133131b6
 REALROOT=$CROSS/m68k-cbm-sysv4/sysroot
-CLIENTS="xdpyinfo xclock xlogo xterm twm xsetroot xset xlsfonts xfd xrdb xauth xdm"
+CLIENTS="xdpyinfo xclock xlogo xterm twm xsetroot xset xlsfonts xfd xrdb xauth xdm xrefresh"
 
 # the gcc-cross-amix wrapper must have the PIC fixes for GNU as (LC%N
 # labels, long PLT calls) and AMIX_RETURN_D0_TO_A0
