@@ -70,21 +70,23 @@ diff --git a/programs/Xserver/Imakefile b/programs/Xserver/Imakefile
 index c169673..addc550 100644
 --- a/programs/Xserver/Imakefile
 +++ b/programs/Xserver/Imakefile
-@@ -198,6 +198,23 @@ ServerTarget(Xzz9000,$(AMIXDIRS),$(AMIXOBJS),$(AMIXLIBS),$(SYSLIBS))
+@@ -198,6 +198,25 @@ ServerTarget(Xzz9000,$(AMIXDIRS),$(AMIXOBJS),$(AMIXLIBS),$(SYSLIBS))
  #endif
  #endif /* XAmixServer */
  
 +#if XAtwServer
 +XCOMM
-+XCOMM Atari System V: the ATW800/2 "Seurat" card, 8-bit PseudoColor over cfb.
++XCOMM Atari System V: the ATW800/2 "Seurat" card over cfb: 8 bpp PseudoColor,
++XCOMM or 32 bpp TrueColor (cfb32).
 +XCOMM
 +MFBDIR   = mfb
 +CFB8DIR  = cfb
++CFB32DIR = cfb32
 +DDXDIR1  = hw/atw
-+ATWDIRS  = include dix os mi $(EXTDIRS) $(MFBDIR) $(CFB8DIR) \
++ATWDIRS  = include dix os mi $(EXTDIRS) $(MFBDIR) $(CFB8DIR) $(CFB32DIR) \
 +           $(DDXDIR1) $(DEPDIRS)
 +ATWOBJS  = hw/atw/atwInit.o
-+ATWLIBS  = hw/atw/LibraryTargetName(atw) CFB8Libs
++ATWLIBS  = hw/atw/LibraryTargetName(atw) CFB32Libs
 +ServerTarget(Xatw,$(ATWDIRS),$(ATWOBJS),$(ATWLIBS),$(SYSLIBS))
 +#ifndef ServerToInstall
 +#define ServerToInstall Xatw

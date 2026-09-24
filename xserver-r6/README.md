@@ -60,6 +60,7 @@ the file empty, so every client in the session was refused.
 Xatw :0 -mode 1024x768 &      # -ac to allow any host while testing
 DISPLAY=noname:0 twm &        # or the system's own R4 clients
 Xatw -listmodes               # the modes this card offers; safe while X runs
+Xatw :0 -mode 1024x768 -depth 32 &   # 24-bit colour (4 MB card)
 ```
 
 ### Modes and the 4 MB card
@@ -74,10 +75,16 @@ jumpers A0/A1 closed (TT, CPLD firmware 2+) the card decodes 4 MB at
 lower; register 15 = 3 switches to the full 4 MB, with the FPGA structures
 at the top of it. A mode that does not fit the card is refused.
 
-Only 8 bpp for now. The 16/32 bpp modes need their pixel byte order
-confirmed on a real card first: the manual gives 16 bpp as a little-endian
-RGB565 word, which from the 68030's side splits green across both bytes -
-not something cfb16 can draw directly. `tools/atw/` has the test programs.
+Depths: 8 bpp PseudoColor through the LUT (the default), or `-depth 32`:
+TrueColor over cfb32, at the modes offered in 32 bit (up to 1024x768,
+which needs the 4 MB card). The card's 32 bpp pixel is the bytes
+R, G, B, x (measured, `tools/atw/`), which the 68030 reads as 0xRRGGBBxx:
+legal for a depth 32 visual (masks 0xff000000 / 0xff0000 / 0xff00) but
+not for depth 24, whose colour must sit in the low 24 bits - so the screen
+is depth 32 and cfb32 draws straight into the card. R6.3 clients, XView,
+olvwm and OpenUA all run on it. 16 bpp is not offered: the card's
+little-endian RGB565 splits green across both bytes from the 68030's side,
+which no TrueColor visual can describe; it would need a shadow framebuffer.
 
 Fonts: `build.sh` compiles R6.3's BDF sources (misc, 75dpi, 100dpi: 472
 fonts, 15 MB) to PCF with the host's `bdftopcf`/`mkfontdir`; the server's

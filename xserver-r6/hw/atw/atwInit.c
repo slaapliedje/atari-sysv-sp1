@@ -18,7 +18,7 @@
 #include "mi.h"
 
 extern int TellLostMap(), TellGainedMap();
-extern Bool cfbScreenInit(), cfbCreateDefColormap();
+extern Bool cfbScreenInit(), cfb32ScreenInit(), cfbSetVisualTypes(), cfbCreateDefColormap();
 
 atwScreenRec	atwScreen;
 
@@ -107,6 +107,7 @@ atwBuiltinModes()
 }
 static int	atwWantW = 640, atwWantH = 480, atwWantBpp = 8;
 
+/* depth 1, and the screen's: 8 bpp, or 32 (set by InitOutput) */
 static PixmapFormatRec formats[] = {
     { 1, 1, BITMAP_SCANLINE_PAD },
     { 8, 8, BITMAP_SCANLINE_PAD },
@@ -249,6 +250,9 @@ atwUpdateColormap(cmap, first, n)
     register int i;
     register Entry *pent;
     unsigned short r, g, b;
+
+    if (cmap->pVisual->class != PseudoColor)
+	return;			/* 32 bpp: the pixels are the colours */
 
     for (i = first, pent = &cmap->red[first]; i < first + n; i++, pent++) {
 	if (pent->fShared) {
@@ -394,8 +398,32 @@ atwScreenInit(index, pScreen, argc, argv)
     pScreen->ListInstalledColormaps = atwListInstalledColormaps;
     pScreen->StoreColors = atwStoreColors;
 
-    if (!cfbScreenInit(pScreen, (pointer)atwScreen.fb, m->width, m->height,
-		       75, 75, m->width))
+    if (m->bpp == 32) {
+	VisualPtr v;
+	int i;
+
+	/* one TrueColor visual at depth 32 (cfb would also offer, and
+	 * default to, DirectColor), with depth 1 for bitmaps */
+	if (!cfbSetVisualTypes(1, 0, 8) ||
+	    !cfbSetVisualTypes(32, 1 << TrueColor, 8))
+	    return FALSE;
+	if (!cfb32ScreenInit(pScreen, (pointer)atwScreen.fb, m->width,
+			     m->height, 75, 75, m->width))
+	    return FALSE;
+	/* The card's 32 bpp pixel is the bytes R, G, B, x (measured on a
+	 * V0205 card): the 68030 reads it as 0xRRGGBBxx. That is legal for
+	 * a depth 32 visual, not a depth 24 one, whose colour bits would
+	 * have to be the low 24 - so the screen is depth 32. */
+	for (i = 0, v = pScreen->visuals; i < pScreen->numVisuals; i++, v++)
+	    if (v->class == TrueColor) {
+		v->redMask   = 0xFF000000;	v->offsetRed   = 24;
+		v->greenMask = 0x00FF0000;	v->offsetGreen = 16;
+		v->blueMask  = 0x0000FF00;	v->offsetBlue  = 8;
+		v->bitsPerRGBValue = 8;
+		v->ColormapEntries = 256;
+	    }
+    } else if (!cfbScreenInit(pScreen, (pointer)atwScreen.fb, m->width,
+			      m->height, 75, 75, m->width))
 	return FALSE;
 
     pScreen->BlockHandler = atwBlockHandler;
@@ -416,14 +444,6 @@ InitOutput(pScreenInfo, argc, argv)
 {
     int i;
 
-    pScreenInfo->imageByteOrder = IMAGE_BYTE_ORDER;
-    pScreenInfo->bitmapScanlineUnit = BITMAP_SCANLINE_UNIT;
-    pScreenInfo->bitmapScanlinePad = BITMAP_SCANLINE_PAD;
-    pScreenInfo->bitmapBitOrder = BITMAP_BIT_ORDER;
-    pScreenInfo->numPixmapFormats = NUMFORMATS;
-    for (i = 0; i < NUMFORMATS; i++)
-	pScreenInfo->formats[i] = formats[i];
-
     if (!atwScreen.fb && !atwMapCard())
 	FatalError("atw: no ATW800/2 found\n");
     if (!atwScreen.mode) {
@@ -439,6 +459,15 @@ InitOutput(pScreenInfo, argc, argv)
 		       m->name, m->bpp, (int)(atwScreen.size >> 20));
 	atwScreen.mode = m;
     }
+    formats[1].depth = formats[1].bitsPerPixel = atwScreen.mode->bpp;
+
+    pScreenInfo->imageByteOrder = IMAGE_BYTE_ORDER;
+    pScreenInfo->bitmapScanlineUnit = BITMAP_SCANLINE_UNIT;
+    pScreenInfo->bitmapScanlinePad = BITMAP_SCANLINE_PAD;
+    pScreenInfo->bitmapBitOrder = BITMAP_BIT_ORDER;
+    pScreenInfo->numPixmapFormats = NUMFORMATS;
+    for (i = 0; i < NUMFORMATS; i++)
+	pScreenInfo->formats[i] = formats[i];
 
     if (AddScreen(atwScreenInit, argc, argv) < 0)
 	FatalError("atw: screen initialisation failed\n");
@@ -504,7 +533,7 @@ atwListModesExit()
 
 /*
  * -mode WxH       one of the VESA modes
- * -depth N        its bits per pixel (8; the default)
+ * -depth N        its bits per pixel: 8 (the default) or 32
  * -listmodes      print the modes and exit
  */
 int
@@ -535,6 +564,6 @@ void
 ddxUseMsg()
 {
     ErrorF("-mode WxH              ATW800/2 video mode (default 640x480)\n");
-    ErrorF("-depth N               bits per pixel (8)\n");
+    ErrorF("-depth N               bits per pixel, 8 or 32 (8)\n");
     ErrorF("-listmodes             list the modes and exit\n");
 }
