@@ -1,11 +1,18 @@
 # ATW800/2 test programs
 
-ASV-native (they use `/dev/mem`, and AMIX's `mmap` does not survive the amx
-module), built with `../../rsync/asv-static-cc`:
+ASV-native programs, built with `../../rsync/asv-static-cc`:
 
 ```sh
 ASV_SYSROOT=... ../../rsync/asv-static-cc -o atwprobe atwprobe.c
 ```
+
+They also build as AMIX programs, with OpenUA's `toolchain/sysv4-cc`, and
+run through the amx module; `/dev/mem` and `mmap` work there too. (An
+earlier AMIX build died of SIGSEGV, which looked like an amx `mmap` bug.
+The real cause was structure layout: sysv4-cc used the mint GCC's 2-byte
+alignment of `int`, so `FILE` came out 14 bytes instead of AMIX's 16 and
+`fflush(stdout)` got a garbage stream. sysv4-cc now defaults to
+`-malign-int`.)
 
 | program | touches | what it tells |
 |---|---|---|
