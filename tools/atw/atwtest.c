@@ -5,6 +5,9 @@
  *   screen 1: 1024x768 at 16 bpp, 2 columns
  *   screen 2: 1024x768 at 32 bpp, 4 columns (needs the 4 MB card)
  *
+ * "atwtest offset": only the 32 bpp screen, with the display starting one
+ * byte into video memory (see main).
+ *
  * Each column is the same picture written in a different byte order,
  * numbered by 1-4 white squares at the top: bands of red, green, blue,
  * white, then a grey ramp black -> white. The right column shows exactly
@@ -34,24 +37,24 @@ static unsigned long vtg = 0x1FF800UL;	/* current layout's VTG */
 #define CPM	0x2063706DUL
 
 /* VESA 1024x768 60 Hz, all depths share the timing */
-static void setmode(int ctrl)
+static void setmode(int ctrl, int start)
 {
 	R(0) = 0;
 	R(9) = 12 - 1; R(10) = 1 - 1; R(11) = 2 - 1;	/* 27 MHz * 12 = 5 x 64.8 MHz */
 	R(1) = 24; R(2) = 136; R(3) = 160; R(4) = W;
 	R(5) = 3;  R(6) = 6;   R(7) = 29;  R(8) = H;
-	R(12) = 0; R(13) = 0;
+	R(12) = start; R(13) = 0;		/* display start in video memory */
 	R(0) = ctrl;
 }
 
 /* back to what X runs: 1024x768 8 bpp through the LUT, 2 MB layout */
 static void restore(void)
 {
-	setmode(0x19);
+	setmode(0x19, 0);
 	REG15(0x3FF81E) = 1;		/* 4 MB layout's register first */
 	REG15(0x1FF81E) = 1;
 	vtg = 0x1FF800UL;
-	setmode(0x19);
+	setmode(0x19, 0);
 }
 
 static void onsig(int s)
@@ -133,8 +136,9 @@ static void waitret(const char *what)
 	fgets(buf, sizeof buf, stdin);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+	int offset = argc > 1 && strcmp(argv[1], "offset") == 0;
 	int fd = open("/dev/mem", O_RDWR), four;
 
 	if (fd < 0) { perror("/dev/mem"); return 1; }
@@ -151,11 +155,17 @@ int main(void)
 	else
 		REG15(0x1FF81E) = 1;
 
-	setmode(0x29);
-	draw(16, 2);
-	waitret("16 bpp: which column (1 or 2 squares) shows red, green, blue, white, grey ramp?");
+	if (!offset) {
+		setmode(0x29, 0);
+		draw(16, 2);
+		waitret("16 bpp: which column (1 or 2 squares) shows red, green, blue, white, grey ramp?");
+	}
 	if (four) {
-		setmode(0x39);
+		/* "offset": the display starts one byte in. If the start
+		 * register counts bytes, column 2 (x R G B, the 68030's own
+		 * 0x00RRGGBB) then shows right: each pixel's R G B, then the
+		 * next pixel's 00 as the ignored x */
+		setmode(0x39, offset);
 		draw(32, 4);
 		waitret("32 bpp: which column (1-4 squares) shows red, green, blue, white, grey ramp?");
 	} else
