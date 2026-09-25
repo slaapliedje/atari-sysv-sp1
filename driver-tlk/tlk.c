@@ -96,6 +96,70 @@ wr(t, off, val)
 	return ioprobe(IOP_WRITE | IOP_BYTE, t->r + off, &v) ? -1 : 0;
 }
 
+extern long lbolt;
+extern int drv_priv();
+
+/* TLK_DIAG: see tlk.h. Busy-waits in the kernel: a diagnostic only. */
+static int
+tlk_diag(t, arg)
+	struct tlk *t;
+	caddr_t arg;
+{
+	volatile unsigned char *r = t->v;
+	struct tlk_diag d;
+	static unsigned char poke[9] = { 0, 0x00, 0x01, 0x00, 0x80, 0x78, 0x56, 0x34, 0x12 };
+	long t0, i, c, total;
+	int reg, pause, k;
+	volatile int spin;
+
+	if (copyin(arg, (caddr_t)&d, sizeof d))
+		return EFAULT;
+	if (d.mode < 1 || d.mode > 5)
+		return EINVAL;
+	pause = d.mode == 5 ? d.n : 0;
+	if (d.mode == 5)
+		d.mode = 1;
+	reg = d.mode & 1 ? R_ISTAT : R_OSTAT;
+	if (d.mode >= 3) {
+		/* one data access, then the raw status right after it */
+		for (c = 0; c < TLK_DIAG_LIMIT && !(r[reg] & 1); c++)
+			;
+		d.polls[0] = (int)c;
+		if (d.mode == 3)
+			(void) r[R_IN];
+		else
+			r[R_OUT] = 0;
+		for (i = 0; i < 64; i++)
+			d.data[i] = r[reg];
+		d.n = 64;
+		d.nspoll = 0;
+		return copyout((caddr_t)&d, arg, sizeof d) ? EFAULT : 0;
+	}
+	/* the cost of a poll: 400000 of them against the clock tick */
+	t0 = lbolt;
+	for (i = 0; i < 400000; i++)
+		(void) r[reg];
+	d.nspoll = (int)((lbolt - t0) * (1000000L / HZ) / 400);
+	total = 0;
+	for (d.n = 0; d.n < 64; d.n++) {
+		/* a paused poll counts as 1 + pause/2 against the limit (a
+		 * pause loop costs about half a bus poll), so the run stays
+		 * near two seconds whatever the pause */
+		for (c = 0; total + c * (1 + pause / 2) < TLK_DIAG_LIMIT && !(r[reg] & 1); c++)
+			for (k = 0; k < pause; k++)
+				spin = k;
+		total += c * (1 + pause / 2);
+		if (total >= TLK_DIAG_LIMIT)
+			break;
+		d.polls[d.n] = (int)c;
+		if (d.mode == 1)
+			d.data[d.n] = r[R_IN];
+		else
+			r[R_OUT] = poke[d.n % 9];
+	}
+	return copyout((caddr_t)&d, arg, sizeof d) ? EFAULT : 0;
+}
+
 static void
 tlk_wake(t)
 	struct tlk *t;
@@ -304,6 +368,10 @@ tlkioctl(dev, cmd, arg, mode, crp, rvalp)
 			return EINVAL;
 		t->timeout = arg ? (arg * HZ + 999) / 1000 : 0;
 		return 0;
+	case TLK_DIAG:			/* busy-waits: root only */
+		if (drv_priv(crp))
+			return EPERM;
+		return tlk_diag(t, (caddr_t)arg);
 	}
 	return EINVAL;
 }

@@ -19,13 +19,19 @@ AMIX_SYSROOT=... sysv4-cc -std=gnu99 -O1 -m68020-60 -msoft-float -c tprobe.c
 AMIX_SYSROOT=... sysv4-ld -o tprobe tprobe.o sysv_rt.o
 ```
 
-Measured on a real TT (2026-09-24), through the tlk driver (`ttest`):
+Measured on a real TT (2026-09-25), through the tlk driver (`ttest`):
 
-- FPGA link: POKE/PEEK round trip, 32-bit transputer, 64 KB streamed in
-  sequence at about 125 KB/s.
-- C011 link: the physical transputer in TRAM slot 1 answers the same
-  way (32-bit), but streams at only 2 KB/s: a byte arrives about every
-  0.5 ms, while register access costs the same as on the FPGA link.
+| link | read | write (POKE stream, PEEKed back) |
+|---|---|---|
+| C011 (TRAM slot 1) | ~95 KB/s | ~170 KB/s |
+| FPGA (T425) | ~100 KB/s | ~180 KB/s |
+
+Both answer as 32-bit transputers and stream in sequence. The C011 link
+first ran at 2 KB/s: ASV's `cc -O` ignored `volatile` and read the status
+register once per polling loop, so the driver gave up after two bytes
+and every output wait slept a clock tick. The driver is built without
+`-O` (see `driver-tlk/install.sh`). `tdiag` (root) times the link from
+inside the driver, byte by byte, with the TLK_DIAG ioctl.
 
 Reset/error is at +0x11 and analyse at +0x17 (the manual's GfA demo);
 +0x21/+0x23 only mirror the input data, and a transputer left running

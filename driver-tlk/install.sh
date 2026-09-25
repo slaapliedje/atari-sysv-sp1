@@ -1,15 +1,20 @@
 # install.sh - build the tlk driver (ATW800/2 transputer links) into the
 # kernel and make /dev/link0 (C011) and /dev/link1 (FPGA).  Run as root:
 #   sh install.sh
-# Then reboot (init 6). Re-running is a no-op if tlk.c and tlk.h are unchanged.
+# Then reboot (init 6). Re-running is a no-op if tlk.c, tlk.h and this
+# script are unchanged.
+#
+# No -O: ASV's cc ignores volatile when optimising and reads a polled
+# status register ONCE per loop (seen in the disassembly: the C011 link
+# crawled at 2 KB/s, and every output wait slept a whole tick).
 cd "`dirname $0`" || exit 1
 [ -c /dev/link0 ] || /sbin/mknod /dev/link0 c 42 0
 [ -c /dev/link1 ] || /sbin/mknod /dev/link1 c 42 1
 chmod 666 /dev/link0 /dev/link1
-cat tlk.c tlk.h > .src.c
+cat tlk.c tlk.h install.sh > .src.c
 if cmp -s .src.c .built.c 2>/dev/null; then echo "kernel already carries this tlk.c"; exit 0; fi
 echo "== compiling tlk.c"
-cc -O -D_KERNEL -c tlk.c || { echo "COMPILE FAILED"; exit 1; }
+cc -D_KERNEL -c tlk.c || { echo "COMPILE FAILED"; exit 1; }
 cp master.d-tlk /etc/master.d/tlk
 echo "== mkboot"
 /usr/sbin/mkboot -m /etc/master.d -d /boot tlk.o || { echo "MKBOOT FAILED"; exit 1; }

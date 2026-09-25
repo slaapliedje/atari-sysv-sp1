@@ -88,6 +88,33 @@ int main(int argc, char **argv)
 	if (t1 == t0) t1++;
 	printf("read test: %ld bytes in %ld ms = %ld KB/s, %d out of sequence, %d reads\n",
 	    total, (t1 - t0) * 1000 / hz, total * hz / (t1 - t0) / 1024, bad, calls);
+
+	/* write speed: POKE commands (9 bytes each) into a transputer that
+	 * waits to boot, 64 KB of them */
+	ioctl(fd, TLK_RESET, 0);
+	{
+		static unsigned char pk[9 * 455];
+		for (i = 0; i < 455; i++) {
+			pk[9 * i] = 0;
+			le(pk + 9 * i + 1, 0x80000100UL);
+			le(pk + 9 * i + 5, (unsigned long)i);
+		}
+		t0 = times(&tm);
+		for (total = 0; total < 65536; total += sizeof pk)
+			if (wr(pk, sizeof pk)) break;
+		t1 = times(&tm);
+		if (t1 == t0) t1++;
+		printf("write test: %ld bytes in %ld ms = %ld KB/s",
+		    total, (t1 - t0) * 1000 / hz, total * hz / (t1 - t0) / 1024);
+		/* the last POKE wrote 454: PEEK it back */
+		b[0] = 1; le(b + 1, 0x80000100UL);
+		if (wr(b, 5) == 0) {
+			for (n = 0; n < 4; n += i)
+				if ((i = read(fd, b + n, 4 - n)) <= 0) break;
+			w = b[0] | b[1] << 8 | (unsigned long)b[2] << 16 | (unsigned long)b[3] << 24;
+			printf(", PEEK after it: %lu %s\n", w, w == 454 ? "ok" : "WRONG");
+		}
+	}
 	ioctl(fd, TLK_RESET, 0);
 	close(fd);
 	return 0;
