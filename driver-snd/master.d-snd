@@ -1,0 +1,6 @@
+*ident	"snd 0.1 - the TT's DMA sound as /dev/audio"
+*
+* SND - software character driver; polled from a clock tick.
+*
+*FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
+ocsn	snd	43
