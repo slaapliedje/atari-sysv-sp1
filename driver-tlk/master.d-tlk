@@ -1,0 +1,6 @@
+*ident	"tlk 0.1 - ATW800/2 transputer links: /dev/link0 (C011), /dev/link1 (FPGA)"
+*
+* TLK - software character driver; the link registers are polled.
+*
+*FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
+ocsn	tlk	42
