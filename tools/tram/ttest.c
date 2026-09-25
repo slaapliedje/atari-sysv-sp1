@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 	unsigned char b[9], buf[4096];
 	long total, t0, t1, hz = sysconf(_SC_CLK_TCK);
 	struct tms tm;
-	int n, i, st, bad;
+	int n, i, st, bad, calls;
 	unsigned long w;
 
 	setvbuf(stdout, 0, _IONBF, 0);
@@ -76,17 +76,18 @@ int main(int argc, char **argv)
 	ioctl(fd, TLK_RESET, 0);
 	if (wr(readtest, sizeof readtest)) return 1;
 	t0 = times(&tm);
-	total = 0; bad = 0;
+	total = 0; bad = 0; calls = 0;
 	while (total < 65536) {
 		if ((n = read(fd, buf, sizeof buf)) <= 0) { printf("read test: stopped at %ld (errno %d)\n", total, errno); break; }
 		for (i = 0; i < n; i++)
 			if (buf[i] != (unsigned char)((total + i) % 10 + 1)) bad++;
 		total += n;
+		calls++;
 	}
 	t1 = times(&tm);
 	if (t1 == t0) t1++;
-	printf("read test: %ld bytes in %ld ms = %ld KB/s, %d out of sequence\n",
-	    total, (t1 - t0) * 1000 / hz, total * hz / (t1 - t0) / 1024, bad);
+	printf("read test: %ld bytes in %ld ms = %ld KB/s, %d out of sequence, %d reads\n",
+	    total, (t1 - t0) * 1000 / hz, total * hz / (t1 - t0) / 1024, bad, calls);
 	ioctl(fd, TLK_RESET, 0);
 	close(fd);
 	return 0;

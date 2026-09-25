@@ -6,7 +6,11 @@
  * "Programming the Transputer"):
  *
  *   +0x01 input data   +0x03 output data   +0x05 input status   +0x07 output status
- *   +0x21 reset (write) / error (read)     +0x23 analyse
+ *   +0x11 reset (write) / error (read)     +0x17 analyse
+ *
+ * (The manual's register table can be read as +0x21/+0x23; on a real
+ * card those bytes only mirror the input data. +0x11/+0x17 are what its
+ * GfA demo uses, and what resets the transputer.)
  *
  *   minor 0  C011 link  0xFEFFFAC0  a physical transputer in TRAM slot 1
  *   minor 1  FPGA link  0xFEDFFAC0  the T425 inside the FPGA
@@ -47,8 +51,8 @@ int tlkdevflag = 0;			/* new-style (DDI) entry points */
 #define R_OUT	0x03
 #define R_ISTAT	0x05
 #define R_OSTAT	0x07
-#define R_RESET	0x21
-#define R_ANAL	0x23
+#define R_RESET	0x11
+#define R_ANAL	0x17
 
 #define NLINK	2
 #define SPIN	400			/* status polls before sleeping a tick */
