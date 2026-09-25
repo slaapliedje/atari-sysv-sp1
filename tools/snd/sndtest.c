@@ -12,7 +12,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-#include <math.h>
 #include <sys/types.h>
 #include <sys/times.h>
 #include <sys/ioctl.h>
@@ -20,6 +19,18 @@
 
 static signed char buf[8192];
 static signed char sine[256];		/* one cycle, amplitude 90 */
+
+/* sin(2 pi i / 256) without libm: the AMIX libm returns its double the
+ * soft-float way, so called from -m68881 code its sin() read as garbage
+ * (the first sndtest built a silent table). Bhaskara I's approximation,
+ * within 0.2 %: plenty for an 8-bit sample. */
+static int sine90(int i)
+{
+	int x = i & 127;			/* 0..127 = 0..pi */
+	long v = 4L * x * (128 - x);
+	long y = 90L * 4 * v / (5L * 128 * 128 - v);	/* 16x(pi-x) / (5pi^2 - 4x(pi-x)) */
+	return i & 128 ? -(int)y : (int)y;
+}
 static int fd, rate;
 static unsigned long ph[2];		/* phase, 8.24 fixed point */
 
@@ -56,7 +67,7 @@ int main(int argc, char **argv)
 	int i;
 
 	for (i = 0; i < 256; i++)
-		sine[i] = (signed char)(90 * sin(2 * M_PI * i / 256));
+		sine[i] = (signed char)sine90(i);
 	setvbuf(stdout, 0, _IONBF, 0);
 	if ((fd = open("/dev/audio", O_WRONLY)) < 0) { printf("/dev/audio: errno %d\n", errno); return 1; }
 	rate = ioctl(fd, SND_SETRATE, argc > 1 ? atoi(argv[1]) : 25033);

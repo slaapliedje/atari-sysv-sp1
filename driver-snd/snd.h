@@ -17,5 +17,16 @@
 #define SND_GETUNDERRUNS (SND_IOC | 7)	/* times the queue ran dry since open: a
 					 * starved writer, and also every end of
 					 * data (it cannot tell the two apart) */
+#define SND_SETVOLUME	(SND_IOC | 8)	/* arg = master volume 0..40 (40 = 0 dB, 2 dB steps) */
+#define SND_DIAG	(SND_IOC | 9)	/* arg = struct snd_diag *: a snapshot (root) */
+#define SND_BEEP	(SND_IOC | 10)	/* arg = ms: 440 Hz on the YM2149 (root) */
+
+struct snd_diag {
+	unsigned long	phys;		/* the ring's physical address */
+	unsigned long	base, end, count;	/* as the DMA registers read */
+	unsigned short	mwmask, mwdata;
+	unsigned char	ctrl, mode;
+	char		at[32];		/* ring bytes at the counter (no "signed": the TT's cc is pre-ANSI) */
+};
 
 #endif

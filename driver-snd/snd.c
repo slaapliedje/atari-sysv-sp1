@@ -20,6 +20,13 @@
  * position restarts a little ahead of it: that lead is silence ("gap"),
  * played before anything written after the restart.
  *
+ * Between the DMA sound and the outputs sits the LMC1992 (volume, tone,
+ * PSG mix), set through the MICROWIRE registers (FFFF8922 data, 8924
+ * mask). ASV's psginit sends it sensible values at boot, but waits only a
+ * few microseconds between commands while each takes at least 16: on a
+ * real TT they overrun one another and the DMA sound stayed silent.
+ * open() sends them again, waiting for each (snd_mw).
+ *
  * Build WITHOUT -O (install.sh): ASV's cc ignores volatile when it
  * optimises and would read the counter once.
  */
@@ -39,6 +46,10 @@
 int snddevflag = 0;			/* new-style (DDI) entry points */
 
 #define REG(o)		(*(volatile unsigned char *)(0xFFFF8900UL + (o)))
+#define MWDATA		(*(volatile unsigned short *)0xFFFF8922UL)
+#define MWMASK		(*(volatile unsigned short *)0xFFFF8924UL)
+#define PSG(r, v)	(*(volatile unsigned char *)0xFFFF8800UL = (r), \
+			 *(volatile unsigned char *)0xFFFF8802UL = (v))
 #define R_CTRL		0x01
 #define R_BASE		0x03		/* high, mid (+2), low (+4) */
 #define R_COUNT		0x09
@@ -55,6 +66,8 @@ extern long kvtophys();
 extern int timeout(), untimeout(), sleep();
 extern void wakeup();
 extern int splclock(), splx();
+extern void drv_usecwait();
+extern int drv_priv(), splhi(), delay();
 
 static struct {
 	int	open;
@@ -67,6 +80,7 @@ static struct {
 	int	gap;			/* silence ahead of them (after a restart) */
 	int	tid;			/* the tick's timeout id, 0 = none */
 	int	underruns;
+	int	volume;			/* LMC1992 master, 0..40 */
 } snd;
 
 static int rates[4] = { 6258, 12517, 25033, 50066 };
@@ -85,6 +99,38 @@ snd_ppos()
 		b = (unsigned long)REG(R_COUNT) << 16 | REG(R_COUNT + 2) << 8 | REG(R_COUNT + 4);
 	} while (a != b);
 	return (int)((a - snd.phys) & (RING - 1));
+}
+
+/* one LMC1992 command (Atari Compendium, "The MICROWIRE Interface"):
+ * write the mask, then the data; the mask rotates while the 11 bits shift
+ * out and reads 0x7FF again when done (at least 16 us) */
+static void
+snd_mw(cmd)
+	int cmd;
+{
+	int i;
+
+	MWMASK = 0x7FF;
+	MWDATA = cmd;
+	for (i = 0; i < 1000 && MWMASK == 0x7FF; i++)	/* until it starts */
+		;
+	for (i = 0; i < 100000 && MWMASK != 0x7FF; i++)	/* until it is done */
+		;
+	drv_usecwait(30);
+}
+
+/* master 0..40 (0 dB at 40, 2 dB steps), both channels at 0 dB, tone
+ * flat, the PSG mixed in (as ASV's own table) */
+static void
+snd_mwinit(master)
+	int master;
+{
+	snd_mw(0x401);				/* mix the PSG */
+	snd_mw(0x4C0 | master);			/* master volume */
+	snd_mw(0x554);				/* left: 0 dB */
+	snd_mw(0x514);				/* right: 0 dB */
+	snd_mw(0x486);				/* treble: flat */
+	snd_mw(0x446);				/* bass: flat */
 }
 
 static void
@@ -141,6 +187,7 @@ int
 sndinit()
 {
 	snd.mode = 0x80 | 2;			/* mono, 25033 Hz */
+	snd.volume = 40;			/* 0 dB */
 	return 0;
 }
 
@@ -176,6 +223,7 @@ sndopen(devp, flag, otyp, crp)
 		return ENOMEM;
 	snd.open = 1;
 	snd.underruns = 0;
+	snd_mwinit(snd.volume);
 	snd_start();
 	snd.tid = timeout(snd_tick, (caddr_t)0, 1);
 	return 0;
@@ -276,6 +324,52 @@ sndioctl(dev, cmd, arg, mode, crp, rvalp)
 		return 0;
 	case SND_GETRING:
 		*rvalp = RING;
+		return 0;
+	case SND_SETVOLUME:
+		if (arg < 0 || arg > 40)
+			return EINVAL;
+		snd.volume = arg;
+		snd_mw(0x4C0 | arg);
+		return 0;
+	case SND_DIAG:
+		if (drv_priv(crp))
+			return EPERM;
+		{
+			struct snd_diag d;
+			int p;
+
+			bzero((caddr_t)&d, sizeof d);
+			d.phys = snd.phys;
+			d.base = (unsigned long)REG(R_BASE) << 16 | REG(R_BASE + 2) << 8 | REG(R_BASE + 4);
+			d.end = (unsigned long)REG(R_END) << 16 | REG(R_END + 2) << 8 | REG(R_END + 4);
+			d.count = (unsigned long)REG(R_COUNT) << 16 | REG(R_COUNT + 2) << 8 | REG(R_COUNT + 4);
+			d.mwmask = MWMASK;
+			d.mwdata = MWDATA;
+			d.ctrl = REG(R_CTRL);
+			d.mode = REG(R_MODE);
+			if (snd.ring) {
+				p = snd_ppos();
+				for (i = 0; i < 32; i++)
+					d.at[i] = snd.ring[(p + i) & (RING - 1)];
+			}
+			return copyout((caddr_t)&d, (caddr_t)arg, sizeof d) ? EFAULT : 0;
+		}
+	case SND_BEEP:
+		if (drv_priv(crp))
+			return EPERM;
+		if (arg < 1 || arg > 5000)
+			return EINVAL;
+		t = splhi();
+		PSG(0, 284 & 0xFF);		/* 2 MHz / (16 x 440) */
+		PSG(1, 284 >> 8);
+		PSG(8, 15);			/* channel A: full volume */
+		PSG(7, 0xFE);			/* tone A on (ports A, B stay outputs) */
+		splx(t);
+		delay((arg * HZ + 999) / 1000);
+		t = splhi();
+		PSG(8, 0);
+		PSG(7, 0xFF);
+		splx(t);
 		return 0;
 	case SND_GETUNDERRUNS:
 		*rvalp = snd.underruns;
