@@ -33,6 +33,14 @@ and every output wait slept a clock tick. The driver is built without
 `-O` (see `driver-tlk/install.sh`). `tdiag` (root) times the link from
 inside the driver, byte by byte, with the TLK_DIAG ioctl.
 
+`tfpu` boots a program that aims two FPU instructions at a marker word
+(`-n` skips them, as a control) and reports `lddevid`. Measured:
+
+| link | FPU test | `-n` control | lddevid |
+|---|---|---|---|
+| C011 (TRAM slot 1) | 0x00000000: FPU present, a T8xx | marker kept | 0x80000004, with or without the FPU part (not a device code: likely a T800 that predates lddevid) |
+| FPGA (T425) | no answer: it stops on FPU instructions | marker kept | 2 |
+
 Reset/error is at +0x11 and analyse at +0x17 (the manual's GfA demo);
 +0x21/+0x23 only mirror the input data, and a transputer left running
 cannot be stopped through them. A byte left in the input register
