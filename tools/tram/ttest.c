@@ -1,7 +1,8 @@
 /*
  * ttest - exercise a transputer through the tlk driver.
  *
- *   ttest [/dev/link0|/dev/link1]      default /dev/link1 (the FPGA's T425)
+ *   ttest [-p pace] [/dev/link0|/dev/link1]   default /dev/link1 (the FPGA's T425)
+ *   -p: set the link's poll pace first (TLK_PACE, root)
  *
  * Resets the transputer, POKEs a word and PEEKs it back, boots the
  * Programmer's Manual's type probe, then boots its read test (a program
@@ -9,6 +10,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
@@ -43,15 +45,21 @@ static void le(unsigned char *b, unsigned long w)
 
 int main(int argc, char **argv)
 {
-	const char *dev = argc > 1 ? argv[1] : "/dev/link1";
+	const char *dev = "/dev/link1";
+	int pace = -1, a;
 	unsigned char b[9], buf[4096];
 	long total, t0, t1, hz = sysconf(_SC_CLK_TCK);
 	struct tms tm;
 	int n, i, st, bad, calls;
 	unsigned long w;
 
+	for (a = 1; a < argc; a++) {
+		if (strcmp(argv[a], "-p") == 0 && a + 1 < argc) pace = atoi(argv[++a]);
+		else dev = argv[a];
+	}
 	setvbuf(stdout, 0, _IONBF, 0);
 	if ((fd = open(dev, O_RDWR)) < 0) { printf("%s: errno %d\n", dev, errno); return 1; }
+	if (pace >= 0 && ioctl(fd, TLK_PACE, pace) < 0) printf("TLK_PACE: errno %d\n", errno);
 	st = ioctl(fd, TLK_STATUS, 0);
 	printf("%s: status in %d out %d error %d\n", dev, !!(st & TLK_ST_IN), !!(st & TLK_ST_OUT), !!(st & TLK_ST_ERROR));
 	ioctl(fd, TLK_TIMEOUT, 500);

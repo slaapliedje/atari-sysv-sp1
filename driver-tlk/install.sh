@@ -12,9 +12,18 @@ cd "`dirname $0`" || exit 1
 [ -c /dev/link1 ] || /sbin/mknod /dev/link1 c 42 1
 chmod 666 /dev/link0 /dev/link1
 cat tlk.c tlk.h install.sh > .src.c
+[ -f tlk.pc.o ] && cat tlk.pc.o >> .src.c
 if cmp -s .src.c .built.c 2>/dev/null; then echo "kernel already carries this tlk.c"; exit 0; fi
-echo "== compiling tlk.c"
-cc -D_KERNEL -c tlk.c || { echo "COMPILE FAILED"; exit 1; }
+# normally the object comes built on the PC (../kbuild.sh, GCC 2.7.2),
+# copied here as tlk.pc.o; the TT's own cc (GCC 1.40, no -O: it ignores
+# volatile when optimising) is the fallback
+if [ -f tlk.pc.o ]; then
+	echo "== using tlk.pc.o, built on the PC"
+	cp tlk.pc.o tlk.o
+else
+	echo "== compiling tlk.c"
+	cc -D_KERNEL -c tlk.c || { echo "COMPILE FAILED"; exit 1; }
+fi
 cp master.d-tlk /etc/master.d/tlk
 echo "== mkboot"
 /usr/sbin/mkboot -m /etc/master.d -d /boot tlk.o || { echo "MKBOOT FAILED"; exit 1; }

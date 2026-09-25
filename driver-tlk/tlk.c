@@ -68,6 +68,7 @@ static struct tlk {
 	volatile unsigned char *v;	/* the same, once probed */
 	int	open;
 	int	timeout;		/* ticks; 0 = none */
+	int	pace;			/* CPU loops after a not-ready poll */
 	int	wchan;
 } tlk[NLINK];
 
@@ -181,6 +182,22 @@ tlk_tick(t)
 	return 0;
 }
 
+/*
+ * Polling the C011's status back to back slows the C011 itself: with an
+ * optimised loop the link read at 14 KB/s instead of ~95. After a poll
+ * that finds it not ready, the driver waits "pace" CPU loops (no bus
+ * access) before the next; TLK_PACE sets it per link.
+ */
+static void
+tlk_pace(t)
+	struct tlk *t;
+{
+	volatile int k;
+
+	for (k = 0; k < t->pace; k++)
+		;
+}
+
 /* wait for bit 0 of a status register: 0 = ready, EIO = timed out,
  * EINTR */
 static int
@@ -191,9 +208,11 @@ tlk_wait(t, reg)
 	int i, ticks = 0;
 
 	for (;;) {
-		for (i = 0; i < SPIN; i++)
+		for (i = 0; i < SPIN; i++) {
 			if (t->v[reg] & 1)
 				return 0;
+			tlk_pace(t);
+		}
 		if (t->timeout && ticks++ >= t->timeout)
 			return EIO;
 		if (tlk_tick(t))
@@ -298,7 +317,7 @@ tlkread(dev, uiop, crp)
 			int k;
 
 			for (k = 0; k < SPIN && !(r[R_ISTAT] & 1); k++)
-				;
+				tlk_pace(t);
 			if (k == SPIN)
 				break;
 			buf[i] = r[R_IN];
@@ -367,6 +386,14 @@ tlkioctl(dev, cmd, arg, mode, crp, rvalp)
 		if (arg < 0)
 			return EINVAL;
 		t->timeout = arg ? (arg * HZ + 999) / 1000 : 0;
+		return 0;
+	case TLK_PACE:			/* root: it changes the timing for all */
+		if (drv_priv(crp))
+			return EPERM;
+		if (arg < 0 || arg > 100000)
+			return EINVAL;
+		*rvalp = t->pace;
+		t->pace = arg;
 		return 0;
 	case TLK_DIAG:			/* busy-waits: root only */
 		if (drv_priv(crp))

@@ -5,3 +5,4 @@ amix/work/
 amix/bash/work/
 .rsyncpass
 rsync/work/
+driver-*/*.o

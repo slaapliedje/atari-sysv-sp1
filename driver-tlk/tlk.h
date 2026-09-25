@@ -15,6 +15,7 @@
 #define TLK_ANALYSE	(TLK_IOC | 2)	/* reset with analyse asserted */
 #define TLK_STATUS	(TLK_IOC | 3)	/* returns TLK_ST_* bits */
 #define TLK_TIMEOUT	(TLK_IOC | 4)	/* arg = ms a read/write may wait; 0 = no limit */
+#define TLK_PACE	(TLK_IOC | 6)	/* arg = CPU loops after a not-ready poll (root); returns the old */
 #define TLK_DIAG	(TLK_IOC | 5)	/* arg = struct tlk_diag *: link timing (root) */
 
 #define TLK_ST_IN	1		/* a byte is waiting to be read */

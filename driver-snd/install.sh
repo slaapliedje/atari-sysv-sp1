@@ -10,9 +10,18 @@ cd "`dirname $0`" || exit 1
 [ -c /dev/audio ] || /sbin/mknod /dev/audio c 43 0
 chmod 666 /dev/audio
 cat snd.c snd.h install.sh > .src.c
+[ -f snd.pc.o ] && cat snd.pc.o >> .src.c
 if cmp -s .src.c .built.c 2>/dev/null; then echo "kernel already carries this snd.c"; exit 0; fi
-echo "== compiling snd.c"
-cc -D_KERNEL -c snd.c || { echo "COMPILE FAILED"; exit 1; }
+# normally the object comes built on the PC (../kbuild.sh, GCC 2.7.2),
+# copied here as snd.pc.o; the TT's own cc (GCC 1.40, no -O: it ignores
+# volatile when optimising) is the fallback
+if [ -f snd.pc.o ]; then
+	echo "== using snd.pc.o, built on the PC"
+	cp snd.pc.o snd.o
+else
+	echo "== compiling snd.c"
+	cc -D_KERNEL -c snd.c || { echo "COMPILE FAILED"; exit 1; }
+fi
 cp master.d-snd /etc/master.d/snd
 echo "== mkboot"
 /usr/sbin/mkboot -m /etc/master.d -d /boot snd.o || { echo "MKBOOT FAILED"; exit 1; }
