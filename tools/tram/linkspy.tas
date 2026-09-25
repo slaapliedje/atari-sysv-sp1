@@ -1,0 +1,163 @@
+; linkspy.tas - boots on a transputer and looks down its links 1-3.
+; Each link gets its own process that sends a PEEK (control byte 1 and
+; the address 0x80000100) and waits for the 4-byte answer: a transputer
+; waiting to boot answers PEEKs. A link with nothing on it blocks its
+; process forever, so the main process waits on the timer (~128 ms) and
+; then sends the host six words: flag and PEEKed word for links 1, 2, 3
+; (flag 1 = that link answered).
+;
+; Memory (all in the 4 KB on-chip RAM): results 0x80000C08..1F (word
+; index 0x302 + 2k - 2 = flag of link k, the next word its answer),
+; process workspaces 0x80000880/900/980, main workspace 0x80000F00.
+
+	ajw 1			; the manual's type-probe prologue:
+	stl 1
+	mint
+	stlf			; empty low-priority queue
+	mint
+	sthf			; empty high-priority queue
+	rev			; A = the boot input channel
+	ldnlp -4		; its output channel: the way home
+	mint
+	ldnlp 0x3C0
+	gajw			; Wptr = 0x80000F00, A = the old one
+	stl 1
+	stl 2			; w2 = host channel
+	ldc 0
+	sttimer			; start the clocks (stopped after reset)
+	ldc 0
+	mint
+	ldnlp 770
+	stnl 0			; clear result word 0
+	ldc 0
+	mint
+	ldnlp 771
+	stnl 0			; clear result word 1
+	ldc 0
+	mint
+	ldnlp 772
+	stnl 0			; clear result word 2
+	ldc 0
+	mint
+	ldnlp 773
+	stnl 0			; clear result word 3
+	ldc 0
+	mint
+	ldnlp 774
+	stnl 0			; clear result word 4
+	ldc 0
+	mint
+	ldnlp 775
+	stnl 0			; clear result word 5
+	ldc probe1-back1
+	mint
+	ldnlp 544		; workspace
+	startp			; start the probe of link 1
+back1:
+	ldc probe2-back2
+	mint
+	ldnlp 576		; workspace
+	startp			; start the probe of link 2
+back2:
+	ldc probe3-back3
+	mint
+	ldnlp 608		; workspace
+	startp			; start the probe of link 3
+back3:
+	ldtimer
+	adc 2000		; 2000 x 64 us
+	tin
+	ldl 2
+	mint
+	ldnlp 770
+	ldnl 0
+	outword			; result word 0
+	ldl 2
+	mint
+	ldnlp 771
+	ldnl 0
+	outword			; result word 1
+	ldl 2
+	mint
+	ldnlp 772
+	ldnl 0
+	outword			; result word 2
+	ldl 2
+	mint
+	ldnlp 773
+	ldnl 0
+	outword			; result word 3
+	ldl 2
+	mint
+	ldnlp 774
+	ldnl 0
+	outword			; result word 4
+	ldl 2
+	mint
+	ldnlp 775
+	ldnl 0
+	outword			; result word 5
+	stopp
+probe1:
+	mint
+	ldnlp 1		; output channel of link 1
+	ldc 1
+	outbyte			; PEEK
+	mint
+	ldnlp 1
+	mint
+	ldnlp 0x40
+	outword			; address 0x80000100
+	mint
+	ldnlp 771		; where the answer goes
+	mint
+	ldnlp 5		; input channel of link 1
+	ldc 4
+	in
+	ldc 1
+	mint
+	ldnlp 770
+	stnl 0			; flag: link 1 answered
+	stopp
+probe2:
+	mint
+	ldnlp 2		; output channel of link 2
+	ldc 1
+	outbyte			; PEEK
+	mint
+	ldnlp 2
+	mint
+	ldnlp 0x40
+	outword			; address 0x80000100
+	mint
+	ldnlp 773		; where the answer goes
+	mint
+	ldnlp 6		; input channel of link 2
+	ldc 4
+	in
+	ldc 1
+	mint
+	ldnlp 772
+	stnl 0			; flag: link 2 answered
+	stopp
+probe3:
+	mint
+	ldnlp 3		; output channel of link 3
+	ldc 1
+	outbyte			; PEEK
+	mint
+	ldnlp 3
+	mint
+	ldnlp 0x40
+	outword			; address 0x80000100
+	mint
+	ldnlp 775		; where the answer goes
+	mint
+	ldnlp 7		; input channel of link 3
+	ldc 4
+	in
+	ldc 1
+	mint
+	ldnlp 774
+	stnl 0			; flag: link 3 answered
+	stopp

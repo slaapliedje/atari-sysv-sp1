@@ -41,6 +41,27 @@ inside the driver, byte by byte, with the TLK_DIAG ioctl.
 | C011 (TRAM slot 1) | 0x00000000: FPU present, a T8xx | marker kept | 0x80000004, with or without the FPU part (not a device code: likely a T800 that predates lddevid) |
 | FPGA (T425) | no answer: it stops on FPU instructions | marker kept | 2 |
 
+### The network, as found on this TT (2026-09-25)
+
+```
+TT --C011--> T8xx (TRAM slot 1) link 0
+               link 1 --> T8xx (TRAM slot 2, presumably), FPU too
+               link 2 --> nothing
+               link 3 --> the FPGA's T425
+TT --FPGA link--> T425
+```
+
+- `tspy [/dev/linkN]` boots `linkspy.tas` on the transputer behind a
+  link: one process per link 1-3 PEEKs 0x80000100 on the far side, and
+  after ~128 ms (the timer) it reports which answered. It first POKEs a
+  marker into the T425 through `/dev/link1`, so the link that answers with
+  the marker is the one to the T425. (Booted on the T425 itself it never
+  reports: that FPGA transputer probably lacks the timer instructions.)
+- `tfpu -r` boots `relay.tas` (link 0 <-> link 1, byte by byte) on the
+  first transputer and runs the FPU test on the second, through it.
+- `tasm.py` assembles these (`tasm.py X.tas -c NAME > X.h`); it
+  reproduces the manual's type probe byte for byte.
+
 Reset/error is at +0x11 and analyse at +0x17 (the manual's GfA demo);
 +0x21/+0x23 only mirror the input data, and a transputer left running
 cannot be stopped through them. A byte left in the input register

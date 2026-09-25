@@ -1,8 +1,9 @@
 /*
  * tfpu - which transputer is on a link: word size, FPU, device id.
  *
- *   tfpu [-n] [/dev/link0|/dev/link1]    -n: skip the FPU instructions
- *                                        (a T4xx stops on them)
+ *   tfpu [-n] [-r] [/dev/link0|/dev/link1]
+ *     -n: skip the FPU instructions (a T4xx stops on them)
+ *     -r: boot relay.tas first and test the transputer on ITS link 1
  *
  * Boots a hand-assembled program (below) that answers with two words:
  *  1. a marker word 0x80000000 after "fpldzerosn; fpstnlsn" was aimed at
@@ -21,6 +22,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include "../../driver-tlk/tlk.h"
+#include "relay.h"
 
 static const unsigned char prog[] = {
 	0,				/* length, filled in */
@@ -57,19 +59,24 @@ static long word(int fd, int *ok)
 int main(int argc, char **argv)
 {
 	const char *dev = "/dev/link1";
-	int nofpu = 0, a;
+	int nofpu = 0, viarelay = 0, a;
 	unsigned char p[sizeof prog];
 	long fpu, id;
 	int fd, ok;
 
 	for (a = 1; a < argc; a++) {
 		if (strcmp(argv[a], "-n") == 0) nofpu = 1;
+		else if (strcmp(argv[a], "-r") == 0) viarelay = 1;
 		else dev = argv[a];
 	}
 	setvbuf(stdout, 0, _IONBF, 0);
 	if ((fd = open(dev, O_RDWR)) < 0) { printf("%s: errno %d\n", dev, errno); return 1; }
 	ioctl(fd, TLK_TIMEOUT, 500);
 	ioctl(fd, TLK_RESET, 0);
+	if (viarelay) {
+		if (write(fd, relay, sizeof relay) != sizeof relay) { printf("%s: relay boot failed\n", dev); return 1; }
+		printf("%s: relay booted; testing the transputer on its link 1\n", dev);
+	}
 	memcpy(p, prog, sizeof p);
 	p[0] = sizeof p - 1;
 	if (nofpu) {			/* pfix 0 is a no-op */

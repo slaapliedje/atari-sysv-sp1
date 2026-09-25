@@ -1,0 +1,55 @@
+; relay.tas - boots on a transputer and joins its link 0 (the host) to its
+; link 1, byte by byte both ways, so the host can talk to - and boot - the
+; transputer on the far side as if it were on the host's own link.
+; Workspaces 0x80000800 / 0x80000880, buffers 0x80000C00 / 0x80000C04,
+; main workspace 0x80000F00.
+
+	ajw 1
+	stl 1
+	mint
+	stlf			; empty process queues
+	mint
+	sthf
+	mint
+	ldnlp 0x3C0
+	gajw			; Wptr = 0x80000F00
+	ldc down-back1
+	mint
+	ldnlp 0x200
+	startp			; host -> link 1
+back1:
+	ldc up-back2
+	mint
+	ldnlp 0x220
+	startp			; link 1 -> host
+back2:
+	stopp
+
+down:
+	mint
+	ldnlp 0x300		; buffer
+	mint
+	ldnlp 4			; link 0 in
+	ldc 1
+	in
+	mint
+	ldnlp 0x300
+	mint
+	ldnlp 1			; link 1 out
+	ldc 1
+	out
+	j down
+
+up:
+	mint
+	ldnlp 0x301
+	mint
+	ldnlp 5			; link 1 in
+	ldc 1
+	in
+	mint
+	ldnlp 0x301
+	mint			; link 0 out
+	ldc 1
+	out
+	j up
