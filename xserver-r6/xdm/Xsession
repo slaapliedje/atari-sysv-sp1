@@ -4,7 +4,7 @@
 OPENWINHOME=/usr/openwin; export OPENWINHOME
 # XView's Help key: its built-in default is /usr/lib/help, the system's
 HELPPATH=$OPENWINHOME/lib/help; export HELPPATH
-PATH=/usr/openwin/bin:/usr/x11r6/bin:$PATH:/usr/local/bin; export PATH
+PATH=/usr/openwin/bin:/usr/x11r6/bin:$PATH:/usr/local/bin:/usr/local/lib/transputer/bin; export PATH
 # an empty shell field in /etc/passwd (root's, on ASV) means /bin/sh, but
 # xdm passes it on as an empty SHELL, and cmdtool then fails to start one.
 # bash, when it is installed and runs (it is an AMIX program: it needs the

@@ -47,10 +47,35 @@ icollect hello.lku -t -o hello.btl
 iserver -sb hello.btl -sl /dev/link0
 ```
 
+and for occam (the configuration names the processor, e.g. `"T800"`):
+
+```sh
+oc hello.occ -t800
+ilink hello.tco hostio.lib convert.lib -t800 -f occama.lnk
+occonf hello.pgm
+icollect hello.cfb
+```
+
+The share's example sources have DOS line endings, which `oc` and
+`occonf` reject ("Illegal character (ASCII 13)"): `tr -d '\r'` them
+first. The toolset's own libraries are already Unix text.
+
 The tools take `-` options and Unix paths (iserver reports a Unix host).
 `itool` sets the Atari profile's environment: `TRANSPUTER=/dev/link0`,
 `ISEARCH`, `ITERM`, `IBOARDSIZE=#200000` (both TRAMs have 2 MB, measured
 with `../tools/tram/tmem`; the T425 has 1 MB).
+
+## A first measurement
+
+`examples/mandel.c` (a 320x200 Mandelbrot set, 256 iterations at most,
+in double; both machines agree on 3,776,752 iterations), 2026-09-25:
+
+| | time | iterations/s |
+|---|---|---|
+| TT: 68030 + 68882 (`sysv4-cc -O2 -m68881`) | 71.0 s | 53 K |
+| T800 in TRAM slot 1 (`icc -t800`) | 44.2 s | 85 K |
+
+The T800's own clock agrees with the TT's wall clock.
 
 Notes:
 
