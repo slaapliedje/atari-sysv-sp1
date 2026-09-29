@@ -486,8 +486,16 @@ def run(cmd, timeout=60):
 	# AMIX's terminal line holds 256 characters, with the marker below
 	if len(cmd) > 220:
 		die('command longer than 220 characters: put a script and run that')
-	t = Telnet()
-	if t.read_until([b'ogin:'], 30) is None:
+	# A connection that arrives while AMIX is still tearing down the last
+	# session can get no login prompt (more often the slower the
+	# emulation): try again a few times.
+	for attempt in range(4):
+		t = Telnet()
+		if t.read_until([b'ogin:'], 15) is not None:
+			break
+		t.s.close()
+		time.sleep(3)
+	else:
 		die('no login prompt on 127.0.0.1:%d' % TELNET_PORT)
 	t.send('root\r\n')
 	r = t.read_until([b'assword:', b'# ', b'$ '], 20)
