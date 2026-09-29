@@ -21,6 +21,7 @@
 #define SND_DIAG	(SND_IOC | 9)	/* arg = struct snd_diag *: a snapshot (root) */
 #define SND_BEEP	(SND_IOC | 10)	/* arg = ms: 440 Hz on the YM2149 (root) */
 #define SND_STATS	(SND_IOC | 11)	/* arg = struct snd_stats *: the frame interrupt */
+#define SND_TEST	(SND_IOC | 12)	/* arg = 1: stop the frame interrupt, to test the fallback (root) */
 
 /* The DMA plays the ring as a chain of blocks, one frame each; the end of
  * every frame is an MFP Timer A interrupt that queues the block after
@@ -29,9 +30,10 @@ struct snd_stats {
 	unsigned long	intrs;		/* frame interrupts */
 	unsigned long	late;		/* ... that came while the last one still worked */
 	unsigned long	skips;		/* ... that found the DMA outside the expected block */
-	unsigned long	fallbacks;	/* no interrupt for SND_QUIET ticks: back to one frame */
+	unsigned long	fallbacks;	/* no interrupt for two blocks' time: back to one frame */
 	unsigned long	block;		/* bytes per block */
 	long		chained;	/* 1 while the blocks chain */
+	unsigned long	repeats;	/* a block played twice (a late or lost interrupt) */
 };
 
 struct snd_diag {

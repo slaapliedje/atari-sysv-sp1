@@ -37,8 +37,12 @@
  * at software level 2 (generic_intr masks the lower MFP channels and
  * lowers the SR), and clears only Timer A's in-service bit first, so the
  * keyboard, serial and disks can interrupt it: the mixer will run there.
- * If no frame interrupt comes for SND_QUIET ticks the ring goes back to
- * one repeating frame (a glitch, never silence).
+ * A late interrupt makes the DMA play a block twice (the frame repeats):
+ * the tick sees the position go back, counts a repeat and treats the
+ * replayed bytes as silence to wait out, so the accounting stays exact.
+ * If no frame interrupt comes for two blocks' time the ring goes back to
+ * one repeating frame, continuing from the block after the stuck one (a
+ * glitch, never silence).
  *
  * Build WITHOUT -O (install.sh): ASV's cc ignores volatile when it
  * optimises and would read the counter once.
@@ -83,7 +87,7 @@ int snddevflag = 0;			/* new-style (DDI) entry points */
 #define RING		0x10000		/* 64 KB: 2.6 s of 25 kHz mono, 1.3 s stereo */
 #define LEAD		512		/* after an underrun, restart this far ahead */
 #define BLOCK		1024		/* one DMA frame of the chain */
-#define SND_QUIET	32		/* ticks without a frame interrupt: unchain */
+
 #define BOUNCE		1024		/* write() moves this much per step (on the kernel stack) */
 #define ST_RAM		0x40000000	/* iomem_alloc attribute: ST-RAM */
 
@@ -95,6 +99,7 @@ extern int splclock(), splx();
 extern void drv_usecwait();
 extern int drv_priv(), splhi(), delay();
 extern int mfp_intrreq();
+extern int hertz;			/* the clock's ticks per second (128) */
 
 static struct {
 	int	open;
@@ -113,6 +118,8 @@ static struct {
 	int	inwork;			/* sndintr's work part is running */
 	unsigned long lastintrs;	/* intrs as of the last tick */
 	int	quiet;			/* ticks since the last frame interrupt */
+	int	quietmax;		/* ... that mean it is lost: two blocks' time */
+	int	unchain_at;		/* unchaining: the frame that ends the chain starts here */
 	struct snd_stats st;
 } snd;
 
@@ -205,16 +212,29 @@ sndintr()
 	snd.inwork = 0;
 }
 
-/* back to the whole ring as one repeating frame (from the next frame) */
+/* two blocks' playing time in ticks, and two ticks to spare */
+static void
+snd_setquiet()
+{
+	long bps = (long)rates[snd.mode & 3] * ((snd.mode & 0x80) ? 1 : 2);
+
+	snd.quietmax = (int)((2L * BLOCK * hertz + bps - 1) / bps) + 2;
+}
+
+/* The frame interrupt is lost: the DMA repeats block nextblk. Its next
+ * frame runs from the block after it to the end of the ring (so the play
+ * goes on in order); once that has started, snd_tick makes the whole ring
+ * the repeating frame. */
 static void
 snd_unchain()
 {
-	int s = splhi();
+	int s = splhi(), nb = (snd.nextblk + BLOCK) & (RING - 1);
 
 	snd.chained = 0;
 	MFP(M_TACR) = 0;
-	snd_setaddr(R_BASE, snd.phys);
+	snd_setaddr(R_BASE, snd.phys + nb);
 	snd_setaddr(R_END, snd.phys + RING);
+	snd.unchain_at = nb;		/* 0: that frame IS the whole ring */
 	splx(s);
 }
 
@@ -222,7 +242,21 @@ snd_unchain()
 static void
 snd_tick()
 {
-	int p = snd_ppos(), n = USED(snd.cpos, p), i;
+	int p = snd_ppos(), n, i;
+
+	/* a block played again: the position went back. The replayed bytes
+	 * are silence to wait out before the data resumes. */
+	if ((snd.chained || snd.unchain_at) && USED(snd.cpos, p) > RING / 2) {
+		snd.st.repeats++;
+		snd.gap += USED(p, snd.cpos);
+		snd.cpos = p;
+	}
+	if (snd.unchain_at && p >= snd.unchain_at) {	/* the last frame has begun */
+		snd_setaddr(R_BASE, snd.phys);
+		snd_setaddr(R_END, snd.phys + RING);
+		snd.unchain_at = 0;
+	}
+	n = USED(snd.cpos, p);
 
 	for (i = 0; i < n; i++)
 		snd.ring[(snd.cpos + i) & (RING - 1)] = 0;
@@ -242,7 +276,7 @@ snd_tick()
 		if (snd.st.intrs != snd.lastintrs) {
 			snd.lastintrs = snd.st.intrs;
 			snd.quiet = 0;
-		} else if (++snd.quiet > SND_QUIET) {
+		} else if (++snd.quiet > snd.quietmax) {
 			snd.st.fallbacks++;
 			snd_unchain();
 		}
@@ -266,6 +300,8 @@ snd_start()
 	snd.st.block = BLOCK;
 	snd.lastintrs = 0;
 	snd.quiet = 0;
+	snd.unchain_at = 0;
+	snd_setquiet();
 	snd.inwork = 0;
 	/* Timer A: event count, one event (one frame end) per interrupt */
 	MFP(M_TACR) = 0;
@@ -347,6 +383,7 @@ sndclose(dev, flag, otyp, crp)
 			break;
 	REG(R_CTRL) = 0;
 	snd.chained = 0;
+	snd.unchain_at = 0;
 	MFP(M_TACR) = 0;
 	snd.open = 0;
 	if (snd.tid)
@@ -410,11 +447,13 @@ sndioctl(dev, cmd, arg, mode, crp, rvalp)
 				best = i;
 		snd.mode = (snd.mode & 0x80) | best;
 		REG(R_MODE) = snd.mode;
+		snd_setquiet();
 		*rvalp = rates[best];
 		return 0;
 	case SND_SETSTEREO:
 		snd.mode = (snd.mode & 3) | (arg ? 0 : 0x80);
 		REG(R_MODE) = snd.mode;
+		snd_setquiet();
 		return 0;
 	case SND_DRAIN:
 		for (t = 0; snd.filled > 0 && t < 30 * HZ; t++)
@@ -479,6 +518,12 @@ sndioctl(dev, cmd, arg, mode, crp, rvalp)
 	case SND_STATS:
 		snd.st.chained = snd.chained;
 		return copyout((caddr_t)&snd.st, (caddr_t)arg, sizeof snd.st) ? EFAULT : 0;
+	case SND_TEST:
+		if (drv_priv(crp))
+			return EPERM;
+		if (arg == 1)
+			MFP(M_TACR) = 0;	/* frame interrupts stop; the chain does not know */
+		return 0;
 	case SND_GETUNDERRUNS:
 		*rvalp = snd.underruns;
 		return 0;
