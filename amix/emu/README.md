@@ -128,6 +128,16 @@ Also found on the way, none of which the cycle-exact switch avoids:
 - WinUAE's Unix port: `od-unix/target.h`'s beta number lags `win32.h`, so
   CMake refuses to configure.
 
+### Checking an emulator
+
+`faultcopy.c` reproduces the MOVES bug without a network. It `read()`s a
+file into fresh memory at odd offsets, so the kernel's `copyout()`
+page-faults in the middle of misaligned MOVES, and then checks every byte.
+Build it for AMIX with the gcc-cross-amix toolchain (or Manx's
+`toolchain/sysv4-cc -m68030`), `put` it, and run `faultcopy /tmp/f 150`.
+A good emulator prints `0 bad bytes`; an affected one corrupts the data or
+panics the kernel.
+
 ## Media
 
 `../work/emu/media/` (not in the repository) holds:
