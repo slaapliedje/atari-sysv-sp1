@@ -80,6 +80,12 @@ Nothing that comes out of the AMIX packages belongs in a repository or on a
 public server. That includes a static bash, which carries code from AMIX's
 `libc.a`.
 
+## AMIX itself, in an emulator
+
+`emu/` runs AMIX 2.1 in an emulated A3000, headless, for testing AMIX
+programs on the real system: `emu/uaeamix.py` starts it, and then runs
+commands over telnet and copies files over ftp. See `emu/README.md`.
+
 ## bash
 
 ```sh
