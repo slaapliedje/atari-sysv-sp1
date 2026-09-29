@@ -20,6 +20,19 @@
 #define SND_SETVOLUME	(SND_IOC | 8)	/* arg = master volume 0..40 (40 = 0 dB, 2 dB steps) */
 #define SND_DIAG	(SND_IOC | 9)	/* arg = struct snd_diag *: a snapshot (root) */
 #define SND_BEEP	(SND_IOC | 10)	/* arg = ms: 440 Hz on the YM2149 (root) */
+#define SND_STATS	(SND_IOC | 11)	/* arg = struct snd_stats *: the frame interrupt */
+
+/* The DMA plays the ring as a chain of blocks, one frame each; the end of
+ * every frame is an MFP Timer A interrupt that queues the block after
+ * next. Counted since open. */
+struct snd_stats {
+	unsigned long	intrs;		/* frame interrupts */
+	unsigned long	late;		/* ... that came while the last one still worked */
+	unsigned long	skips;		/* ... that found the DMA outside the expected block */
+	unsigned long	fallbacks;	/* no interrupt for SND_QUIET ticks: back to one frame */
+	unsigned long	block;		/* bytes per block */
+	long		chained;	/* 1 while the blocks chain */
+};
 
 struct snd_diag {
 	unsigned long	phys;		/* the ring's physical address */

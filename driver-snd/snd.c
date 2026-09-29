@@ -27,6 +27,19 @@
  * real TT they overrun one another and the DMA sound stayed silent.
  * open() sends them again, waiting for each (snd_mw).
  *
+ * The ring plays as a CHAIN of BLOCK-byte frames: the DMA sound latches a
+ * new frame's addresses at the end of the current one, and each frame's
+ * end is an MFP Timer A event (Timer A counts the DMA's XSINT line; the
+ * Atari Compendium, "Sound Interrupts using MFP Timer A"). sndintr, on
+ * the ST MFP's line 13 (free in the stock kernel: phase 0 in
+ * tools/snd/PHASE0.md), queues the block after next, so the DMA still
+ * walks the ring in order and everything above works unchanged. It runs
+ * at software level 2 (generic_intr masks the lower MFP channels and
+ * lowers the SR), and clears only Timer A's in-service bit first, so the
+ * keyboard, serial and disks can interrupt it: the mixer will run there.
+ * If no frame interrupt comes for SND_QUIET ticks the ring goes back to
+ * one repeating frame (a glitch, never silence).
+ *
  * Build WITHOUT -O (install.sh): ASV's cc ignores volatile when it
  * optimises and would read the counter once.
  */
@@ -56,8 +69,21 @@ int snddevflag = 0;			/* new-style (DDI) entry points */
 #define R_END		0x0F
 #define R_MODE		0x21
 
+/* the ST MFP (Atari Compendium, MC68901): Timer A counts DMA frame ends */
+#define MFP(o)		(*(volatile unsigned char *)(0xFFFFFA00UL + (o)))
+#define M_IERA		0x07
+#define M_ISRA		0x0F
+#define M_IMRA		0x13
+#define M_TACR		0x19
+#define M_TADR		0x1F
+#define TA_BIT		0x20		/* channel 13 in the A registers */
+#define TA_LINE		13
+#define TA_IPL		2		/* the software level sndintr runs at */
+
 #define RING		0x10000		/* 64 KB: 2.6 s of 25 kHz mono, 1.3 s stereo */
 #define LEAD		512		/* after an underrun, restart this far ahead */
+#define BLOCK		1024		/* one DMA frame of the chain */
+#define SND_QUIET	32		/* ticks without a frame interrupt: unchain */
 #define BOUNCE		1024		/* write() moves this much per step (on the kernel stack) */
 #define ST_RAM		0x40000000	/* iomem_alloc attribute: ST-RAM */
 
@@ -68,6 +94,7 @@ extern void wakeup();
 extern int splclock(), splx();
 extern void drv_usecwait();
 extern int drv_priv(), splhi(), delay();
+extern int mfp_intrreq();
 
 static struct {
 	int	open;
@@ -81,6 +108,12 @@ static struct {
 	int	tid;			/* the tick's timeout id, 0 = none */
 	int	underruns;
 	int	volume;			/* LMC1992 master, 0..40 */
+	int	chained;		/* the ring plays as a chain of blocks */
+	int	nextblk;		/* the block the DMA plays next (as programmed) */
+	int	inwork;			/* sndintr's work part is running */
+	unsigned long lastintrs;	/* intrs as of the last tick */
+	int	quiet;			/* ticks since the last frame interrupt */
+	struct snd_stats st;
 } snd;
 
 static int rates[4] = { 6258, 12517, 25033, 50066 };
@@ -143,6 +176,48 @@ snd_setaddr(reg, a)
 	REG(reg + 4) = a & 0xFE;
 }
 
+/* the end of a DMA frame (MFP Timer A, software level 2): queue the block
+ * after next - the DMA has already latched the one we queued last time */
+static void
+sndintr()
+{
+	int p, nb;
+
+	MFP(M_ISRA) = (unsigned char)~TA_BIT;	/* Timer A no longer in service */
+	if (!snd.open || !snd.chained)
+		return;
+	snd.st.intrs++;
+	p = snd_ppos();
+	if (USED(snd.nextblk, p) >= BLOCK) {	/* a frame went by unseen */
+		snd.st.skips++;
+		snd.nextblk = p & ~(BLOCK - 1);
+	}
+	nb = (snd.nextblk + BLOCK) & (RING - 1);
+	snd_setaddr(R_BASE, snd.phys + nb);
+	snd_setaddr(R_END, snd.phys + nb + BLOCK);
+	snd.nextblk = nb;
+	if (snd.inwork) {
+		snd.st.late++;
+		return;
+	}
+	snd.inwork = 1;
+	/* the mixer's place (phase 1, step 2) */
+	snd.inwork = 0;
+}
+
+/* back to the whole ring as one repeating frame (from the next frame) */
+static void
+snd_unchain()
+{
+	int s = splhi();
+
+	snd.chained = 0;
+	MFP(M_TACR) = 0;
+	snd_setaddr(R_BASE, snd.phys);
+	snd_setaddr(R_END, snd.phys + RING);
+	splx(s);
+}
+
 /* once a tick: zero what has played since the last tick, and wake a writer */
 static void
 snd_tick()
@@ -163,6 +238,15 @@ snd_tick()
 	} else
 		snd.gap -= n;
 	snd.cpos = p;
+	if (snd.chained) {
+		if (snd.st.intrs != snd.lastintrs) {
+			snd.lastintrs = snd.st.intrs;
+			snd.quiet = 0;
+		} else if (++snd.quiet > SND_QUIET) {
+			snd.st.fallbacks++;
+			snd_unchain();
+		}
+	}
 	wakeup((caddr_t)&snd);
 	snd.tid = snd.open ? timeout(snd_tick, (caddr_t)0, 1) : 0;
 }
@@ -175,12 +259,28 @@ snd_start()
 	REG(R_CTRL) = 0;
 	for (i = 0; i < RING; i++)
 		snd.ring[i] = 0;
-	snd_setaddr(R_BASE, snd.phys);
-	snd_setaddr(R_END, snd.phys + RING);
 	REG(R_MODE) = snd.mode;
 	snd.cpos = snd.filled = 0;
 	snd.wpos = snd.gap = LEAD;
+	bzero((caddr_t)&snd.st, sizeof snd.st);
+	snd.st.block = BLOCK;
+	snd.lastintrs = 0;
+	snd.quiet = 0;
+	snd.inwork = 0;
+	/* Timer A: event count, one event (one frame end) per interrupt */
+	MFP(M_TACR) = 0;
+	MFP(M_TADR) = 1;
+	MFP(M_TACR) = 0x08;
+	MFP(M_IERA) |= TA_BIT;
+	MFP(M_IMRA) |= TA_BIT;
+	/* the first block, then (latched at its end) the second */
+	snd_setaddr(R_BASE, snd.phys);
+	snd_setaddr(R_END, snd.phys + BLOCK);
 	REG(R_CTRL) = 3;			/* play, repeat */
+	snd_setaddr(R_BASE, snd.phys + BLOCK);
+	snd_setaddr(R_END, snd.phys + 2 * BLOCK);
+	snd.nextblk = BLOCK;
+	snd.chained = 1;
 }
 
 int
@@ -205,6 +305,9 @@ sndstart()
 		cmn_err(CE_WARN, "snd: ring at %x: not in the first 4 MB", snd.phys);
 		snd.ring = 0;
 	}
+	/* the DMA frame interrupt: ST MFP Timer A, at software level 2 */
+	if (snd.ring)
+		mfp_intrreq(TA_LINE, 0, sndintr, 0, 1, 0, TA_IPL);
 	return 0;
 }
 
@@ -243,6 +346,8 @@ sndclose(dev, flag, otyp, crp)
 		if (sleep((caddr_t)&snd, (PZERO + 1) | PCATCH))
 			break;
 	REG(R_CTRL) = 0;
+	snd.chained = 0;
+	MFP(M_TACR) = 0;
 	snd.open = 0;
 	if (snd.tid)
 		untimeout(snd.tid);
@@ -371,6 +476,9 @@ sndioctl(dev, cmd, arg, mode, crp, rvalp)
 		PSG(7, 0xFF);
 		splx(t);
 		return 0;
+	case SND_STATS:
+		snd.st.chained = snd.chained;
+		return copyout((caddr_t)&snd.st, (caddr_t)arg, sizeof snd.st) ? EFAULT : 0;
 	case SND_GETUNDERRUNS:
 		*rvalp = snd.underruns;
 		return 0;
