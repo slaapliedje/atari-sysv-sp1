@@ -11,9 +11,7 @@ counterpart of `tools/hatari-asv.sh`:
   over ftp.
 
 ```sh
-export WINUAE_EXE=~/opt/winuae-win/5310/winuae64.exe WINEPREFIX=~/opt/winuae-win/prefix
-
-./uaeamix.py start --from ../work/emu/amix-configured.hdf --wait   # ~25 s to a login
+./uaeamix.py start --from ../work/emu/amix-configured.hdf --wait   # ~20 s to a login
 ./uaeamix.py sh 'uname -a'           # root, over telnet; exits with the command's status
 ./uaeamix.py put manx /home/dev/manx/manx
 ./uaeamix.py get /etc/passwd /tmp/passwd
@@ -61,55 +59,74 @@ default route.
 
 ## Which emulator
 
-`--emu` (or `$UAEAMIX_EMU`) picks one of three.
+`--emu` (or `$UAEAMIX_EMU`) picks one:
 
-- **`wine`** (the default): WinUAE 5.3.1 for Windows, under Wine. Set
-  `WINUAE_EXE` to its `winuae64.exe`, from
-  <https://download.abime.net/winuae/releases/WinUAE5310_x64.zip>.
-  `WINEPREFIX` defaults to `../work/emu/wine`.
-  **This is the one that works.** It installs, boots, runs telnet and ftp,
-  and Manx loads Hacker News over HTTPS.
+- **`amiberry`** (the default): Amiberry (`$AMIBERRY`, or the flatpak).
+  Its control socket drives it.
+- **`wine`**: WinUAE for Windows under Wine. `WINUAE_EXE` names a
+  `winuae64.exe`; `WINEPREFIX` defaults to `../work/emu/wine`.
 - **`winuae`**: WinUAE's Unix port (`$WINUAE`).
-- **`amiberry`**: Amiberry (`$AMIBERRY`, or the flatpak). Amiberry 8.3
-  also has a control socket, which the harness uses.
 
-### Why not current WinUAE or Amiberry
+All three run AMIX, from the install floppies onwards, because the harness
+turns cycle-exact **off**. Tested:
 
-**WinUAE 6.0.0 and later, and Amiberry 8.3, kill AMIX's first process:**
+- Amiberry 8.3 as it ships;
+- WinUAE 5.3.1;
+- WinUAE master built for Linux, with the two Unix-port fixes listed
+  below (without them it doesn't start).
 
-```
-NOTICE: User BUS ERROR at DC801770, PC:C100F3A6 FAULT:6 PID:1 CMD:/sbin/init
-```
+### Cycle-exact and the 68030 MMU
 
-The kernel's `suword()` stores init's argc into the fresh user stack with
-`moves.l`. That store takes a page fault, and on the retry it writes the
-previous store's data (the address of `sf_fault`) instead.
+WinUAE 6.0 made cycle-exact the default (5.3.1 had it off), and Amiberry
+followed. A 68030 with its MMU then runs table 35 (or table 34 with "more
+compatible"), which models the instruction pipeline, instead of table 32.
+Two bugs in those tables break AMIX, and neither exists in table 32.
 
-- Table 35 (68030 MMU with caches, used for this configuration since 6.0)
-  sent MOVES through the plain `dfc030c_put_*` helpers, not the `_state`
-  ones.
-- WinUAE PR #499 fixed `gencpu.cpp`, but the `cpuemu_35.cpp` in the
-  repository was never regenerated. Regenerating it changes only those
-  MOVES lines, and AMIX then boots.
+1. **A MOVES store that page-faults is replayed with stale data.** The
+   kernel's `suword()` stores init's argc into the new stack. On the
+   retry it writes the previous store's value (the address of `sf_fault`)
+   instead, and init dies:
 
-Even with that fixed, current WinUAE isn't usable for AMIX yet:
+   ```
+   NOTICE: User BUS ERROR at DC801770, PC:C100F3A6 FAULT:6 PID:1 CMD:/sbin/init
+   ```
 
-- **Received network data gets corrupted.** Bytes are zeroed inside TCP
-  segments, after the checksum has already passed. The frames SLIRP hands
-  to the A2065 are correct, and WinUAE 5.3.1 receives the same downloads
-  intact.
-- **Boots sometimes hang, and processes sometimes die**: a stray
-  `User BUS ERROR` in `id`, for example.
+   WinUAE PR #499 fixed this in `gencpu.cpp`, but the `cpuemu_35.cpp` in
+   the repository was never regenerated. Regenerating it changes only
+   those MOVES lines.
+
+2. **A misaligned MOVES that crosses a page boundary uses one
+   translation for all of it.** Without the data cache, MOVES goes through
+   `mmu030_get/put_fc_long` and `_word`, which don't split a misaligned
+   access. Only the first byte's page is translated. The rest is written
+   to (or read from) the physically adjacent page, and the second page
+   never faults in.
+
+   `copyout()` and `copyin()` do exactly such MOVES whenever a user buffer
+   is at an odd offset. The result is:
+
+   - zeroed bytes in network data (every 6th TCP segment, where a
+     download's buffer crosses a page);
+   - TLS certificate chains that fail to parse;
+   - kernel panics in `kmem_alloc` from garbage in its free list.
+
+   Splitting the access as `dfc030_put_long()` does fixes all of it: a
+   stress test (`read()` into fresh pages at odd offsets) goes from a
+   kernel panic to 150 clean rounds, and 1 MB downloads from half
+   corrupted to all intact.
+
+   Hatari has the same code, but it runs these tables with its data cache
+   on, and that path splits correctly.
+
+Also found on the way, none of which the cycle-exact switch avoids:
+
 - The A2065 turns its receiver off for good after a receive BUFF error.
-  The Am7990 only does that for transmit errors (data sheet, CSR0 RXON/TXON).
-  AMIX's driver never restarts it, so the network dies.
-
-The Unix port adds two build problems:
-
-- Since commit f4aaab2, every reset frees the UAE Boot ROM, so the first
-  reset writes through a NULL pointer.
-- `od-unix/target.h`'s beta number lags `win32.h`, so CMake refuses to
-  configure.
+  The Am7990 only does that for transmit errors (data sheet, CSR0
+  RXON/TXON), and AMIX's driver never restarts it.
+- WinUAE's Unix port: since commit f4aaab2, every reset frees the UAE Boot
+  ROM, so the first reset writes through a NULL pointer.
+- WinUAE's Unix port: `od-unix/target.h`'s beta number lags `win32.h`, so
+  CMake refuses to configure.
 
 ## Media
 

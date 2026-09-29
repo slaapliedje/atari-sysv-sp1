@@ -25,12 +25,12 @@ installer insists), and an A2065 on user-mode NAT (SLIRP). The guest is
 reaches the guest's telnet and 127.0.0.1:2121 its ftp.
 
 Emulators (--emu, or $UAEAMIX_EMU):
+  amiberry  Amiberry ($AMIBERRY, default: the flatpak; the default)
   wine      WinUAE for Windows under Wine ($WINUAE_EXE, a winuae64.exe)
   winuae    WinUAE's Unix port ($WINUAE, default: winuae on $PATH)
-  amiberry  Amiberry ($AMIBERRY, default: the flatpak)
-Use WinUAE 5.3.1 for now: 6.0.0 and later, and Amiberry 8, kill AMIX's
-init with a bus error, and a patched build still corrupts network data
-(see README.md).
+All three run AMIX with the settings below, which turn cycle-exact off:
+WinUAE 6 and Amiberry default to it, and their cycle-exact 68030 MMU
+code breaks AMIX (README.md).
 
 Files live in $AMIX_EMU (default ../work/emu): media/ (the 2.1 floppies
 and tape, and the Kickstart), amix.hdf (the disk), run/ (this run's
@@ -103,8 +103,11 @@ def config(mode, emu, extra):
 		'kickstart_rom_file': kick,
 		'chipset': 'ecs', 'chipset_compatible': 'A3000', 'ntsc': 'false',
 		'cpu_model': '68030', 'mmu_model': '68030', 'fpu_model': '68882',
-		# "more compatible" and JIT both break AMIX
+		# "more compatible" and JIT both break AMIX. So does cycle-exact,
+		# which WinUAE 6 and Amiberry turn on by default: their pipelined
+		# 68030 MMU tables mishandle MOVES (see README.md).
 		'cpu_compatible': 'false', 'cpu_24bit_addressing': 'false',
+		'cpu_cycle_exact': 'false', 'cpu_memory_cycle_exact': 'false',
 		'cpu_speed': 'max', 'cachesize': '0',
 		'chipmem_size': '4', 'bogomem_size': '0', 'fastmem_size': '0',
 		'a3000mem_size': '16', 'collision_level': 'playfields',
@@ -161,7 +164,7 @@ def start(args):
 	mode = 'run'
 	if args and args[0] in ('install', 'run'):
 		mode = args.pop(0)
-	emu = os.environ.get('UAEAMIX_EMU', 'wine')
+	emu = os.environ.get('UAEAMIX_EMU', 'amiberry')
 	extra = []
 	image = None
 	wait = False
