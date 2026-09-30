@@ -140,6 +140,16 @@ Caveats:
   `apkg-pkgadd` fixes packages before they are installed, not after.
 - `pkgchk APKG` reports `/etc/apkg.conf` as changed, as it would after any
   edit: `apkg-setup.sh` adds its lines to it.
+- APKGENG's `pkgchk` can crash (segmentation fault) while reporting a
+  directory whose group differs from the package's. It prints the first
+  mismatch, then a group of `(null)` for the next. A package installed with
+  `APKG_ANYWHERE=1` into existing directories such as `/usr/local/bin`
+  leaves exactly such differences; `chgrp` the directories to what the
+  package declares (`sys`) and `pkgchk` passes.
+- The TT's own compiler is GCC 1.40, which knows `signed` only with
+  `-ansi`. acompat's `stdint.h`, written for the AMIX cross-compiler, needs
+  `cc -ansi` there. With it, `stdint.h` (`long long` included), `strings.h`
+  and `-lacompat` all work.
 
 ## AMIX itself, in an emulator
 
