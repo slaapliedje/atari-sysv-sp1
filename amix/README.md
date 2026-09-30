@@ -76,9 +76,70 @@ as bash below) need neither.
    for the trailer, because AMIX's own `cpio` binary contains the string
    `TRAILER!!!`.
 
+4. Packages from pkg.amigaux.org: see [apkg](#packages-apkg) below.
+
 Nothing that comes out of the AMIX packages belongs in a repository or on a
 public server. That includes a static bash, which carries code from AMIX's
 `libc.a`.
+
+## Packages: apkg
+
+`apkg` is the AMIX community's package client. It fetches packages from
+<http://pkg.amigaux.org> and installs them with its own SVR4 package engine
+(`APKGENG`: pkgadd, pkgrm, pkgchk…). Both are dynamically linked AMIX
+programs, so they run on the TT once they point at `/usr/amx`, and so do the
+programs they install. Three pieces here do that on the TT itself:
+
+- `amixify.c` is `amixify.py` in C (the same bytes out, and a second run
+  changes nothing). `-q` skips anything that is not a 68k ELF file.
+- `apkg-pkgadd` is the `pkgadd` that `apkg` runs. It unpacks the package,
+  refuses it if it would install anything outside `/opt/amix` or apkg's own
+  files, amixifies its programs and puts their new checksums in the pkgmap,
+  and only then hands it to the engine. Afterwards it sets owners and
+  groups, which the engine leaves as root's. The installed-software
+  database therefore matches the files on disk, and `pkgchk` agrees.
+- `apkg-pkgrm` is the `pkgrm` that `apkg` runs. It refuses to remove a
+  package with files outside `/opt/amix`: ASV has packages of its own called
+  `core`, `lp`, `man` and `sysadm`, the names of AMIX's stock packages, and
+  `apkg list` shows them as installed.
+
+To install, get `APKGENG-1.12.0.pkg` and `APKG-0.2.2.pkg` from the server
+(`base/` in its `catalog`, which also has their MD5 sums). Then, as root on
+the TT, in a directory with them, `amixify.c`, `apkg-pkgadd`, `apkg-pkgrm` and
+`apkg-setup.sh`:
+
+```sh
+sh apkg-setup.sh APKGENG-1.12.0.pkg APKG-0.2.2.pkg   # [NAMESERVER]
+apkg update
+apkg install gzip less
+PATH=/opt/amix/bin:$PATH
+```
+
+`apkg-setup.sh` builds `amixify` with the TT's `cc` into `/usr/amx/bin`,
+next to the two hooks. ASV's own `pkgadd` installs the engine, and the engine
+then installs `apkg`. Finally it adds `pkgadd=`, `pkgrm=` and `nameserver=`
+to `/etc/apkg.conf`, the last taken from `/etc/resolv.conf`. AMIX has no
+resolver, so apkg asks that server itself. Packages are unpacked in
+`$TMPDIR` (default `/var/tmp`); set it to a roomier filesystem if `/var` is
+small.
+
+What installs: the community's ports, which live in `/opt/amix`. That means
+gzip, less, grep, make, tar, zlib and amix-benchmark. What is refused: AMIX's
+stock packages (`core`, `bsd`, `text`, `xcore`…), which would replace ASV's
+own commands and libraries. Also refused are `patch` and `acompat`, which
+write to `/usr/bin` and `/usr/local`, where `acompat`'s `stdint.h` would sit
+in front of the TT's gcc, and `cdfs`, an AMIX filesystem driver.
+`APKG_ANYWHERE=1` overrides either hook.
+
+Caveats:
+
+- apkg fetches over plain HTTP. The catalog's MD5 sums catch damaged
+  downloads, not altered ones.
+- Neither `installf -f` survives on the TT: ASV's dies with a bus error, and
+  APKGENG's with a segmentation fault on some packages. That is why
+  `apkg-pkgadd` fixes packages before they are installed, not after.
+- `pkgchk APKG` reports `/etc/apkg.conf` as changed, as it would after any
+  edit: `apkg-setup.sh` adds its lines to it.
 
 ## AMIX itself, in an emulator
 

@@ -1,0 +1,158 @@
+#!/bin/sh
+# apkg-pkgadd - the pkgadd that apkg runs on Atari System V, set in
+# /etc/apkg.conf as  pkgadd=/usr/amx/bin/apkg-pkgadd
+#
+# apkg hands it an AMIX package: pkgadd -n -a ADMIN -d FILE PKGINST.
+# Before the package engine sees it, this
+#  - unpacks the datastream into a directory, reading its cpio archives the
+#    way pkgadd does;
+#  - refuses the package if it would install anything outside /opt/amix or
+#    apkg's own files. AMIX's stock packages (core, bsd, text...) would
+#    replace ASV's own commands and libraries, and so would the community
+#    packages that write to /usr/local or /usr/bin. APKG_ANYWHERE=1
+#    installs them anyway;
+#  - makes its programs use AMIX's C library in /usr/amx (amixify) and puts
+#    their new checksums in the pkgmap,
+# and then runs the engine on the directory, and afterwards sets owners and
+# groups, which the engine leaves as root's. The installed-software database
+# therefore describes the files as they are on disk, with no installf
+# afterwards (ASV's installf -f dies with a bus error, apkg's with a
+# segmentation fault).
+#
+# The engine is apkg's own (/usr/apkg/bin/pkgadd), or ASV's when that is
+# missing; APKG_ENGINE overrides it (apkg-setup.sh uses ASV's to install the
+# engine itself). The unpacked copy goes in $TMPDIR (default /var/tmp).
+engine=/usr/apkg/bin/pkgadd
+[ -x $engine ] || engine=/usr/sbin/pkgadd
+[ -n "$APKG_ENGINE" ] && engine=$APKG_ENGINE
+
+# the arguments: -d's value, the instance (last), and the rest
+opts= src= inst=
+while [ $# -gt 0 ]
+do
+	case $1 in
+	-d)	src=$2
+		shift 2 ;;
+	*)	if [ $# -eq 1 ]
+		then
+			inst=$1
+		else
+			opts="$opts $1"
+		fi
+		shift ;;
+	esac
+done
+if [ -z "$inst" ] || [ ! -f "$src" ]
+then
+	echo "apkg-pkgadd: expects [options] -d DATASTREAM PKGINST"
+	exit 1
+fi
+
+tmp=${TMPDIR:-/var/tmp}/apkg-pkgadd.$$
+mkdir $tmp || exit 1
+# (no trap on 0: in ASV's sh the trap's own status would replace the exit
+# status, and apkg would take a refusal for success)
+bye() {
+	cd /
+	rm -rf $tmp
+	exit $1
+}
+trap 'bye 1' 1 2 15
+
+# The header block names each package with its number of parts. Then comes
+# one archive of every package's pkginfo and pkgmap, and then each
+# package's parts, one archive apiece, relative to its directory.
+pkgs=`dd if=$src bs=512 count=1 2>/dev/null | tr -d '\000' |
+	sed -n '/^# PaCkAgE DaTaStReAm/,/^# end of header/p' |
+	sed -e '1d' -e '$d' -e 's/^\([^ ]*\) \([0-9]*\) .*/\1:\2/'`
+case " `echo $pkgs` " in
+*" $inst:"*) ;;
+*)	echo "apkg-pkgadd: $inst is not in $src"
+	bye 1 ;;
+esac
+(
+	dd bs=512 count=1 of=/dev/null 2>/dev/null
+	cd $tmp && cpio -icdumD -C 512 2>/dev/null || exit 1
+	for p in $pkgs
+	do
+		name=`echo $p | sed 's/:.*//'`
+		parts=`echo $p | sed 's/.*://'`
+		n=0
+		while [ $n -lt $parts ]
+		do
+			(cd $tmp/$name && cpio -icdumD -C 512 2>/dev/null) || exit 1
+			n=`expr $n + 1`
+		done
+	done
+) < $src
+if [ $? -ne 0 ] || [ ! -f $tmp/$inst/pkgmap ]
+then
+	echo "apkg-pkgadd: cannot unpack $src"
+	bye 1
+fi
+cd $tmp/$inst || bye 1
+
+# Only /opt/amix and apkg's own files; directories on the way are fine.
+# (The check fails closed: if nawk cannot run it, nothing is installed.)
+nawk '$1 != ":" && $2 != "i" {
+	p = $4
+	sub("=.*", "", p)
+	if (p ~ /^\/opt\/amix(\/|$)/ || p ~ /^\/usr\/apkg(\/|$)/ ||
+	    p ~ /^\/var\/apkg(\/|$)/ || p == "/etc/apkg.conf" || p == "/usr/bin/apkg")
+		next
+	if ($2 == "d" && (p == "/opt" || p == "/usr" || p == "/var" || p == "/etc"))
+		next
+	print p
+}' pkgmap > $tmp/outside || { echo "apkg-pkgadd: cannot check $inst's pkgmap"; bye 1; }
+if [ -s $tmp/outside ] && [ "$APKG_ANYWHERE" != 1 ]
+then
+	echo "apkg-pkgadd: $inst would install outside /opt/amix, over Atari System V's own files:"
+	sed -n '1,8s/^/	/p' $tmp/outside
+	echo "Not installed. (APKG_ANYWHERE=1 installs it anyway.)"
+	bye 1
+fi
+
+# amixify the regular files, and record the new checksums (SysV sum)
+: > $tmp/sums
+for p in `nawk '$2 == "f" || $2 == "e" || $2 == "v" { print $4 }' pkgmap`
+do
+	case $p in
+	/*)	f=root$p ;;
+	*)	f=reloc/$p ;;
+	esac
+	[ -f "$f" ] || continue
+	out=`/usr/amx/bin/amixify -q "$f"` || bye 1
+	if [ -n "$out" ]
+	then
+		msg=`echo "$out" | sed 's/^[^:]*: //'`
+		echo "$p: $msg"
+		cks=`sum "$f" | nawk '{ print $1 }'`
+		echo "$p $cks" >> $tmp/sums
+	fi
+done
+if [ -s $tmp/sums ]
+then
+	nawk 'NR == FNR { s[$1] = $2; next }
+	($2 == "f" || $2 == "e" || $2 == "v") && ($4 in s) { $9 = s[$4] }
+	{ print }' $tmp/sums pkgmap > $tmp/pkgmap.new && cp $tmp/pkgmap.new pkgmap || bye 1
+fi
+
+cd /
+$engine $opts -d $tmp $inst
+rc=$?
+
+# apkg's engine leaves every file root's group (other) instead of the one
+# in the pkgmap: set owner and group as ASV's pkgadd would, but not on the
+# directories that lead to /opt/amix, which are the system's.
+case $rc in
+0|10|20)
+	nawk '($2 == "f" || $2 == "e" || $2 == "v" || $2 == "d" || $2 == "x") &&
+	    ($4 ~ /^\/opt\/amix(\/|$)/ || $4 ~ /^\/usr\/apkg(\/|$)/ ||
+	     $4 ~ /^\/var\/apkg(\/|$)/ || $4 == "/etc/apkg.conf") { print $6, $7, $4 }' \
+	    $tmp/$inst/pkgmap |
+	while read owner group path
+	do
+		chown $owner $path && chgrp $group $path || echo "apkg-pkgadd: cannot set $owner:$group on $path"
+	done ;;
+esac
+bye $rc

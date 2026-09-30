@@ -1,0 +1,61 @@
+#!/bin/sh
+# apkg-pkgrm - the pkgrm that apkg runs on Atari System V, set in
+# /etc/apkg.conf as  pkgrm=/usr/amx/bin/apkg-pkgrm
+#
+# ASV has packages of its own with the names of AMIX's stock ones (core,
+# lp, man, sysadm...), and apkg lists those as installed. This refuses to
+# remove a package that has files outside /opt/amix and apkg's own, so
+# "apkg remove man" cannot take ASV's manual pages with it. APKG_ANYWHERE=1
+# removes it anyway. apkg runs: pkgrm -n -a ADMIN PKGINST
+engine=/usr/apkg/bin/pkgrm
+[ -x $engine ] || engine=/usr/sbin/pkgrm
+[ -n "$APKG_ENGINE" ] && engine=$APKG_ENGINE
+
+for inst
+do :
+done			# the package instance is the last argument
+
+out=${TMPDIR:-/var/tmp}/apkg-pkgrm.$$
+trap 'rm -f $out; exit 1' 1 2 15
+# The package names on a contents line start at a field that depends on
+# the entry's type; a name can carry a status mark (*, !, ~, \, +).
+nawk '/^#/ { next }
+{
+	t = $2
+	start = 4
+	if (t == "d" || t == "x" || t == "p")
+		start = 7
+	else if (t == "f" || t == "e" || t == "v")
+		start = 10
+	else if (t == "b" || t == "c")
+		start = 9
+	mine = 0
+	for (i = start; i <= NF; i++) {
+		q = $i
+		gsub(/^[^A-Za-z0-9]+/, "", q)
+		gsub(/[^A-Za-z0-9._-]+$/, "", q)
+		if (q == inst)
+			mine = 1
+	}
+	if (!mine)
+		next
+	p = $1
+	sub("=.*", "", p)
+	if (p ~ /^\/opt\/amix(\/|$)/ || p ~ /^\/usr\/apkg(\/|$)/ ||
+	    p ~ /^\/var\/apkg(\/|$)/ || p == "/etc/apkg.conf" || p == "/usr/bin/apkg")
+		next
+	if (t == "d" && (p == "/opt" || p == "/usr" || p == "/var" || p == "/etc"))
+		next
+	print p
+}' inst="$inst" /var/sadm/install/contents > $out ||
+	{ rm -f $out; echo "apkg-pkgrm: cannot read the installed-software database"; exit 1; }
+if [ -s $out ] && [ "$APKG_ANYWHERE" != 1 ]
+then
+	echo "apkg-pkgrm: $inst has files outside /opt/amix; it is probably Atari System V's own package:"
+	sed -n '1,8s/^/	/p' $out
+	echo "Not removed. (APKG_ANYWHERE=1 removes it anyway.)"
+	rm -f $out
+	exit 1
+fi
+rm -f $out
+$engine "$@"
