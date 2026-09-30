@@ -13,8 +13,9 @@
 #    installs them anyway;
 #  - makes its programs use AMIX's C library in /usr/amx (amixify) and puts
 #    their new checksums in the pkgmap,
-# and then runs the engine on the directory, and afterwards sets owners and
-# groups, which the engine leaves as root's. The installed-software database
+# and then runs the engine on the directory, and afterwards sets the owners
+# and groups the engine leaves as root's (on the package's files, and on the
+# directories it created, not on ones that were there before). The installed-software database
 # therefore describes the files as they are on disk, with no installf
 # afterwards (ASV's installf -f dies with a bus error, apkg's with a
 # segmentation fault).
@@ -137,19 +138,29 @@ then
 	{ print }' $tmp/sums pkgmap > $tmp/pkgmap.new && cp $tmp/pkgmap.new pkgmap || bye 1
 fi
 
+# the directories that are already there (the system's, or an earlier
+# package's): their owners are left alone after the install. "/" keeps the
+# list from being empty, which would make nawk's NR == FNR read the pkgmap
+# as the list.
+echo / > $tmp/existing
+for d in `nawk '$2 == "d" || $2 == "x" { print $4 }' pkgmap`
+do
+	[ -d $d ] && echo $d
+done >> $tmp/existing
+
 cd /
 $engine $opts -d $tmp $inst
 rc=$?
 
 # apkg's engine leaves every file root's group (other) instead of the one
-# in the pkgmap: set owner and group as ASV's pkgadd would, but not on the
-# directories that lead to /opt/amix, which are the system's.
+# in the pkgmap: set owner and group as ASV's pkgadd would, on the package's
+# files and on the directories it created.
 case $rc in
 0|10|20)
-	nawk '($2 == "f" || $2 == "e" || $2 == "v" || $2 == "d" || $2 == "x") &&
-	    ($4 ~ /^\/opt\/amix(\/|$)/ || $4 ~ /^\/usr\/apkg(\/|$)/ ||
-	     $4 ~ /^\/var\/apkg(\/|$)/ || $4 == "/etc/apkg.conf") { print $6, $7, $4 }' \
-	    $tmp/$inst/pkgmap |
+	nawk 'NR == FNR { old[$1] = 1; next }
+	($2 == "f" || $2 == "e" || $2 == "v") ||
+	(($2 == "d" || $2 == "x") && !($4 in old)) { print $6, $7, $4 }' \
+	    $tmp/existing $tmp/$inst/pkgmap |
 	while read owner group path
 	do
 		chown $owner $path && chgrp $group $path || echo "apkg-pkgadd: cannot set $owner:$group on $path"
