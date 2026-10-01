@@ -94,13 +94,16 @@ does nothing), so each switch blanks the screen for a moment.
 
 ```sh
 # xdm's Xservers: the desktop as F1
-noname:0 local /usr/x11r6/bin/Xatw :0 -mode 1024x768 -vt 1
+noname:0 local /usr/x11r6/bin/Xatw :0 -mode 1024x768 -depth 32 -vt 1
 # a game full screen at 640x480 as F2, the server gone when it exits
 xatwrun -mode 640x480 /work/openua/openua
 ```
 
-`xatwrun.sh` starts the second server 1 MB into video memory (clear of a
-1024x768 desktop and its 2D-engine fill source, which follows each screen).
+`xatwrun.sh` starts the second server in video memory just past the
+desktop's screen and its 2D-engine fill source, which follows each screen
+(it reads where that is from the desktop's `_ATW_FRAMEBUFFER`): 832 KB in
+under an 8-bit 1024x768 desktop, 3 MB + 64 KB under a 32-bit one, where a
+640x480 or 800x600 8-bit server still fits the 4 MB card.
 Tested in Hatari: switching both ways with the screens intact (an `xclock`
 kept drawing on the hidden one), the keyboard back on F1 afterwards, and
 the card handed back when the F2 server exits.

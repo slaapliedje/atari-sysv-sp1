@@ -1,4 +1,6 @@
 # The display must be named by host (TCP): these X libraries have no
 # local transport. "noname" is Atari System V's default node name; use
 # yours (uname -n) if you changed it.
-noname:0 local /usr/x11r6/bin/Xatw :0 -mode 1024x768
+# 24-bit colour (-depth 32) needs the 4 MB card; without it, leave the
+# option out for 8 bits through the LUT.
+noname:0 local /usr/x11r6/bin/Xatw :0 -mode 1024x768 -depth 32 -vt 1
