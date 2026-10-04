@@ -1,12 +1,16 @@
 /*
  * ttntp - set Atari System V's clock from an NTP server (SNTP, RFC 4330).
  *
- *   ttntp [-n] [-q] [server ...]        (default: pool.ntp.org)
+ *   ttntp [-n] [-q] [-z] [server ...]   (default: pool.ntp.org)
+ *   ttntp -b
  *
  *   -n   only print how far off the clock is; change nothing
  *   -q   quiet: print only errors (for cron and the boot script)
- *   -z   first make the TT's clock chip keep LOCAL time, as TOS does, and
- *        write the current time to it (see below)
+ *   -z   once the clock is right, make the TT's clock chip keep LOCAL
+ *        time, as TOS does, and write the time to it (see below)
+ *   -b   at boot, before the network is up: the kernel has read the
+ *        chip's local time as GMT, so move the clock by the zone's offset.
+ *        Once only (the boot script); the chip is not touched.
  *
  * A server is a dotted address or a name. Names are looked up with a DNS
  * query of ttntp's own, to the first nameserver in /etc/resolv.conf, so
@@ -30,8 +34,17 @@
  * driver also needs the chip's year counted from 1968, as TOS counts it -
  * sp1's patched CLOCK (tools/ttntp/README.md).
  *
+ * The chip is written only after a time server has answered: at boot the
+ * clock is still the kernel's reading of the chip (off by the zone's
+ * offset, unless -b ran), and writing that back made each boot whose
+ * network wasn't up yet lose another 6 hours.
+ *
+ * At boot the driver's offset is 0 again, so the kernel reads the chip's
+ * local time as GMT, and the stock /sbin/setclk does not correct it on
+ * this system: -b does.
+ *
  * Build (static, like the other sp1 tools):
- *   ASV_SYSROOT=... ../../rsync/asv-static-cc -o ttntp ttntp.c -lsocket -lnsl
+ *   ASV_SYSROOT=... ../../rsync/asv-static-cc -O -I../../rsync/include -o ttntp ttntp.c -lsocket
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -287,9 +300,28 @@ static int chip_local(void)
 	return 0;
 }
 
+/* -b: the kernel read the chip's local time as GMT; add the zone's
+ * offset (seconds west), daylight time included. The driver hasn't been
+ * told an offset since boot, so it doesn't write the chip. */
+static int boot_local(void)
+{
+	time_t t = time((time_t *)0);
+	time_t l = t + timezone;
+	struct tm *tm = localtime(&l);
+	long s = (long)t + (tm->tm_isdst > 0 ? altzone : timezone);
+
+	if (stime(&s) < 0) {
+		perror("ttntp: stime");
+		return 1;
+	}
+	if (!quiet)
+		printf("clock moved by the zone's offset: %+ld s\n", s - (long)t);
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
-	int dry = 0, zone = 0, i, j, n;
+	int dry = 0, zone = 0, boot = 0, i, j, n;
 	const char *def[] = { "pool.ntp.org" };
 	const char **servers = def;
 	int nservers = 1;
@@ -302,15 +334,17 @@ int main(int argc, char **argv)
 			quiet = 1;
 		else if (!strcmp(argv[1], "-z"))
 			zone = 1;
+		else if (!strcmp(argv[1], "-b"))
+			boot = 1;
 		else {
-			fprintf(stderr, "usage: ttntp [-n] [-q] [-z] [server ...]\n");
+			fprintf(stderr, "usage: ttntp [-n] [-q] [-z] [server ...] | ttntp [-q] -b\n");
 			return 2;
 		}
 		argc--, argv++;
 	}
 	tzset();
-	if (zone && !dry && chip_local() < 0)
-		return 1;
+	if (boot)
+		return boot_local();
 	if (argc > 1) {
 		servers = (const char **)(argv + 1);
 		nservers = argc - 1;
@@ -342,6 +376,8 @@ int main(int argc, char **argv)
 				if (!quiet)
 					printf("clock slewed\n");
 			}
+			if (zone && chip_local() < 0)
+				return 1;
 			return 0;
 		}
 	}

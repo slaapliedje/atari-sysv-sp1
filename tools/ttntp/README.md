@@ -6,9 +6,13 @@ library.
 
 ```
 ttntp [-n] [-q] [-z] [server ...]      default server: pool.ntp.org
+ttntp [-q] -b
   -n   show how far off the clock is, change nothing
   -q   quiet (cron, boot)
-  -z   keep the TT's clock chip on local time, as TOS does, and write it
+  -z   once the clock is right, keep the TT's clock chip on local time, as
+       TOS does, and write it
+  -b   at boot: the kernel read the chip's local time as GMT; move the
+       clock by the zone's offset (once; the boot script does it)
 ```
 
 ASV steps its clock only in whole seconds (`stime()` keeps the fraction;
@@ -73,11 +77,22 @@ TOS from agreeing on it:
   clock read 2028 in the future: `/etc/shadow`'s third field (days since
   1970) wants resetting, or logins demand a new password.
 
-- **Local time.** At boot `setclk` (from `/etc/inittab`) reads the chip as
-  local time in `TZ`, which is how TOS keeps it. But the driver writes the
-  chip only once it has been told its offset from GMT (an ioctl on
-  `/dev/rtc`, `'R'<<8 | 1`, seconds west), which nothing on the stock
-  system does - so setting ASV's clock never reached the chip. `ttntp -z`
-  tells it the zone's offset and has the kernel write the time.
+- **Local time.** The driver keeps the chip at GMT minus an offset it is
+  told (an ioctl on `/dev/rtc`, `'R'<<8 | 1`, seconds west), and writes the
+  chip only once it has been told, which nothing on the stock system does -
+  so setting ASV's clock never reached the chip. `ttntp -z` tells it the
+  zone's offset and has the kernel write the time. At every boot the
+  offset is 0 again, so the kernel reads the chip's local time as GMT:
+  6 hours slow in MDT. The stock `/sbin/setclk` (from `/etc/inittab`) is
+  meant to correct that from `TZ`, but on a real TT it changes nothing,
+  with `TZ=:US/Mountain` or `TZ=MST7MDT`. `ttntp -b` does it instead.
+
+  Until 2026-10-04 `-z` wrote the chip before asking the network for the
+  time. At boot the clock was then still the kernel's 6-hour-slow reading,
+  so every boot whose network wasn't up yet (a BlueSCSI's WiFi after a
+  power-on) wrote that into the chip and lost another 6 hours, and ASV's
+  `setclk` printed "Time of Day Clock needs Restoring". Now the chip is
+  written only after a time server has answered, and `S99ttntp` runs
+  `ttntp -b` and then retries `ttntp -z` every 15 s for 10 minutes.
 
 - **The zone.** The stock `/etc/TIMEZONE` names US Eastern.

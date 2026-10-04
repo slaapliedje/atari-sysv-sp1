@@ -4,14 +4,27 @@
 # /etc/defaultrouter, if the system has no default route of its own; the
 # nameserver is /etc/resolv.conf's. ttntp -z also keeps the TT's clock chip
 # on local time, as TOS keeps it.
+#
+# The kernel has read the chip's local time as GMT: ttntp -b moves the
+# clock by the zone's offset at once. Then the network: after a power-on
+# it can take a minute or more (a BlueSCSI's WiFi has to join first), so
+# keep trying, every 15 seconds for 10 minutes.
 case "$1" in
 start|'')
 	[ -f /etc/TIMEZONE ] && . /etc/TIMEZONE
+	/usr/local/bin/ttntp -q -b
 	# (no "!" in this sh)
 	if [ -s /etc/defaultrouter ]; then
 		/usr/bin/netstat -rn | grep '^default' > /dev/null ||
 			/usr/sbin/route add default `cat /etc/defaultrouter` 1 > /dev/null 2>&1
 	fi
-	/usr/local/bin/ttntp -q -z &
+	(
+		n=0
+		while [ $n -lt 40 ]; do
+			/usr/local/bin/ttntp -q -z > /dev/null 2>&1 && break
+			sleep 15
+			n=`expr $n + 1`
+		done
+	) &
 	;;
 esac
