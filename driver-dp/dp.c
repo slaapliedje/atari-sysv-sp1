@@ -455,6 +455,7 @@ dp_linit(dev)
 dev_t dev;
 {
 	int i, t;
+	char mac[18];			/* xx:xx:xx:xx:xx:xx */
 
 	if (en_if.if_flags & ENF_RUNNING)
 		return;
@@ -486,10 +487,15 @@ dev_t dev;
 	}
 	for (i = 0; i < 6; i++)
 		en_if.if_enaddr[i] = dpdata[i];
-	cmn_err(CE_CONT, "dp0: DaynaPORT at SCSI id %d, %x:%x:%x:%x:%x:%x\n",
-	    dpjob->sj_target, en_if.if_enaddr[0], en_if.if_enaddr[1],
-	    en_if.if_enaddr[2], en_if.if_enaddr[3], en_if.if_enaddr[4],
-	    en_if.if_enaddr[5]);
+	/* two digits a byte (00:80:19:..., not 0:80:19:...): made here, as
+	 * the kernel's cmn_err has no field widths */
+	for (i = 0; i < 6; i++) {
+		mac[3 * i] = "0123456789abcdef"[(en_if.if_enaddr[i] >> 4) & 15];
+		mac[3 * i + 1] = "0123456789abcdef"[en_if.if_enaddr[i] & 15];
+		mac[3 * i + 2] = i < 5 ? ':' : '\0';
+	}
+	cmn_err(CE_CONT, "dp0: DaynaPORT at SCSI id %d, %s\n",
+	    dpjob->sj_target, mac);
 	en_if.if_flags |= ENF_RUNNING;
 	dp_idle = 0;
 	dp_reinit = 0;
