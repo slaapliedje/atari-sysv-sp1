@@ -10,7 +10,13 @@
 cd "`dirname $0`" || exit 1
 [ -c /dev/link0 ] || /sbin/mknod /dev/link0 c 42 0
 [ -c /dev/link1 ] || /sbin/mknod /dev/link1 c 42 1
-chmod 666 /dev/link0 /dev/link1
+# root and group tlk only: after a reset a transputer answers peeks with
+# no program running, so whoever can open its link reads what was left in
+# its memory (Manx's t425wipe zeroes the T425's at boot). gid 110: below
+# 100 is the system's.
+grep '^tlk:' /etc/group >/dev/null || /usr/sbin/groupadd -g 110 tlk
+chgrp tlk /dev/link0 /dev/link1
+chmod 660 /dev/link0 /dev/link1
 cat tlk.c tlk.h install.sh > .src.c
 [ -f tlk.pc.o ] && cat tlk.pc.o >> .src.c
 if cmp -s .src.c .built.c 2>/dev/null; then echo "kernel already carries this tlk.c"; exit 0; fi

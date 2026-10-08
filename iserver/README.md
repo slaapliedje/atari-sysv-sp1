@@ -5,7 +5,10 @@ transputer and then serves its file, terminal and environment requests.
 This builds it for Atari System V / AMIX over the tlk driver
 (`../driver-tlk`: `/dev/link0` = the C011 and the TRAM in slot 1,
 `/dev/link1` = the FPGA's T425), and with it the INMOS C and occam
-toolset (d72uni) runs on the TRAM with the TT as its host.
+toolset (d72uni) runs on the TRAM with the TT as its host. The links
+are root's and group `tlk`'s (mode 660): a transputer answers peeks after
+a reset, so whoever can open its link can read what was left in its
+memory. Run iserver as root or as a member of `tlk`.
 
 Verified on a real TT (2026-09-25): `icc`, `ilink` and `icollect` running
 on the slot-1 T800 compile, link and collect a C program in the TT's
