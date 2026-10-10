@@ -1,0 +1,8 @@
+*ident	"midi 0.1 - the TT's MIDI port as /dev/midi and /dev/midit"
+*
+* MIDI - software character driver; the 6850 ACIA's transmit interrupt,
+* on the ST MFP line it shares with the keyboard ACIA (the handler calls
+* ikbdint for the keyboard's share).
+*
+*FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
+ocsn	midi	44
