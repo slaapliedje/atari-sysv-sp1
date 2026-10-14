@@ -1,0 +1,37 @@
+#!/bin/bash
+# amix-cc - a C compiler for vim's configure and Makefile that also links:
+# Manx's toolchain/sysv4-cc compiles (the mint GCC 15 to SVR4 assembly, the
+# assembler of gcc-cross-amix to ELF), toolchain/sysv4-ld links a static
+# AMIX program, and rt.a (rt.c: what no AMIX library has, and the shims
+# around libm) goes into every link, with libm after it. gcc-cross-amix's
+# own gcc 2.7.2 can't compile vim 9, which needs C99.
+#   MANX          a checkout of Manx (github.com/slaapliedje/manx)
+#   AMIX_SYSROOT  ../mksysroot.sh's work/sysroot
+#   AMIX_RT       rt.a
+set -e
+: "${MANX:?set MANX}" "${AMIX_SYSROOT:?set AMIX_SYSROOT}" "${AMIX_RT:?set AMIX_RT}"
+cc=$MANX/toolchain/sysv4-cc
+ld=$MANX/toolchain/sysv4-ld
+for a in "$@"; do
+	case "$a" in -c|-E|-S|-M|-MM) exec "$cc" "$@";; esac
+done
+
+out=a.out link=() cflags=() tmps=()
+trap 'rm -f "${tmps[@]}"' EXIT
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-o) out="$2"; shift;;
+	-o*) out="${1#-o}";;
+	*.c) o=$(mktemp "${TMPDIR:-/tmp}/amixcc.XXXXXX.o"); tmps+=("$o")
+	     "$cc" "${cflags[@]}" -c "$1" -o "$o"; link+=("$o");;
+	-include|-isystem|-iquote|-idirafter) cflags+=("$1" "$2"); shift;;
+	-I*|-D*|-U*|-O*|-m*|-f*|-W|-W[a-km-z]*|-g|-std=*) cflags+=("$1");;
+	-Wl,*) IFS=, read -ra w <<< "${1#-Wl,}"; link+=("${w[@]}");;
+	-lc) ;;
+	-l*|*.o|*.a) link+=("$1");;
+	*) ;;
+	esac
+	shift
+done
+# (not exec: the trap removes the objects of the .c files)
+"$ld" -o "$out" "${link[@]}" "$AMIX_RT" -lm

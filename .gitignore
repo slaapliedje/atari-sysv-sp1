@@ -3,6 +3,7 @@ __pycache__/
 .asvpass*
 amix/work/
 amix/bash/work/
+amix/vim/work/
 .rsyncpass
 rsync/work/
 driver-*/*.o

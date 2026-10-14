@@ -1,0 +1,18 @@
+" vimrc - the system vimrc of vim on AMIX and Atari System V
+" (atari-sysv-sp1 amix/vim), installed as /usr/local/share/vim/vimrc.
+"
+" Neither system has a UTF-8 locale, so vim would take 'encoding' latin1
+" from the locale. Text is UTF-8 inside vim instead (mail is, and most of
+" what comes from the network), while the terminal stays what the locale
+" says: Latin-1, unless LANG names UTF-8. vim converts between the two
+" itself; what Latin-1 can't show comes out as "?".
+if &encoding !=# 'utf-8'
+  let &termencoding = &encoding
+  set encoding=utf-8
+endif
+
+" The backtracking regexp engine, not the NFA one. When a file is opened,
+" vim compiles the file name patterns of filetype.vim (over a thousand).
+" As NFA programs they take some 18 MB here, more than AMIX lets a process
+" have (16 MB) and than the machines have; as backtracking ones, about 1 MB.
+set regexpengine=1

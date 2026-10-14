@@ -5,7 +5,8 @@ Commodore's Amiga UNIX (AMIX 2.1) and Atari System V are both SVR4.0 for the
 TT. This directory, with the kernel module in `../driver-amix`, makes that
 work: AMIX's own programs (ls, sh, awk, sed, ps, cpio, stty…), the
 community's AMIX builds (GNU grep, gzip, tar, perl 4), and anything
-cross-built for AMIX. That includes **GNU bash 5.2**, built here.
+cross-built for AMIX. That includes **GNU bash 5.2** and **Vim 9.2**, built
+here.
 
 ## What differs, and where it is handled
 
@@ -79,8 +80,8 @@ as bash below) need neither.
 4. Packages from pkg.amigaux.org: see [apkg](#packages-apkg) below.
 
 Nothing that comes out of the AMIX packages belongs in a repository or on a
-public server. That includes a static bash, which carries code from AMIX's
-`libc.a`.
+public server. That includes a static bash or vim, which carry code from
+AMIX's `libc.a`.
 
 ## Packages: apkg
 
@@ -193,3 +194,60 @@ What it took:
 Time comes from `gettimeofday()`, which AMIX's libc implements with
 `hrtcntl()`. On ASV that ticks at 1/128 s. A short `time sleep 1` is ASV's
 own `sleep`, whose `alarm` wakes at the next whole second.
+
+## vim
+
+```sh
+AMIX_SYSROOT=../work/sysroot sh vim/build.sh
+# -> vim/work/vim, and vim/work/vim-9.2.1189-amix.tar to unpack in /
+```
+
+This builds Vim 9.2.1189 (the tarball's SHA-256 is pinned) with the
+"normal" features and no GUI, as a static AMIX program: 2.9 MB stripped.
+The tar holds it with its runtime files and a system vimrc, all under
+`/usr/local` (26 MB unpacked; no spelling dictionaries, translations or
+tutor). Manx's `manxmail` writes mail in it. The tar is over the 16 MB
+that ASV lets a process write to a file (`ulimit -f`, ftpd's too), so
+bring it over gzipped (8 MB) and unpack it with apkg's gzip:
+`cd / && /opt/amix/bin/gzip -dc vim-9.2.1189-amix.tar.gz | tar xf -`.
+
+What it took:
+
+- **A C99 compiler.** vim 9 needs C99, and gcc-cross-amix's gcc 2.7.2 is
+  C89. `vim/amix-cc` compiles with Manx's `toolchain/sysv4-cc` (the mint
+  GCC 15 to SVR4 assembly, gcc-cross-amix's assembler) and links with its
+  `sysv4-ld`, so `MANX=` must name a checkout of Manx (default
+  `~/dev/unix-browser`). configure runs with it, and is told what it can't
+  run on the PC through cache variables. It also finds the PC's Wayland
+  through pkg-config and `/proc/self/exe` on the PC's disk; both are kept
+  out.
+- **Doubles come back in fp0.** The mint GCC returns a double in d0:d1
+  even with `-m68881`, but AMIX's libc and libm return one in fp0. So
+  every float literal read as 0, and the math functions returned garbage.
+  `vim/rt.c` wraps the 19 that vim calls (`strtod`, `sqrt`, `pow`, the
+  trigonometry...) to move fp0 to d0:d1, and `vim/amixfix.h`, forced
+  ahead of each source, renames vim's calls to them.
+- **No `%lld`.** AMIX's printf has no `ll` length, and vim formats each
+  number with `sprintf(buf, "%lld", n)`. `rt.c`'s `sprintf` does
+  `%ll[duoxX]` itself and passes the rest to AMIX's `vsprintf`.
+- **What SVR4.0 doesn't have**: prototypes for `getrlimit`, `select` and
+  `fchmod`, `ssize_t` (`amixfix.h`), and `trunc` (`rt.c`, the FPU's
+  `fintrz`). configure's own tests run without `amixfix.h`, since they
+  declare each function as `char f();` to see whether it links.
+- **Memory.** AMIX and ASV give a process 16 MB of address space. When a
+  file is opened, vim compiles the file name patterns of `filetype.vim`
+  (over a thousand); as programs of its NFA regexp engine they take some
+  18 MB, which brought "E342: Out of memory" and then crashes. The system
+  vimrc (`vim/vimrc`) picks the backtracking engine instead: about 4 MB
+  in all with syntax highlighting on.
+- **UTF-8 inside, Latin-1 outside.** Neither system has a UTF-8 locale.
+  The vimrc sets 'encoding' to utf-8 (mail is UTF-8) and leaves
+  'termencoding' at what the locale says, Latin-1, which vim converts to
+  and from itself.
+- **The tar.** ASV's tar is from 1991: the archive is ustar with every name
+  under 100 bytes, and its files have owners named `root`. AMIX's tar
+  crashed on empty owner names.
+
+The assembler warns "Bignum too big for f format; truncated" for negative
+single-precision constants. That warning is harmless: the bits come out
+right.
