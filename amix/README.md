@@ -204,9 +204,9 @@ AMIX_SYSROOT=../work/sysroot sh vim/build.sh
 
 This builds Vim 9.2.1189 (the tarball's SHA-256 is pinned) with the
 "normal" features and no GUI, as a static AMIX program: 2.9 MB stripped.
-The tar holds it with its runtime files and a system vimrc, all under
-`/usr/local` (26 MB unpacked; no spelling dictionaries, translations or
-tutor). Manx's `manxmail` writes mail in it. The tar is over the 16 MB
+The tar holds it with its runtime files, a system vimrc and a quicker
+colouring of mail, all under `/usr/local` (26 MB unpacked; no spelling
+dictionaries, translations or tutor). Manx's `manxmail` writes mail in it. The tar is over the 16 MB
 that ASV lets a process write to a file (`ulimit -f`, ftpd's too), so
 bring it over gzipped (8 MB) and unpack it with apkg's gzip:
 `cd / && /opt/amix/bin/gzip -dc vim-9.2.1189-amix.tar.gz | tar xf -`.
@@ -244,6 +244,16 @@ What it took:
   The vimrc sets 'encoding' to utf-8 (mail is UTF-8) and leaves
   'termencoding' at what the locale says, Latin-1, which vim converts to
   and from itself.
+- **Colouring on a 68030.** On the TT a screen of quoted mail took 3-4.5 s
+  to colour, past 'redrawtime' (2 s), after which vim stops colouring the
+  buffer; a jump to the end of a long mail took 8 s. `vim/mail.vim`,
+  installed as `vimfiles/after/syntax/mail.vim`, drops mail.vim's emoji
+  pattern on a Latin-1 terminal (it always runs on the NFA engine: 2.6 s
+  of 4.4), tries addresses only where a word starts, and reads back 30
+  lines after a jump instead of 100. The vimrc gives a redraw 6 s. A
+  screen of quoted mail now takes 2-3 s, a jump 4 s. Over telnet, colours
+  need a TERM that has them: ASV's terminfo `xterm` has none, while
+  `xterm-xfree86` (its XFree86 xterm's) and `xterm-color` have 8.
 - **The tar.** ASV's tar is from 1991: the archive is ustar with every name
   under 100 bytes, and its files have owners named `root`. AMIX's tar
   crashed on empty owner names.

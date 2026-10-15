@@ -5,7 +5,8 @@
 #   AMIX_SYSROOT=../work/sysroot sh build.sh
 #
 # -> work/vim (stripped), and work/vim-$V-amix.tar: vim with its runtime
-# files and vimrc, to unpack in / (it all goes in /usr/local).
+# files, vimrc and after/syntax/mail.vim, to unpack in / (it all goes in
+# /usr/local).
 #
 # Needs gcc-cross-amix at ~/opt/asv-cross (or ASV_CROSS=) for its SVR4
 # assembler, linker and libgcc; the mint GCC (m68k-atari-mint-gcc on PATH,
@@ -73,9 +74,11 @@ cp vim "$work/vim"
 # (AMIX's tar crashes on an empty owner name).
 root=$work/root
 rm -rf "$root"
-mkdir -p "$root/usr/local/bin" "$root/usr/local/share/vim/vim92"
+mkdir -p "$root/usr/local/bin" "$root/usr/local/share/vim/vim92" \
+	"$root/usr/local/share/vim/vimfiles/after/syntax"
 cp "$work/vim" "$root/usr/local/bin/vim"
 cp "$here/vimrc" "$root/usr/local/share/vim/vimrc"
+cp "$here/mail.vim" "$root/usr/local/share/vim/vimfiles/after/syntax/mail.vim"
 cd ../runtime
 tar cf - --exclude=testdir ./*.vim autoload colors compiler doc ftplugin \
 	import indent keymap macros pack plugin print syntax |

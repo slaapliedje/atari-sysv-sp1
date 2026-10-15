@@ -16,3 +16,8 @@ endif
 " As NFA programs they take some 18 MB here, more than AMIX lets a process
 " have (16 MB) and than the machines have; as backtracking ones, about 1 MB.
 set regexpengine=1
+
+" More time to colour a screen before vim gives up on a buffer's syntax
+" (2 s by default): on the TT's 68030 a screen of quoted mail takes 2-2.5 s,
+" even with vimfiles/after/syntax/mail.vim.
+set redrawtime=6000
