@@ -1,0 +1,33 @@
+#!/sbin/sh
+# /etc/init.d/dhcpc - the Ethernet address from DHCP (sp1 dhcpc).
+# Linked twice in rc2.d:
+#   S68dhcpc  before S69inet: asks the server, writes the node's line in
+#             /etc/inet/hosts.net (rc.inet's ifconfig takes the address
+#             from it), /etc/inet/dhcp.sh and /etc/resolv.conf;
+#   S71dhcpc  after S69inet: runs /etc/inet/dhcp.sh (netmask, broadcast,
+#             default route).
+# /etc/inet/dhcpc.dev names the device (/dev/en0 the DaynaPORT, /dev/nu0
+# the NetUSBee); without it nothing happens and the static files stay.
+# The one script does both: the rc2.d name says which half.
+case "$1" in
+'start')
+	[ -f /etc/inet/dhcpc.dev ] || exit 0
+	DEV=`cat /etc/inet/dhcpc.dev`
+	case "$0" in
+	*S71*)
+		[ -f /etc/inet/dhcp.sh ] && /usr/bin/sh /etc/inet/dhcp.sh
+		;;
+	*)
+		rm -f /etc/inet/dhcp.sh
+		if /usr/local/bin/dhcpc -w -t 40 $DEV; then
+			:
+		else
+			echo "dhcpc: no lease on $DEV: the static address stays"
+		fi
+		;;
+	esac
+	;;
+'stop')
+	;;
+esac
+exit 0
