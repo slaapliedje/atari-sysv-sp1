@@ -7,3 +7,5 @@ amix/vim/work/
 .rsyncpass
 rsync/work/
 driver-*/*.o
+driver-nu/tt/
+driver-nu/nu.pc.o
