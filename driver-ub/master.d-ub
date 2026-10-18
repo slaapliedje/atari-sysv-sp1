@@ -1,0 +1,7 @@
+*ident	"ub 0.1 - USB (ISP1160: Lightning VME, NetUSBee): /dev/ub0"
+*
+* UB - character driver; the host controller is polled from a user
+* process (ubd), the class drivers live in the kernel.
+*
+*FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
+ocsn	ub	46

@@ -36,9 +36,9 @@ static unsigned long cbw_tag = 1;
 static long storage_probe();
 static long storage_disconnect();
 static long storage_ioctl();
-static char lname[] = "USB mass storage";
+static char stor_lname[] = "USB mass storage";
 static struct uddif storage_uif = {
-	0, USB_API_VERSION, USB_DEVICE, lname, "storage", 0, 0,
+	0, USB_API_VERSION, USB_DEVICE, stor_lname, "storage", 0, 0,
 	storage_probe, storage_disconnect, 0, storage_ioctl, 0
 };
 

@@ -9,3 +9,8 @@ rsync/work/
 driver-*/*.o
 driver-nu/tt/
 driver-nu/nu.pc.o
+driver-ub/tt/
+driver-ub/ub.pc.o
+driver-ub/ubuser
+driver-ub/ubuserd
+driver-ub/ubtool

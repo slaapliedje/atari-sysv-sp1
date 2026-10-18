@@ -21,6 +21,10 @@ void ub_kprintf();
 void ub_memset();
 char *strcat();
 int sprintf();
+extern void delay();
+extern void drv_usecwait();
+extern int spl6();
+extern void splx();
 #else
 #include <stdio.h>
 #include <string.h>

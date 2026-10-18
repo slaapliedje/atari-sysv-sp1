@@ -7,6 +7,10 @@ NetUSBee, which both carry a Philips ISP1160.
     ub.h, ub_io.c      the platform: the two buses, delays, printing
     isp116x.[ch]       the host controller driver (from ucd/netusbee)
     usb.c hub.c ...    the core, ucd.c/udd.c the registration glue
+    ub.c, ubioc.h      the kernel driver: /dev/ub0 (major 46), ioctls that
+                       start the stack, poll the hubs, list devices and
+                       storage, read/write blocks; master.d-ub, install.sh
+    ubtool.c           its user side: start, poll, devs, stor, read, daemon
     ubuser.c           user-space harness: ubuser [-l|-n] [SECONDS]
     ubstor.[ch]        mass storage, bulk-only: probe, CBW/CSW transport,
                        TEST UNIT READY, INQUIRY, READ CAPACITY, READ/WRITE 10

@@ -154,6 +154,24 @@ int bus;
 	return -1;
 }
 
+#ifdef _KERNEL
+/* process context (ioctl): sleep; a millisecond is a tick at most */
+void
+ub_udelay(us)
+long us;
+{
+	drv_usecwait(us);
+}
+
+void
+ub_mdelay(ms)
+long ms;
+{
+	long t = (ms * HZ + 999) / 1000;
+
+	delay(t > 0 ? t : 1);
+}
+#else
 void
 ub_udelay(us)
 long us;
@@ -171,6 +189,7 @@ long ms;
 	while (ms-- > 0)
 		ub_udelay(1000L);
 }
+#endif
 
 #ifdef _KERNEL
 static int ub_spl;
