@@ -1,11 +1,20 @@
 /*
  * ub.c - USB for Atari System V: FreeMiNT's stack (usb.c, hub.c, the
- * ISP1160 host driver) under a character driver, /dev/ub0.  A user
- * process drives it (ubd: UBIOC_START, then UBIOC_POLL every half
- * second), so the stack's waits are sleeps and its enumeration runs in
- * process context; ubtool lists what is there and reads blocks through
- * the mass storage class driver.  The Lightning VME's chip on the VME bus
- * first; the NetUSBee's through the cartridge port is next.
+ * ISP1160 host driver) under one driver, major 46:
+ *
+ *   /dev/ub0            minor 0, character: the control device.  A user
+ *                       process drives the stack through it (ubtool:
+ *                       UBIOC_START, then UBIOC_POLL every half second),
+ *                       so the stack's waits are sleeps and its
+ *                       enumeration runs in process context; ubtool lists
+ *                       what is there and reads blocks.
+ *   /dev/dsk/usbN       minor 16+N, block: mass storage unit N whole
+ *   /dev/rdsk/usbN      minor 16+N, character: the same, raw (physiock)
+ *
+ * The strategy routine does the transfer there and then, in the caller's
+ * process context, through the class driver (ubstor.c); the stack is used
+ * by one process at a time (ub_lock).  The Lightning VME's chip on the
+ * VME bus first; the NetUSBee's through the cartridge port is next.
  *
  * Built on the PC (../kbuild.sh driver-ub/ub.c): one compilation unit,
  * the stack's files included below.
@@ -22,6 +31,8 @@
 #include <sys/iosystm.h>
 #include <sys/cmn_err.h>
 #include <sys/kmem.h>
+#include <sys/buf.h>
+/* no sys/ddi.h: it turns getminor into a function the kernel lacks */
 
 #include "ub.h"
 #include "usb.h"
@@ -33,8 +44,40 @@
 extern int drv_priv();
 extern int ioprobe();
 
+extern void biodone();
+extern int physiock();
+extern int bp_mapin(), bp_mapout();
+
 int ub_state = UB_NOCHIP;
 static int ub_open_count;
+
+/* minors: 0 the control device, UB_DISKBASE + unit the storage units */
+#define UB_DISKBASE	16
+#define UB_UNIT(dev)	(getminor(dev) - UB_DISKBASE)
+#define UB_CHUNK	(64 * 1024)	/* bytes per class driver call */
+
+/* the stack serves one process at a time */
+static int ub_busy, ub_wanted;
+
+static void
+ub_lock()
+{
+	while (ub_busy) {
+		ub_wanted = 1;
+		sleep((caddr_t)&ub_busy, PRIBIO);
+	}
+	ub_busy = 1;
+}
+
+static void
+ub_unlock()
+{
+	ub_busy = 0;
+	if (ub_wanted) {
+		ub_wanted = 0;
+		wakeup((caddr_t)&ub_busy);
+	}
+}
 
 /* ---- the kernel side of ub.h ---------------------------------------- */
 
@@ -171,6 +214,25 @@ ubinit()
 	return 0;
 }
 
+static int ub_start();
+static void ub_poll_hubs();
+
+/* a storage unit that is there and ready, or 0 */
+static struct ub_stor *
+ub_unit(dev)
+dev_t dev;
+{
+	int unit = UB_UNIT(dev);
+	struct ub_stor *s;
+
+	if (unit < 0 || unit >= UB_STOR_MAX)
+		return (struct ub_stor *)0;
+	s = &ub_stor[unit];
+	if (s->dev == (struct usb_device *)0 || !s->ready || s->blocksize == 0)
+		return (struct ub_stor *)0;
+	return s;
+}
+
 /* ARGSUSED */
 int
 ubopen(devp, flag, otyp, crp)
@@ -178,12 +240,30 @@ dev_t *devp;
 int flag, otyp;
 struct cred *crp;
 {
-	if (getminor(*devp) != 0 || otyp != OTYP_CHR)
-		return ENXIO;
+	int r = 0;
+
 	if (ub_state == UB_NOCHIP)
 		return ENXIO;
-	ub_open_count++;
-	return 0;
+	if (getminor(*devp) == 0) {
+		if (otyp != OTYP_CHR)
+			return ENXIO;
+		ub_open_count++;
+		return 0;
+	}
+	if (otyp != OTYP_CHR && otyp != OTYP_BLK)
+		return ENXIO;
+	/* a storage unit: the stack up and the hubs looked at, so that a
+	 * stick plugged in since the last poll is found */
+	ub_lock();
+	if (ub_state != UB_RUNNING)
+		r = ub_start();
+	if (r == 0) {
+		ub_poll_hubs();
+		if (ub_unit(*devp) == (struct ub_stor *)0)
+			r = ENXIO;
+	}
+	ub_unlock();
+	return r;
 }
 
 /* ARGSUSED */
@@ -193,7 +273,8 @@ dev_t dev;
 int flag, otyp;
 struct cred *crp;
 {
-	ub_open_count--;
+	if (getminor(dev) == 0 && ub_open_count > 0)
+		ub_open_count--;
 	return 0;
 }
 
@@ -333,25 +414,157 @@ int *rvalp;
 		*rvalp = ub_state;
 		return 0;
 	case UBIOC_START:
-		if ((r = ub_start()) != 0)
-			return r;
-		ub_poll_hubs();
-		return 0;
+		ub_lock();
+		if ((r = ub_start()) == 0)
+			ub_poll_hubs();
+		ub_unlock();
+		return r;
 	case UBIOC_POLL:
 		if (ub_state != UB_RUNNING)
 			return ENXIO;
+		ub_lock();
 		ub_poll_hubs();
+		ub_unlock();
 		return 0;
 	case UBIOC_DEVS:
 		return ub_devs((caddr_t)arg);
 	case UBIOC_STOR:
 		return ub_storlist((caddr_t)arg);
 	case UBIOC_RD:
-		return ub_rw((caddr_t)arg, 0);
+		ub_lock();
+		r = ub_rw((caddr_t)arg, 0);
+		ub_unlock();
+		return r;
 	case UBIOC_WR:
 		if (drv_priv(crp))
 			return EPERM;
-		return ub_rw((caddr_t)arg, 1);
+		ub_lock();
+		r = ub_rw((caddr_t)arg, 1);
+		ub_unlock();
+		return r;
 	}
 	return EINVAL;
+}
+
+/* ---- the storage units as disks ------------------------------------- */
+
+/*
+ * The transfer, here and now: the buffer is read or written through the
+ * class driver in chunks, in this process's context (the stack sleeps
+ * while the chip works).  b_blkno counts 512-byte blocks whatever the
+ * unit's block size; a request past the end is cut short, one entirely
+ * past it transfers nothing.
+ */
+void
+ubstrategy(bp)
+struct buf *bp;
+{
+	struct ub_stor *s;
+	unsigned long bs, lba, n, done, chunk;
+	unsigned char *addr;
+	int mapped = 0, write = (bp->b_flags & B_READ) == 0;
+
+	bp->b_resid = bp->b_bcount;
+	if ((s = ub_unit(bp->b_edev)) == (struct ub_stor *)0) {
+		bp->b_error = ENXIO;
+		goto bad;
+	}
+	bs = s->blocksize;
+	if (bs < DEV_BSIZE || bs % DEV_BSIZE != 0 || bp->b_bcount % bs != 0 ||
+	    (bp->b_blkno * DEV_BSIZE) % bs != 0) {
+		bp->b_error = EINVAL;
+		goto bad;
+	}
+	lba = bp->b_blkno / (bs / DEV_BSIZE);
+	n = bp->b_bcount / bs;
+	if (lba >= s->blocks) {
+		biodone(bp);		/* at the end: nothing transferred */
+		return;
+	}
+	if (lba + n > s->blocks)
+		n = s->blocks - lba;
+	if (bp->b_flags & B_PHYS) {
+		bp_mapin(bp);
+		mapped = 1;
+	}
+	addr = (unsigned char *)bp->b_un.b_addr;
+	ub_lock();
+	for (done = 0; done < n; done += chunk) {
+		chunk = n - done;
+		if (chunk * bs > UB_CHUNK)
+			chunk = UB_CHUNK / bs;
+		if ((write ? ub_stor_write(s, lba + done, chunk, addr)
+		    : ub_stor_read(s, lba + done, chunk, addr)) < 0)
+			break;
+		addr += chunk * bs;
+	}
+	ub_unlock();
+	if (mapped)
+		bp_mapout(bp);
+	bp->b_resid = bp->b_bcount - done * bs;
+	if (done < n) {
+		bp->b_error = EIO;
+		goto bad;
+	}
+	biodone(bp);
+	return;
+bad:
+	bp->b_flags |= B_ERROR;
+	biodone(bp);
+}
+
+/* the unit's size in 512-byte blocks */
+static daddr_t
+ub_nblocks(dev)
+dev_t dev;
+{
+	struct ub_stor *s = ub_unit(dev);
+
+	if (s == (struct ub_stor *)0)
+		return 0;
+	return s->blocks * (s->blocksize / DEV_BSIZE);
+}
+
+/* the raw device */
+/* ARGSUSED */
+int
+ubread(dev, uio, crp)
+dev_t dev;
+struct uio *uio;
+struct cred *crp;
+{
+	if (UB_UNIT(dev) < 0)
+		return ENXIO;
+	return physiock(ubstrategy, (struct buf *)0, dev, B_READ, ub_nblocks(dev), uio);
+}
+
+/* ARGSUSED */
+int
+ubwrite(dev, uio, crp)
+dev_t dev;
+struct uio *uio;
+struct cred *crp;
+{
+	if (UB_UNIT(dev) < 0)
+		return ENXIO;
+	return physiock(ubstrategy, (struct buf *)0, dev, B_WRITE, ub_nblocks(dev), uio);
+}
+
+int
+ubprint(dev, str)
+dev_t dev;
+char *str;
+{
+	cmn_err(CE_NOTE, "usb%d: %s\n", UB_UNIT(dev), str);
+	return 0;
+}
+
+/* for swap: the size in 512-byte blocks, -1 when the unit is not there */
+int
+ubsize(dev)
+dev_t dev;
+{
+	daddr_t n = ub_nblocks(dev);
+
+	return n ? (int)n : -1;
 }

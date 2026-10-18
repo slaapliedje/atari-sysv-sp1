@@ -15,6 +15,13 @@ echo "== mkboot"
 grep "INCLUDE:UB" /stand/system >/dev/null || echo "INCLUDE:UB" >> /stand/system
 [ -c /dev/ub0 ] || /sbin/mknod /dev/ub0 c 46 0
 chmod 600 /dev/ub0
+# the storage units: minor 16 + unit, block and raw
+for n in 0 1 2 3; do
+	[ -b /dev/dsk/usb$n ] || /sbin/mknod /dev/dsk/usb$n b 46 `expr 16 + $n`
+	[ -c /dev/rdsk/usb$n ] || /sbin/mknod /dev/rdsk/usb$n c 46 `expr 16 + $n`
+	chmod 600 /dev/dsk/usb$n /dev/rdsk/usb$n
+done
+[ -f ubtool ] && cp ubtool /usr/bin/ubtool && chmod 755 /usr/bin/ubtool
 echo "== buildsys"
 /sbin/buildsys || { echo "BUILDSYS FAILED"; exit 1; }
 mv .src.c .built.c
