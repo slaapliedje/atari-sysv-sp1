@@ -7,11 +7,12 @@
  *   ubtool stor             the mass storage devices
  *   ubtool read UNIT LBA N  N blocks from LBA of storage UNIT, hex dump
  *   ubtool dd UNIT LBA N    the same, raw, to stdout
- *   ubtool daemon           start, then poll every half second (ubd)
+ *   ubtool daemon           serve the disk devices and poll the hubs (UBIOC_WORK)
  */
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <errno.h>
 #include "ubioc.h"
 
 /* Only printf, perror and system calls from the C library: the AMIX
@@ -121,7 +122,7 @@ char **argv;
 	int n, i, r;
 
 	if (argc < 2) {
-		fprintf(stderr, "usage: ubtool start|poll [N]|devs|stor|read UNIT LBA N|dd UNIT LBA N|daemon\n");
+		printf("usage: ubtool start|poll [N]|devs|stor|read UNIT LBA N|dd UNIT LBA N|daemon\n");
 		return 2;
 	}
 	if ((fd = open("/dev/ub0", O_RDWR)) < 0)
@@ -147,13 +148,11 @@ char **argv;
 		read_blocks((int)number(argv[2]), number(argv[3]), number(argv[4]),
 		    argv[1][0] == 'd');
 	else if (strcmp(argv[1], "daemon") == 0) {
-		if (ioctl(fd, UBIOC_START, 0) < 0)
-			fail("UBIOC_START");
-		for (;;) {
-			poll((struct pollfd *)0, 0, 500);
-			if (ioctl(fd, UBIOC_POLL, 0) < 0)
-				fail("UBIOC_POLL");
-		}
+		/* each call serves what is queued, polls the hubs and waits
+		 * for the next request, half a second at most */
+		for (;;)
+			if (ioctl(fd, UBIOC_WORK, 0) < 0 && errno != EINTR)
+				fail("UBIOC_WORK");
 	} else {
 		r = ioctl(fd, UBIOC_STATUS, 0);
 		printf("state %d\n", r);

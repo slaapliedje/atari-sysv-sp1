@@ -46,13 +46,21 @@ then mtools for the FAT side, then HID.
 
 2026-10-18, later: the block device.  /dev/dsk/usbN and /dev/rdsk/usbN
 are the whole stick (no slices: mtools takes an offset, a file system
-on a stick would be made over the whole device).  ubstrategy does the
-transfer in the caller's process context through ubstor in 64 KB
-chunks under a sleep lock that every use of the stack takes (ioctls
-included); opening a unit starts the stack and polls the hubs first, so a
-stick plugged in since the last poll is found.  b_blkno counts 512-byte
-blocks; a request past the end is cut short.  ubsize gives the size for
-swap; ubprint names the unit in buffer-cache messages.  Try: dd
-if=/dev/rdsk/usb0 bs=512 count=1 | od -x (the MBR, 55aa at the end),
+on a stick would be made over the whole device).  The first version ran
+the stack from the open and strategy paths (opening a unit started the
+stack and polled; ubstrategy did the transfer there and then): the TT
+died twice, once in a raw read, once in a plain open of /dev/rdsk/usb0 -
+the kernel stack is shallow on those paths and the USB stack keeps 512-byte
+buffers on it, is the likely reason, since the same work from the ioctl
+path has always been fine.  So now the stack runs ONLY from ioctls:
+ubstrategy checks the request and queues it (av_forw), and `ubtool daemon`
+sits in UBIOC_WORK, which serves the queue (bp_mapin for raw buffers,
+64 KB chunks), polls the hubs and sleeps until the next request or half a
+second (timeout + sleep at PZERO+1, so the daemon can be killed; its
+close fails what is queued).  Without the daemon a disk request fails at
+once with EIO; the open only checks that the unit is there.  b_blkno
+counts 512-byte blocks; a request past the end is cut short.  ubsize
+gives the size for swap; ubprint names the unit.  Test: ubtool daemon &;
+dd if=/dev/rdsk/usb0 bs=512 count=1 | od -x (the MBR, 55aa at the end);
 dd if=/dev/dsk/usb0 bs=8k count=16 of=/dev/null (through the buffer
-cache), ubtool read 0 0 1 for comparison.  Next: mtools for the FAT side.
+cache); compare with ubtool read 0 0 1.  Next: mtools for the FAT side.

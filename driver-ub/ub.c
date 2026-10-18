@@ -11,10 +11,15 @@
  *   /dev/dsk/usbN       minor 16+N, block: mass storage unit N whole
  *   /dev/rdsk/usbN      minor 16+N, character: the same, raw (physiock)
  *
- * The strategy routine does the transfer there and then, in the caller's
- * process context, through the class driver (ubstor.c); the stack is used
- * by one process at a time (ub_lock).  The Lightning VME's chip on the
- * VME bus first; the NetUSBee's through the cartridge port is next.
+ * The stack only ever runs from the ioctl path: a process in UBIOC_WORK
+ * (ubtool daemon) takes the queued disk requests one at a time, does the
+ * transfer through the class driver (ubstor.c), polls the hubs and waits
+ * for more; the strategy routine only queues.  Running the stack from
+ * the open or the read path instead (through spec_open, physiock) took
+ * the TT down twice on 2026-10-18: the kernel stack there is too shallow
+ * for the stack's buffers, is the likely reason.  One process uses the
+ * stack at a time (ub_lock).  The Lightning VME's chip on the VME bus
+ * first; the NetUSBee's through the cartridge port is next.
  *
  * Built on the PC (../kbuild.sh driver-ub/ub.c): one compilation unit,
  * the stack's files included below.
@@ -47,6 +52,9 @@ extern int ioprobe();
 extern void biodone();
 extern int physiock();
 extern int bp_mapin(), bp_mapout();
+extern int timeout(), spl6();
+extern void splx();
+extern int hertz;
 
 int ub_state = UB_NOCHIP;
 static int ub_open_count;
@@ -216,6 +224,7 @@ ubinit()
 
 static int ub_start();
 static void ub_poll_hubs();
+static void ub_noworker();
 
 /* a storage unit that is there and ready, or 0 */
 static struct ub_stor *
@@ -252,17 +261,9 @@ struct cred *crp;
 	}
 	if (otyp != OTYP_CHR && otyp != OTYP_BLK)
 		return ENXIO;
-	/* a storage unit: the stack up and the hubs looked at, so that a
-	 * stick plugged in since the last poll is found */
-	ub_lock();
-	if (ub_state != UB_RUNNING)
-		r = ub_start();
-	if (r == 0) {
-		ub_poll_hubs();
-		if (ub_unit(*devp) == (struct ub_stor *)0)
-			r = ENXIO;
-	}
-	ub_unlock();
+	/* a storage unit the daemon has found; nothing runs here */
+	if (ub_unit(*devp) == (struct ub_stor *)0)
+		return ENXIO;
 	return r;
 }
 
@@ -273,8 +274,8 @@ dev_t dev;
 int flag, otyp;
 struct cred *crp;
 {
-	if (getminor(dev) == 0 && ub_open_count > 0)
-		ub_open_count--;
+	if (getminor(dev) == 0 && ub_open_count > 0 && --ub_open_count == 0)
+		ub_noworker();
 	return 0;
 }
 
@@ -426,6 +427,8 @@ int *rvalp;
 		ub_poll_hubs();
 		ub_unlock();
 		return 0;
+	case UBIOC_WORK:
+		return ub_work();
 	case UBIOC_DEVS:
 		return ub_devs((caddr_t)arg);
 	case UBIOC_STOR:
@@ -449,14 +452,91 @@ int *rvalp;
 /* ---- the storage units as disks ------------------------------------- */
 
 /*
- * The transfer, here and now: the buffer is read or written through the
- * class driver in chunks, in this process's context (the stack sleeps
- * while the chip works).  b_blkno counts 512-byte blocks whatever the
- * unit's block size; a request past the end is cut short, one entirely
- * past it transfers nothing.
+ * Requests wait on a queue (av_forw links) for the daemon: a process in
+ * UBIOC_WORK takes them one at a time and does the transfer through the
+ * class driver in chunks, in its own (ioctl) context; b_blkno counts
+ * 512-byte blocks whatever the unit's block size; a request past the end
+ * is cut short, one entirely past it transfers nothing.  Without a
+ * daemon a request fails at once rather than hang.
  */
+static struct buf *ub_qhead, *ub_qtail;
+static int ub_worker;			/* a process serves UBIOC_WORK */
+
+static void
+ub_fail(bp, err)
+struct buf *bp;
+int err;
+{
+	bp->b_error = err;
+	bp->b_flags |= B_ERROR;
+	bp->b_resid = bp->b_bcount;
+	biodone(bp);
+}
+
 void
 ubstrategy(bp)
+struct buf *bp;
+{
+	struct ub_stor *s;
+	unsigned long bs;
+	int sp;
+
+	if ((s = ub_unit(bp->b_edev)) == (struct ub_stor *)0) {
+		ub_fail(bp, ENXIO);
+		return;
+	}
+	bs = s->blocksize;
+	if (bs < DEV_BSIZE || bs % DEV_BSIZE != 0 || bp->b_bcount % bs != 0 ||
+	    (bp->b_blkno * DEV_BSIZE) % bs != 0) {
+		ub_fail(bp, EINVAL);
+		return;
+	}
+	if (!ub_worker) {
+		ub_fail(bp, EIO);
+		return;
+	}
+	bp->av_forw = (struct buf *)0;
+	sp = spl6();
+	if (ub_qtail)
+		ub_qtail->av_forw = bp;
+	else
+		ub_qhead = bp;
+	ub_qtail = bp;
+	splx(sp);
+	wakeup((caddr_t)&ub_qhead);
+}
+
+/* the next queued request, or 0 */
+static struct buf *
+ub_dequeue()
+{
+	struct buf *bp;
+	int sp;
+
+	sp = spl6();
+	if ((bp = ub_qhead) != (struct buf *)0) {
+		ub_qhead = bp->av_forw;
+		if (ub_qhead == (struct buf *)0)
+			ub_qtail = (struct buf *)0;
+	}
+	splx(sp);
+	return bp;
+}
+
+/* the daemon is gone: what it would have served fails */
+static void
+ub_noworker()
+{
+	struct buf *bp;
+
+	ub_worker = 0;
+	while ((bp = ub_dequeue()) != (struct buf *)0)
+		ub_fail(bp, EIO);
+}
+
+/* one request, in the daemon's context */
+static void
+ub_doio(bp)
 struct buf *bp;
 {
 	struct ub_stor *s;
@@ -466,15 +546,10 @@ struct buf *bp;
 
 	bp->b_resid = bp->b_bcount;
 	if ((s = ub_unit(bp->b_edev)) == (struct ub_stor *)0) {
-		bp->b_error = ENXIO;
-		goto bad;
+		ub_fail(bp, ENXIO);		/* gone since it was queued */
+		return;
 	}
 	bs = s->blocksize;
-	if (bs < DEV_BSIZE || bs % DEV_BSIZE != 0 || bp->b_bcount % bs != 0 ||
-	    (bp->b_blkno * DEV_BSIZE) % bs != 0) {
-		bp->b_error = EINVAL;
-		goto bad;
-	}
 	lba = bp->b_blkno / (bs / DEV_BSIZE);
 	n = bp->b_bcount / bs;
 	if (lba >= s->blocks) {
@@ -483,6 +558,7 @@ struct buf *bp;
 	}
 	if (lba + n > s->blocks)
 		n = s->blocks - lba;
+	/* a raw or paging request: its pages mapped for the kernel */
 	if (bp->b_flags & B_PHYS) {
 		bp_mapin(bp);
 		mapped = 1;
@@ -504,13 +580,41 @@ struct buf *bp;
 	bp->b_resid = bp->b_bcount - done * bs;
 	if (done < n) {
 		bp->b_error = EIO;
-		goto bad;
+		bp->b_flags |= B_ERROR;
 	}
 	biodone(bp);
-	return;
-bad:
-	bp->b_flags |= B_ERROR;
-	biodone(bp);
+}
+
+/*
+ * UBIOC_WORK, the daemon's loop body: the stack started if need be, the
+ * queued requests served, the hubs polled, then a wait for the next
+ * request, half a second at most.  Interruptible, so the daemon can be
+ * killed; its close fails what is left.
+ */
+static int
+ub_work()
+{
+	struct buf *bp;
+	int r = 0, sp;
+
+	ub_lock();
+	if (ub_state != UB_RUNNING)
+		r = ub_start();
+	ub_unlock();
+	if (r)
+		return r;
+	ub_worker = 1;
+	while ((bp = ub_dequeue()) != (struct buf *)0)
+		ub_doio(bp);
+	ub_lock();
+	ub_poll_hubs();
+	ub_unlock();
+	timeout(wakeup, (caddr_t)&ub_qhead, hertz / 2);
+	sp = spl6();
+	if (ub_qhead == (struct buf *)0)
+		sleep((caddr_t)&ub_qhead, PZERO + 1);
+	splx(sp);
+	return 0;
 }
 
 /* the unit's size in 512-byte blocks */

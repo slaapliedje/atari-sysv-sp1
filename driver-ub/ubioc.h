@@ -10,6 +10,7 @@
 #define UBIOC_RD	(UBIOC | 5)	/* arg: struct ub_rw, blocks in */
 #define UBIOC_WR	(UBIOC | 6)	/* arg: struct ub_rw, blocks out (root) */
 #define UBIOC_STATUS	(UBIOC | 7)	/* returns ub_state */
+#define UBIOC_WORK	(UBIOC | 8)	/* the daemon: serve disk requests, poll, wait */
 
 #define UB_NDEV		32		/* USB_MAX_DEVICE */
 #define UB_NSTOR	4		/* UB_STOR_MAX */
