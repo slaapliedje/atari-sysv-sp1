@@ -64,3 +64,21 @@ gives the size for swap; ubprint names the unit.  Test: ubtool daemon &;
 dd if=/dev/rdsk/usb0 bs=512 count=1 | od -x (the MBR, 55aa at the end);
 dd if=/dev/dsk/usb0 bs=8k count=16 of=/dev/null (through the buffer
 cache); compare with ubtool read 0 0 1.  Next: mtools for the FAT side.
+
+THE CRASHES, FOUND 2026-10-18 evening (crash(1M) on the live kernel,
+`od -x cdevsw`, `ts` on the entries): a driver whose master entry has
+the b flag is wired by cunix through its OLD-STYLE GATEWAY, as the
+kernel's own hd and ffd are: cdevsw/bdevsw row 0 holds gen_copen,
+gen_cclose, gen_read, gen_write, gen_ioctl, gen_bopen, gen_strategy,
+which call the driver's real entry points (kept in a shadow table) with
+the SVR3 conventions - dev by value as major<<8|minor (cmpdev), read
+and write with the request in u.u_base/u_count/u_offset and no uio,
+ioctl with four arguments and the result taken from u.u_rval1, the
+error from u.u_error.  A character-only driver (ub 0.1, snd, midi,
+tlk) is wired directly with the SVR4 conventions.  ub 0.2/0.3, written
+SVR4-style, read the device number as a pointer and passed garbage to
+physiock: every open of a disk minor reset the machine, silently (no
+panic: a jump through garbage).  ub 0.4 uses the old conventions
+(ubopen(dev, flag, otyp), ubread(dev) = physck + physio, ubioctl(dev,
+cmd, arg, mode), u_error/u_rval1/u_cred by their offsets 0x4d1/0x4e4/
+0x4dc in u, since sys/user.h does not compile with GCC 2.7.2's headers).

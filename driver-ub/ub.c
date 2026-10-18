@@ -11,6 +11,19 @@
  *   /dev/dsk/usbN       minor 16+N, block: mass storage unit N whole
  *   /dev/rdsk/usbN      minor 16+N, character: the same, raw (physiock)
  *
+ * The kernel calls this driver the OLD way, as it does its own disk
+ * drivers: a driver with a block side goes through cunix's gateway
+ * (gen_copen, gen_read, gen_ioctl, gen_strategy...), which passes the
+ * device number by value in the SVR3 form (major << 8 | minor), sets up
+ * u.u_base/u_count/u_offset for read and write instead of passing a uio,
+ * passes no credentials and no rvalp, and takes the error from u.u_error.
+ * (A character-only driver is wired directly, the SVR4 way; this one was,
+ * before it had /dev/dsk/usbN, and a version written the SVR4 way took the
+ * machine down on every open of a disk minor: the device number read as
+ * a pointer.)  So: entry points take dev by value, errors go to u.u_error,
+ * raw I/O is physck/physio over the u-area, the ioctl's result to
+ * u.u_rval1.
+ *
  * The stack only ever runs from the ioctl path: a process in UBIOC_WORK
  * (ubtool daemon) takes the queued disk requests one at a time, does the
  * transfer through the class driver (ubstor.c), polls the hubs and waits
@@ -37,6 +50,19 @@
 #include <sys/cmn_err.h>
 #include <sys/kmem.h>
 #include <sys/buf.h>
+
+/*
+ * The u-area fields the old conventions use.  sys/user.h does not
+ * compile with this compiler's headers (sigset_t and friends are hidden
+ * from an ANSI compiler), so the two fields are reached by their offsets
+ * in this kernel's struct user, read off the kernel's own gen_ioctl and
+ * physck code: u_error the byte at 0x4d1, u_rval1 the int at 0x4e4, u_cred the pointer
+ * at 0x4dc.
+ */
+extern char u[];
+#define UB_UERROR	(*(char *)(u + 0x4d1))
+#define UB_URVAL1	(*(int *)(u + 0x4e4))
+#define UB_UCRED	(*(struct cred **)(u + 0x4dc))	/* u_cred, from the kernel's suser calls */
 /* no sys/ddi.h: it turns getminor into a function the kernel lacks */
 
 #include "ub.h"
@@ -50,7 +76,7 @@ extern int drv_priv();
 extern int ioprobe();
 
 extern void biodone();
-extern int physiock();
+extern int physio(), physck();
 extern int bp_mapin(), bp_mapout();
 extern int timeout(), spl6();
 extern void splx();
@@ -59,9 +85,12 @@ extern int hertz;
 int ub_state = UB_NOCHIP;
 static int ub_open_count;
 
-/* minors: 0 the control device, UB_DISKBASE + unit the storage units */
+/* minors: 0 the control device, UB_DISKBASE + unit the storage units.
+ * The minor is the low byte whether the number comes in the old form
+ * (the gateway's) or the new (a buffer's b_edev). */
 #define UB_DISKBASE	16
-#define UB_UNIT(dev)	(getminor(dev) - UB_DISKBASE)
+#define UB_MINOR(dev)	((int)((dev) & 0xff))
+#define UB_UNIT(dev)	(UB_MINOR(dev) - UB_DISKBASE)
 #define UB_CHUNK	(64 * 1024)	/* bytes per class driver call */
 
 /* the stack serves one process at a time */
@@ -244,37 +273,38 @@ dev_t dev;
 
 /* ARGSUSED */
 int
-ubopen(devp, flag, otyp, crp)
-dev_t *devp;
+ubopen(dev, flag, otyp)
+dev_t dev;
 int flag, otyp;
-struct cred *crp;
 {
-	int r = 0;
-
-	if (ub_state == UB_NOCHIP)
-		return ENXIO;
-	if (getminor(*devp) == 0) {
-		if (otyp != OTYP_CHR)
-			return ENXIO;
-		ub_open_count++;
+	if (ub_state == UB_NOCHIP) {
+		UB_UERROR = ENXIO;
 		return 0;
 	}
-	if (otyp != OTYP_CHR && otyp != OTYP_BLK)
-		return ENXIO;
+	if (UB_MINOR(dev) == 0) {
+		if (otyp != OTYP_CHR)
+			UB_UERROR = ENXIO;
+		else
+			ub_open_count++;
+		return 0;
+	}
+	if (otyp != OTYP_CHR && otyp != OTYP_BLK) {
+		UB_UERROR = ENXIO;
+		return 0;
+	}
 	/* a storage unit the daemon has found; nothing runs here */
-	if (ub_unit(*devp) == (struct ub_stor *)0)
-		return ENXIO;
-	return r;
+	if (ub_unit(dev) == (struct ub_stor *)0)
+		UB_UERROR = ENXIO;
+	return 0;
 }
 
 /* ARGSUSED */
 int
-ubclose(dev, flag, otyp, crp)
+ubclose(dev, flag, otyp)
 dev_t dev;
 int flag, otyp;
-struct cred *crp;
 {
-	if (getminor(dev) == 0 && ub_open_count > 0 && --ub_open_count == 0)
+	if (UB_MINOR(dev) == 0 && ub_open_count > 0 && --ub_open_count == 0)
 		ub_noworker();
 	return 0;
 }
@@ -400,53 +430,61 @@ int write;
 	return r;
 }
 
+/* the error of an old-style entry point goes to u.u_error */
+static int
+ub_err(r)
+int r;
+{
+	if (r)
+		UB_UERROR = r;
+	return 0;
+}
+
 /* ARGSUSED */
 int
-ubioctl(dev, cmd, arg, mode, crp, rvalp)
+ubioctl(dev, cmd, arg, mode)
 dev_t dev;
 int cmd, arg, mode;
-struct cred *crp;
-int *rvalp;
 {
 	int r;
 
 	switch (cmd) {
 	case UBIOC_STATUS:
-		*rvalp = ub_state;
+		UB_URVAL1 = ub_state;
 		return 0;
 	case UBIOC_START:
 		ub_lock();
 		if ((r = ub_start()) == 0)
 			ub_poll_hubs();
 		ub_unlock();
-		return r;
+		return ub_err(r);
 	case UBIOC_POLL:
 		if (ub_state != UB_RUNNING)
-			return ENXIO;
+			return ub_err(ENXIO);
 		ub_lock();
 		ub_poll_hubs();
 		ub_unlock();
 		return 0;
 	case UBIOC_WORK:
-		return ub_work();
+		return ub_err(ub_work());
 	case UBIOC_DEVS:
-		return ub_devs((caddr_t)arg);
+		return ub_err(ub_devs((caddr_t)arg));
 	case UBIOC_STOR:
-		return ub_storlist((caddr_t)arg);
+		return ub_err(ub_storlist((caddr_t)arg));
 	case UBIOC_RD:
 		ub_lock();
 		r = ub_rw((caddr_t)arg, 0);
 		ub_unlock();
-		return r;
+		return ub_err(r);
 	case UBIOC_WR:
-		if (drv_priv(crp))
-			return EPERM;
+		if (drv_priv(UB_UCRED))
+			return ub_err(EPERM);
 		ub_lock();
 		r = ub_rw((caddr_t)arg, 1);
 		ub_unlock();
-		return r;
+		return ub_err(r);
 	}
-	return EINVAL;
+	return ub_err(EINVAL);
 }
 
 /* ---- the storage units as disks ------------------------------------- */
@@ -481,7 +519,7 @@ struct buf *bp;
 	unsigned long bs;
 	int sp;
 
-	if ((s = ub_unit(bp->b_edev)) == (struct ub_stor *)0) {
+	if ((s = ub_unit(bp->b_dev)) == (struct ub_stor *)0) {
 		ub_fail(bp, ENXIO);
 		return;
 	}
@@ -545,7 +583,7 @@ struct buf *bp;
 	int mapped = 0, write = (bp->b_flags & B_READ) == 0;
 
 	bp->b_resid = bp->b_bcount;
-	if ((s = ub_unit(bp->b_edev)) == (struct ub_stor *)0) {
+	if ((s = ub_unit(bp->b_dev)) == (struct ub_stor *)0) {
 		ub_fail(bp, ENXIO);		/* gone since it was queued */
 		return;
 	}
@@ -629,29 +667,35 @@ dev_t dev;
 	return s->blocks * (s->blocksize / DEV_BSIZE);
 }
 
-/* the raw device */
-/* ARGSUSED */
-int
-ubread(dev, uio, crp)
+/* the raw device: the request is in u.u_base/u_count/u_offset (the
+ * gateway put it there), physck keeps it inside the unit */
+static void
+ub_rawio(dev, rw)
 dev_t dev;
-struct uio *uio;
-struct cred *crp;
+int rw;
 {
-	if (UB_UNIT(dev) < 0)
-		return ENXIO;
-	return physiock(ubstrategy, (struct buf *)0, dev, B_READ, ub_nblocks(dev), uio);
+	if (ub_unit(dev) == (struct ub_stor *)0) {
+		UB_UERROR = ENXIO;
+		return;
+	}
+	if (physck(ub_nblocks(dev), rw))
+		physio(ubstrategy, (struct buf *)0, dev, rw);
 }
 
-/* ARGSUSED */
 int
-ubwrite(dev, uio, crp)
+ubread(dev)
 dev_t dev;
-struct uio *uio;
-struct cred *crp;
 {
-	if (UB_UNIT(dev) < 0)
-		return ENXIO;
-	return physiock(ubstrategy, (struct buf *)0, dev, B_WRITE, ub_nblocks(dev), uio);
+	ub_rawio(dev, B_READ);
+	return 0;
+}
+
+int
+ubwrite(dev)
+dev_t dev;
+{
+	ub_rawio(dev, B_WRITE);
+	return 0;
 }
 
 int
