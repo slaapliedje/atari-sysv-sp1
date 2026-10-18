@@ -4,4 +4,4 @@
 * cartridge port. Flags as dp's (fs).
 *
 *FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
-fs	nu	45
+hf	nu	45

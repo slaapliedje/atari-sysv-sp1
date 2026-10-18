@@ -1072,6 +1072,57 @@ queue_t *q;
 	return 0;
 }
 
+/*
+ * XGETEDT (sysm68k 76), what prtconf prints under the NU line of the
+ * boot's hardware page: the kernel calls the cdevsw d_driver entry,
+ * prefix + driverinfo, with the user's buffer; a 4-byte one wants the
+ * count, a 4 + 72 n one the entries (struct xedt: 64-byte name, unit,
+ * size in K).  Nothing has opened nu0 that early, so the card is probed
+ * here, as the first open would.
+ */
+struct nu_xedt {
+	char		x_name[64];
+	int		x_unit;
+	unsigned int	x_ksize;
+};
+
+int
+nudriverinfo(dev, cmd, buf, len)
+dev_t dev;
+int cmd;
+caddr_t buf;
+int len;
+{
+	static char text[] = "NetUSBee (RTL8019AS) 00:00:00:00:00:00";
+	struct nu_xedt x;
+	int n, i;
+
+	if (cmd != 76)
+		return EINVAL;
+	if (nu_up == 0) {
+		nu_padinit();
+		nu_linit();
+	}
+	n = nu_up ? 1 : 0;
+	if (len == sizeof n)
+		return copyout((caddr_t)&n, buf, sizeof n) ? EFAULT : 0;
+	if (len != sizeof n + n * sizeof x)
+		return EINVAL;
+	if (copyout((caddr_t)&n, buf, sizeof n))
+		return EFAULT;
+	if (n == 0)
+		return 0;
+	for (i = 0; i < 6; i++) {
+		text[21 + 3 * i] = "0123456789abcdef"[(nu_sc.ea[i] >> 4) & 15];
+		text[22 + 3 * i] = "0123456789abcdef"[nu_sc.ea[i] & 15];
+	}
+	bzero((caddr_t)&x, sizeof x);
+	bcopy((caddr_t)text, (caddr_t)x.x_name, sizeof text);
+	x.x_unit = 0;
+	x.x_ksize = (nu_sc.memhi - nu_sc.memlo) / 4;
+	return copyout((caddr_t)&x, buf + sizeof n, sizeof x) ? EFAULT : 0;
+}
+
 static int
 nuopen(q, devp, flag, sflag, crp)
 queue_t *q;

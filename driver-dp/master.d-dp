@@ -4,4 +4,4 @@
 * drivers (llcloop, sp, ptm = fs). Needs the SCSI core, which is a required driver.
 *
 *FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
-fs	dp	41
+hf	dp	41

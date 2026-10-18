@@ -3,4 +3,4 @@
 * TLK - software character driver; the link registers are polled.
 *
 *FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
-ocsn	tlk	42
+ochn	tlk	42

@@ -449,6 +449,60 @@ dpfind()
 	return -1;
 }
 
+/*
+ * XGETEDT (sysm68k 76): the line prtconf prints under DP on the boot's
+ * hardware page.  The DaynaPORT is looked up on the SCSI bus if it has
+ * not been yet; its Ethernet address is known only once opened.
+ */
+struct dp_xedt {
+	char		x_name[64];
+	int		x_unit;
+	unsigned int	x_ksize;
+};
+
+int
+dpdriverinfo(dev, cmd, buf, len)
+dev_t dev;
+int cmd;
+caddr_t buf;
+int len;
+{
+	static char tail[] = " at SCSI id 0";
+	struct dp_xedt x;
+	int n, i, k;
+
+	if (cmd != 76)
+		return EINVAL;
+	if (dpjob == (struct scsijoblock *)0)
+		(void)dpfind();
+	n = dpjob != (struct scsijoblock *)0 ? 1 : 0;
+	if (len == sizeof n)
+		return copyout((caddr_t)&n, buf, sizeof n) ? EFAULT : 0;
+	if (len != sizeof n + n * sizeof x)
+		return EINVAL;
+	if (copyout((caddr_t)&n, buf, sizeof n))
+		return EFAULT;
+	if (n == 0)
+		return 0;
+	bzero((caddr_t)&x, sizeof x);
+	/* the INQUIRY's vendor, product and revision, as the disks show */
+	for (k = 0, i = 8; i < 36; i++) {
+		if (dpjob->sj_inqdata[i] < ' ' || dpjob->sj_inqdata[i] > '~')
+			break;
+		if (dpjob->sj_inqdata[i] == ' ' && (k == 0 || x.x_name[k - 1] == ' '))
+			continue;
+		x.x_name[k++] = dpjob->sj_inqdata[i];
+	}
+	while (k > 0 && x.x_name[k - 1] == ' ')
+		k--;
+	tail[sizeof tail - 2] = '0' + dpjob->sj_target;
+	if (k + sizeof tail <= sizeof x.x_name)
+		bcopy((caddr_t)tail, (caddr_t)x.x_name + k, sizeof tail);
+	x.x_unit = 0;
+	x.x_ksize = 0;
+	return copyout((caddr_t)&x, buf + sizeof n, sizeof x) ? EFAULT : 0;
+}
+
 /* EN_LINIT: bring the hardware up. Process context (first open). */
 static void
 dp_linit(dev)

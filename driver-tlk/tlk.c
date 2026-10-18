@@ -259,6 +259,59 @@ tlkinit()
 	return 0;
 }
 
+/*
+ * XGETEDT (sysm68k 76): the lines prtconf prints under TLK on the boot's
+ * hardware page, one per link whose adapter answers (an absent board
+ * bus-errors).  The T425's 5 MB is what the FPGA link leads to.
+ */
+struct tlk_xedt {
+	char		x_name[64];
+	int		x_unit;
+	unsigned int	x_ksize;
+};
+
+int
+tlkdriverinfo(dev, cmd, buf, len)
+	dev_t dev;
+	int cmd;
+	caddr_t buf;
+	int len;
+{
+	static char *name[NLINK] = {
+		"Transputer link adapter (C011), TRAM",
+		"ATW800/2 FPGA link, T425 40 MHz"
+	};
+	static unsigned int ksize[NLINK] = { 0, 5120 };
+	struct tlk_xedt x;
+	int n, i, have[NLINK];
+
+	if (cmd != 76)
+		return EINVAL;
+	for (n = 0, i = 0; i < NLINK; i++) {
+		have[i] = rd(&tlk[i], R_ISTAT) >= 0 && rd(&tlk[i], R_OSTAT) >= 0;
+		n += have[i];
+	}
+	if (len == sizeof n)
+		return copyout((caddr_t)&n, buf, sizeof n) ? EFAULT : 0;
+	if (len != sizeof n + n * sizeof x)
+		return EINVAL;
+	if (copyout((caddr_t)&n, buf, sizeof n))
+		return EFAULT;
+	buf += sizeof n;
+	for (i = 0; i < NLINK; i++) {
+		if (!have[i])
+			continue;
+		bzero((caddr_t)&x, sizeof x);
+		strncpy(x.x_name, name[i], sizeof x.x_name - 1);
+		x.x_unit = i;
+		x.x_ksize = ksize[i];
+		if (copyout((caddr_t)&x, buf, sizeof x))
+			return EFAULT;
+		buf += sizeof x;
+	}
+	return 0;
+}
+
 /* ARGSUSED */
 int
 tlkopen(devp, flag, otyp, crp)
