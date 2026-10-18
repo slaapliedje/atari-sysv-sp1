@@ -28,7 +28,15 @@ VME bus and as they are on the NetUSBee (ub_io_init reads HcChipID both
 ways); FIFO data words go the other way round from register words, both
 directions, on both.
 
-2026-10-18: on the Lightning VME, from user space, a SanDisk Cruzer Fit
+Trap: ASV user programs built with the AMIX cross toolchain must keep
+to printf, perror and system calls: the AMIX headers' FILE layout is
+not ASV's libc's, so putchar, fwrite, fprintf(stderr) and friends wreck
+stdio (printf then prints the format's first character for every
+conversion); malloc/strtoul crashed too.  ubtool uses write(2) and poll.
+
+2026-10-18: the kernel driver is in (/dev/ub0): ubtool start enumerates
+the stick, ubtool read 0 0 1 shows its MBR.  Earlier that night, from
+user space, a SanDisk Cruzer Fit
 (16 GB) enumerates and its block 0 reads back (an MBR, one FAT32
 partition).  Next: the kernel driver (tick-polled) and a block device,
 then mtools for the FAT side, then HID.

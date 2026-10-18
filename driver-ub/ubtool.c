@@ -10,11 +10,34 @@
  *   ubtool daemon           start, then poll every half second (ubd)
  */
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include <errno.h>
 #include "ubioc.h"
+
+/* Only printf, perror and system calls from the C library: the AMIX
+ * cross headers lay FILE out differently from ASV's runtime libc, so
+ * anything that touches a FILE (putchar, fwrite, fprintf(stderr)) wrecks
+ * stdio; and no malloc, strtoul, strerror, sleep (poll instead). */
+#include <poll.h>
+static unsigned char rwbuf[UB_RWMAX];
+
+static unsigned long
+number(s)
+char *s;
+{
+	unsigned long v = 0;
+	int base = 10;
+
+	if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+		base = 16, s += 2;
+	for (; *s; s++) {
+		int c = *s >= 'a' ? *s - 'a' + 10 : *s >= 'A' ? *s - 'A' + 10 : *s - '0';
+		if (c < 0 || c >= base)
+			break;
+		v = v * base + c;
+	}
+	return v;
+}
 
 static int fd;
 
@@ -22,7 +45,7 @@ static void
 fail(what)
 char *what;
 {
-	fprintf(stderr, "ubtool: %s: %s\n", what, strerror(errno));
+	perror(what);
 	exit(1);
 }
 
@@ -66,7 +89,11 @@ unsigned long lba, n;
 	unsigned char *buf;
 	unsigned long k;
 
-	buf = (unsigned char *)malloc(n * 2048);
+	if (n * 512 > UB_RWMAX) {
+		printf("at most %d blocks\n", UB_RWMAX / 512);
+		return;
+	}
+	buf = rwbuf;
 	rw.unit = unit;
 	rw.lba = lba;
 	rw.n = n;
@@ -74,7 +101,7 @@ unsigned long lba, n;
 	if (ioctl(fd, UBIOC_RD, &rw) < 0)
 		fail("UBIOC_RD");
 	if (raw) {
-		fwrite(buf, 1, n * 512, stdout);
+		write(1, buf, n * 512);
 		return;
 	}
 	for (k = 0; k < n * 512; k++) {
@@ -82,7 +109,7 @@ unsigned long lba, n;
 			printf("%06lx:", lba * 512 + k);
 		printf(" %02x", buf[k]);
 		if (k % 16 == 15)
-			putchar('\n');
+			printf("\n");
 	}
 }
 
@@ -104,12 +131,12 @@ char **argv;
 			fail("UBIOC_START");
 		devs();
 	} else if (strcmp(argv[1], "poll") == 0) {
-		n = argc > 2 ? atoi(argv[2]) : 1;
+		n = argc > 2 ? (int)number(argv[2]) : 1;
 		for (i = 0; i < n; i++) {
 			if (ioctl(fd, UBIOC_POLL, 0) < 0)
 				fail("UBIOC_POLL");
 			if (i + 1 < n)
-				sleep(1);
+				poll((struct pollfd *)0, 0, 1000);
 		}
 		devs();
 	} else if (strcmp(argv[1], "devs") == 0)
@@ -117,13 +144,13 @@ char **argv;
 	else if (strcmp(argv[1], "stor") == 0)
 		stor();
 	else if ((strcmp(argv[1], "read") == 0 || strcmp(argv[1], "dd") == 0) && argc == 5)
-		read_blocks(atoi(argv[2]), strtoul(argv[3], (char **)0, 0), strtoul(argv[4], (char **)0, 0),
+		read_blocks((int)number(argv[2]), number(argv[3]), number(argv[4]),
 		    argv[1][0] == 'd');
 	else if (strcmp(argv[1], "daemon") == 0) {
 		if (ioctl(fd, UBIOC_START, 0) < 0)
 			fail("UBIOC_START");
 		for (;;) {
-			sleep(1);
+			poll((struct pollfd *)0, 0, 500);
 			if (ioctl(fd, UBIOC_POLL, 0) < 0)
 				fail("UBIOC_POLL");
 		}
