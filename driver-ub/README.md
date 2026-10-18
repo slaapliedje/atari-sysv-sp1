@@ -8,12 +8,14 @@ NetUSBee, which both carry a Philips ISP1160.
     isp116x.[ch]       the host controller driver (from ucd/netusbee)
     usb.c hub.c ...    the core, ucd.c/udd.c the registration glue
     ubuser.c           user-space harness: ubuser [-l|-n] [SECONDS]
+    ubstor.[ch]        mass storage, bulk-only: probe, CBW/CSW transport,
+                       TEST UNIT READY, INQUIRY, READ CAPACITY, READ/WRITE 10
     ubprobe.c          the NetUSBee's chip found from user space
     lightprobe.c       the Lightning VME's
 
 Build the harness on the PC: m68k-cbm-sysv4-gcc -O -I. -o ubuser
-ubuser.c usb.c hub.c ucd.c udd.c isp116x.c ub_io.c (-DUB_DEBUG for the
-trace).  It talks to the chip through /dev/mem, so it runs from TT-RAM
+ubuser.c usb.c hub.c ucd.c udd.c isp116x.c ub_io.c ubstor.c (-DUB_DEBUG for
+the trace).  It talks to the chip through /dev/mem, so it runs from TT-RAM
 and the cartridge port sees clean cycles; the kernel driver will use the
 nu driver's frozen-cache accesses for the NetUSBee.
 
@@ -22,6 +24,7 @@ VME bus and as they are on the NetUSBee (ub_io_init reads HcChipID both
 ways); FIFO data words go the other way round from register words, both
 directions, on both.
 
-2026-10-18: the Lightning VME enumerates the root hub and a SanDisk
-Cruzer Fit on port 2 from user space.  Next: the storage class driver
-(read a sector), then the kernel driver and a block device.
+2026-10-18: on the Lightning VME, from user space, a SanDisk Cruzer Fit
+(16 GB) enumerates and its block 0 reads back (an MBR, one FAT32
+partition).  Next: the kernel driver (tick-polled) and a block device,
+then mtools for the FAT side, then HID.
