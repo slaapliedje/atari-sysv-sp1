@@ -1,0 +1,25 @@
+#!/sbin/sh
+# /etc/init.d/ub - the USB daemon (sp1 driver-ub).  `ubtool daemon` sits
+# in /dev/ub0's UBIOC_WORK: it starts the stack, enumerates what is on
+# the bus, serves the disk devices (/dev/dsk/usbN, /dev/rdsk/usbN, the
+# ub: drives of mtools) and polls the hubs.  Without it a disk open
+# fails with ENXIO.  Linked as /etc/rc2.d/S75ub and /etc/rc0.d/K75ub.
+pid=`/usr/bin/ps -e | /usr/bin/grep 'ubtool$' | /usr/bin/sed -e 's/^  *//' -e 's/ .*//'`
+case $1 in
+'start')
+	if [ "${pid}" = "" -a -x /usr/bin/ubtool -a -c /dev/ub0 ]
+	then
+		/usr/bin/nohup /usr/bin/ubtool daemon </dev/null >/dev/null 2>&1 &
+	fi
+	;;
+'stop')
+	if [ "${pid}" != "" ]
+	then
+		/usr/bin/kill ${pid}
+	fi
+	;;
+*)
+	echo "usage: /etc/init.d/ub {start|stop}"
+	;;
+esac
+exit 0

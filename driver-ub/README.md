@@ -12,8 +12,10 @@ NetUSBee, which both carry a Philips ISP1160.
                        hubs, list devices and storage, read/write blocks) and
                        the storage units as disks, /dev/dsk/usbN (block) and
                        /dev/rdsk/usbN (raw), minor 16+N; master.d-ub
-                       (obcsn), install.sh (makes the nodes)
+                       (obcsn), install.sh (the nodes, ubtool, the rc script;
+                       the kernel only when its inputs changed)
     ubtool.c           its user side: start, poll, devs, stor, read, daemon
+    ub.init            /etc/init.d/ub: `ubtool daemon` at boot (S75ub, K75ub)
     ubuser.c           user-space harness: ubuser [-l|-n] [SECONDS]
     ubstor.[ch]        mass storage, bulk-only: probe, CBW/CSW transport,
                        TEST UNIT READY, INQUIRY, READ CAPACITY, READ/WRITE 10
@@ -89,3 +91,16 @@ cmd, arg, mode), u_error/u_rval1/u_procp by their offsets 0x4d1/0x4e4/
 0x4dc in u (u_cred is u_procp->p_cred, at 16: what the kernel's own
 suser calls pass), since sys/user.h does not compile with GCC 2.7.2's
 headers).
+
+2026-10-19: the daemon is an rc script, ub.init = /etc/init.d/ub, in
+cron's style (the pid from ps -e), linked as /etc/rc2.d/S75ub (start:
+`nohup ubtool daemon` if none runs, /dev/ub0 and /usr/bin/ubtool
+present) and /etc/rc0.d/K75ub (stop: kill it).  So the stick's
+devices and mtools' u: drive are there after a boot without anyone
+logging in, as the network is through dhcpc.  install.sh now does the
+nodes, ubtool and the rc links every run and rebuilds the kernel only
+when a source, master.d-ub or ub.pc.o changed (install.sh itself is no
+longer in the hash: an rc change must not cost a kernel build).  Tested
+on the TT: stop kills the hand-started daemon, start brings one back
+(and a second start does not add another), the daemon outlives the
+shell that started it, mdir u: and the raw MBR read work after it.

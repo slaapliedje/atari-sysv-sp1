@@ -279,7 +279,8 @@ kernel USB driver's storage unit N read and written by block number
 through /dev/ub0's UBIOC_RD/UBIOC_WR, since a 32-bit lseek caps
 /dev/rdsk/usbN at 2 GB and a 16 GB stick's FAT32 lives beyond it.
 mtools.conf: `drive u: file="ub:0" partition=1` (and v: the raw device,
-first 2 GB).  Needs `ubtool daemon` running.  On the TT 2026-10-19:
+first 2 GB).  Needs `ubtool daemon` running (driver-ub's rc script
+starts it at boot).  On the TT 2026-10-19:
 mdir/minfo/mtype/mcopy/mdu/mshowfat all work on a 16 GB FlashFloppy
 stick (15.6 GB free shown, 64-bit offsets in order); a 170 KB file
 copied off it matched the public FlashFloppy 3.43 release byte for byte;
