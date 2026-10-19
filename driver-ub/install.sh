@@ -24,7 +24,7 @@ cp ub.init /etc/init.d/ub && chmod 744 /etc/init.d/ub
 rm -f /etc/rc2.d/S75ub /etc/rc0.d/K75ub
 ln /etc/init.d/ub /etc/rc2.d/S75ub
 ln /etc/init.d/ub /etc/rc0.d/K75ub
-cat ub.c ub.h ub_io.c usb.c hub.c ucd.c udd.c isp116x.c isp116x.h ubstor.c ubstor.h ubioc.h master.d-ub ub.pc.o > .src.c
+cat ub.c ub.h ub_io.c usb.c hub.c ucd.c udd.c isp116x.c isp116x.h ubstor.c ubstor.h ubhid.c ubhid.h ubioc.h master.d-ub ub.pc.o > .src.c
 if cmp -s .src.c .built.c 2>/dev/null; then echo "kernel already carries this ub; the daemon's rc script is in"; exit 0; fi
 cp ub.pc.o ub.o
 cp master.d-ub /etc/master.d/ub

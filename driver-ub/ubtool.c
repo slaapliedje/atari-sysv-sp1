@@ -8,6 +8,8 @@
  *   ubtool read UNIT LBA N  N blocks from LBA of storage UNIT, hex dump
  *   ubtool dd UNIT LBA N    the same, raw, to stdout
  *   ubtool daemon           serve the disk devices and poll the hubs (UBIOC_WORK)
+ *   ubtool hid              the keyboards and mice
+ *   ubtool ikbd HH ...      bytes as from the keyboard controller (root)
  */
 #include <stdio.h>
 #include <string.h>
@@ -122,7 +124,7 @@ char **argv;
 	int n, i, r;
 
 	if (argc < 2) {
-		printf("usage: ubtool start|poll [N]|devs|stor|read UNIT LBA N|dd UNIT LBA N|daemon\n");
+		printf("usage: ubtool start|poll [N]|devs|stor|read UNIT LBA N|dd UNIT LBA N|daemon|hid|ikbd HH ...\n");
 		return 2;
 	}
 	if ((fd = open("/dev/ub0", O_RDWR)) < 0)
@@ -147,7 +149,30 @@ char **argv;
 	else if ((strcmp(argv[1], "read") == 0 || strcmp(argv[1], "dd") == 0) && argc == 5)
 		read_blocks((int)number(argv[2]), number(argv[3]), number(argv[4]),
 		    argv[1][0] == 'd');
-	else if (strcmp(argv[1], "daemon") == 0) {
+	else if (strcmp(argv[1], "hid") == 0) {
+		static struct ub_hidinfo h[UB_NHID];
+
+		if (ioctl(fd, UBIOC_HID, h) < 0)
+			fail("UBIOC_HID");
+		for (i = 0; i < UB_NHID; i++)
+			if (h[i].present)
+				printf("hid %d: USB %s, device %d, %lu polls, %lu reports\n", i,
+				    h[i].kind == 1 ? "keyboard" : "mouse", h[i].devaddr, h[i].polls, h[i].reports);
+		for (i = 0; i < UB_NHID && !h[i].present; i++)
+			;
+		if (i == UB_NHID)
+			printf("no USB keyboard or mouse\n");
+		else
+			printf("%lu bytes given to the ikbd driver\n", h[0].ikbd_bytes);
+	} else if (strcmp(argv[1], "ikbd") == 0 && argc > 2) {
+		struct ub_ikbd k;
+
+		k.n = 0;
+		for (i = 2; i < argc && k.n < sizeof k.b; i++)
+			k.b[k.n++] = (unsigned char)number(argv[i]);
+		if (ioctl(fd, UBIOC_IKBD, &k) < 0)
+			fail("UBIOC_IKBD");
+	} else if (strcmp(argv[1], "daemon") == 0) {
 		/* each call serves what is queued, polls the hubs and waits
 		 * for the next request, half a second at most */
 		for (;;)

@@ -71,7 +71,9 @@ extern char u[];
 #include "hub.h"
 #include "usb_api.h"
 #include "ubstor.h"
+#include "ubhid.h"
 #include "ubioc.h"
+#include <sys/poll.h>
 
 extern int drv_priv();
 extern int ioprobe();
@@ -231,6 +233,7 @@ long a1, a2, a3, a4, a5, a6, a7, a8;
 #include "udd.c"
 #include "isp116x.c"
 #include "ubstor.c"
+#include "ubhid.c"
 
 /* ---- the driver ------------------------------------------------------ */
 
@@ -313,6 +316,7 @@ ub_start()
 		return 0;
 	usb_init();
 	ub_stor_init();
+	ub_hid_init();
 	if (ub_hcd_init() < 0)
 		return EIO;
 	ub_state = UB_RUNNING;
@@ -429,6 +433,97 @@ int write;
 
 static int ub_work();
 
+/*
+ * The kernel's ikbd driver (ikbdint, the ACIA's interrupt) puts each
+ * byte from the keyboard controller into a ring the X server reads
+ * through /dev/ikbd (ik_rdbuf, ik_rdin/ik_rdout/ik_rdcount, wakeup and
+ * pollwakeup) while the device is open, and gives it to the console's
+ * termin (ikbd_func) otherwise.  A USB keyboard's or mouse's bytes go
+ * the same way, from here, at spl7 so the ACIA's interrupt and the ring
+ * stay consistent; the whole record at once, so a mouse record is not
+ * split by a real one (a real record being received byte by byte while
+ * this is called can still be split: the two mice are not for use at
+ * the same instant).
+ */
+extern unsigned char *ik_rdin, *ik_rdend, ik_rdbuf[];
+extern int ik_rdsize, ik_rdcount, ik_isopen, ik_lost;
+extern void (*ikbd_func)();
+extern char ikbd_pollhead[];
+extern int spl7();
+extern void wakeup(), pollwakeup();
+static unsigned long ub_ikbd_bytes;
+
+void
+ub_ikbd_put(b, n)
+unsigned char *b;
+int n;
+{
+	int s = spl7();
+
+	ub_ikbd_bytes += n;
+	if (ik_isopen) {
+		while (n-- > 0) {
+			if (ik_rdcount < ik_rdsize) {
+				*ik_rdin++ = *b++;
+				ik_rdcount++;
+				if (ik_rdin == ik_rdend)
+					ik_rdin = ik_rdbuf;
+			} else {
+				ik_lost++;
+				b++;
+			}
+		}
+		splx(s);
+		wakeup((caddr_t)ik_rdbuf);
+		pollwakeup(ikbd_pollhead, POLLIN);
+		pollwakeup(ikbd_pollhead, POLLRDNORM);
+		return;
+	}
+	if (ikbd_func)
+		while (n-- > 0)
+			(*ikbd_func)((int)*b++);
+	splx(s);
+}
+
+/* UBIOC_HID: the keyboards and mice */
+static int
+ub_hidlist(arg)
+caddr_t arg;
+{
+	static struct ub_hidinfo info[UB_NHID];
+	int i;
+
+	ub_memset((char *)info, 0, sizeof info);
+	for (i = 0; i < UB_HID_MAX && i < UB_NHID; i++) {
+		struct ub_hid *h = &ub_hid[i];
+
+		if (h->dev == (struct usb_device *)0)
+			continue;
+		info[i].present = 1;
+		info[i].kind = h->kind;
+		info[i].devaddr = h->dev->devnum;
+		info[i].polls = h->polls;
+		info[i].reports = h->reports;
+		info[i].ikbd_bytes = ub_ikbd_bytes;
+	}
+	return copyout((caddr_t)info, arg, sizeof info) ? EFAULT : 0;
+}
+
+/* UBIOC_IKBD: bytes as from the keyboard controller, for testing */
+static int
+ub_ikbd_ioctl(arg)
+caddr_t arg;
+{
+	struct ub_ikbd k;
+
+	if (copyin(arg, (caddr_t)&k, sizeof k))
+		return EFAULT;
+	if (k.n < 1 || k.n > sizeof k.b)
+		return EINVAL;
+	ub_ikbd_put(k.b, k.n);
+	return 0;
+}
+
 /* the error of an old-style entry point goes to u.u_error */
 static int
 ub_err(r)
@@ -470,6 +565,12 @@ int cmd, arg, mode;
 		return ub_err(ub_devs((caddr_t)arg));
 	case UBIOC_STOR:
 		return ub_err(ub_storlist((caddr_t)arg));
+	case UBIOC_HID:
+		return ub_err(ub_hidlist((caddr_t)arg));
+	case UBIOC_IKBD:
+		if (drv_priv(UB_UCRED))
+			return ub_err(EPERM);
+		return ub_err(ub_ikbd_ioctl((caddr_t)arg));
 	case UBIOC_RD:
 		ub_lock();
 		r = ub_rw((caddr_t)arg, 0);
@@ -620,23 +721,37 @@ struct buf *bp;
 
 /*
  * UBIOC_WORK, the daemon's loop body: the stack started if need be, the
- * hubs polled, then a wait of half a second (interruptible, so the
- * daemon can be killed).
+ * hubs polled, then a wait (interruptible, so the daemon can be killed).
+ * Half a second between hub polls; with a keyboard or a mouse on the bus
+ * their interrupt pipes are tried every UB_HID_TICKS ticks instead (about
+ * 50 times a second: a try costs a USB frame, a millisecond of the CPU's
+ * time at most), the hubs every UB_HUB_EVERY of those.
  */
+#define UB_HID_TICKS	2
+#define UB_HUB_EVERY	25
+
 static int
 ub_work()
 {
-	int r = 0;
+	static int since_hubs;
+	int r = 0, hid = 0;
 
 	ub_lock();
 	if (ub_state != UB_RUNNING)
 		r = ub_start();
-	if (r == 0)
-		ub_poll_hubs();
+	if (r == 0) {
+		hid = ub_hid_present();
+		if (!hid || ++since_hubs >= UB_HUB_EVERY) {
+			ub_poll_hubs();
+			since_hubs = 0;
+		}
+		if (hid)
+			ub_hid_poll();
+	}
 	ub_unlock();
 	if (r)
 		return r;
-	delay(hertz / 2);
+	delay(hid ? UB_HID_TICKS : hertz / 2);
 	return 0;
 }
 

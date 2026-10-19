@@ -14,7 +14,12 @@ NetUSBee, which both carry a Philips ISP1160.
                        /dev/rdsk/usbN (raw), minor 16+N; master.d-ub
                        (obcsn), install.sh (the nodes, ubtool, the rc script;
                        the kernel only when its inputs changed)
-    ubtool.c           its user side: start, poll, devs, stor, read, daemon
+    ubhid.[ch]         HID keyboards and mice (boot protocol) as a second
+                       IKBD: their reports become the keyboard controller's
+                       bytes, put into the kernel's ikbd ring (the X server
+                       reads /dev/ikbd) or given to the console's termin
+    ubtool.c           its user side: start, poll, devs, stor, read, daemon,
+                       hid (the keyboards and mice), ikbd (inject bytes)
     ub.init            /etc/init.d/ub: `ubtool daemon` at boot (S75ub, K75ub)
     ubuser.c           user-space harness: ubuser [-l|-n] [SECONDS]
     ubstor.[ch]        mass storage, bulk-only: probe, CBW/CSW transport,
@@ -104,3 +109,23 @@ longer in the hash: an rc change must not cost a kernel build).  Tested
 on the TT: stop kills the hand-started daemon, start brings one back
 (and a second start does not add another), the daemon outlives the
 shell that started it, mdir u: and the raw MBR read work after it.
+
+2026-10-19, ub 0.8: USB keyboards and mice (ubhid.c).  A HID interface
+with the boot protocol (subclass 1, protocol 1 keyboard / 2 mouse) is
+put into the boot protocol with an idle rate of 0 and its interrupt IN
+pipe tried from the daemon every 2 ticks (ub_work: 44 times a second
+measured; the hubs every 25th time); a try is one USB frame, a NAK
+when nothing changed.  Each report becomes the bytes the IKBD would
+have sent (a US layout to Atari scancodes after FreeMiNT's
+usb_keyboard.c: F11/F12 Help/Undo, End/PgUp/PgDn Shift+Home/Up/Down,
+PrtScr Alt+Help, both Alts Alt, the wheel Up/Down arrow presses, the
+middle button nothing) and ub_ikbd_put gives them to the kernel's
+ikbd driver as its interrupt does: into the ik_rdbuf ring with
+wakeup/pollwakeup while /dev/ikbd is open (the X server, Xatw, reads it;
+all those symbols are global), to ikbd_func (the console's termin)
+otherwise; at spl7, a record at a time.  A record of the real mouse
+being received at that instant could still be split: not both mice at
+once.  On the TT with a Wooting Two HE and a Logitech M-UV55 on the
+Lightning: both probe (ubtool hid: polls, reports), the daemon takes
+about 3% of the CPU polling them, `ubtool ikbd f8 0 0` (UBIOC_IKBD,
+root) goes through to X.  Typing and moving: the user's test.

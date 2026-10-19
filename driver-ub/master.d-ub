@@ -1,4 +1,4 @@
-*ident	"ub 0.7 - USB (ISP1160: Lightning VME, NetUSBee): /dev/ub0, /dev/dsk/usbN"
+*ident	"ub 0.8 - USB (ISP1160: Lightning VME, NetUSBee): /dev/ub0, /dev/dsk/usbN"
 *
 * UB - character and block driver; the host controller is polled from a
 * user process (ubtool daemon), the class drivers live in the kernel;

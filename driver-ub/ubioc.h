@@ -11,9 +11,12 @@
 #define UBIOC_WR	(UBIOC | 6)	/* arg: struct ub_rw, blocks out (root) */
 #define UBIOC_STATUS	(UBIOC | 7)	/* returns ub_state */
 #define UBIOC_WORK	(UBIOC | 8)	/* the daemon: serve disk requests, poll, wait */
+#define UBIOC_HID	(UBIOC | 9)	/* arg: struct ub_hidinfo[UB_NHID] */
+#define UBIOC_IKBD	(UBIOC | 10)	/* arg: struct ub_ikbd, bytes as from the IKBD (root) */
 
 #define UB_NDEV		32		/* USB_MAX_DEVICE */
 #define UB_NSTOR	4		/* UB_STOR_MAX */
+#define UB_NHID		4		/* UB_HID_MAX */
 #define UB_RWMAX	(64 * 1024)	/* bytes per UBIOC_RD/WR */
 
 struct ub_devinfo {
@@ -31,6 +34,17 @@ struct ub_rw {
 	int		unit;		/* index into UBIOC_STOR's list */
 	unsigned long	lba, n;		/* blocks */
 	char		*buf;		/* n * blocksize bytes */
+};
+
+struct ub_hidinfo {
+	int		present, kind, devaddr;	/* kind: 1 keyboard, 2 mouse */
+	unsigned long	polls, reports;
+	unsigned long	ikbd_bytes;	/* all the bytes given to the ikbd driver so far */
+};
+
+struct ub_ikbd {
+	int		n;
+	unsigned char	b[16];
 };
 
 /* ub_state */
