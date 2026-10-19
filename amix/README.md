@@ -261,3 +261,26 @@ What it took:
 The assembler warns "Bignum too big for f format; truncated" for negative
 single-precision constants. That warning is harmless: the bits come out
 right.
+
+## mtools
+
+GNU mtools 4.0.49 as a static AMIX program, for the USB stick's FAT file
+system (ASV has no FAT driver): `amix/mtools/build.sh`, built like vim
+(the mint GCC through Manx's sysv4-cc, vim's amix-cc wrapper, rt.a with
+Manx's snprintf and a usleep; amixfix.h ahead of each source for the
+prototypes AMIX's headers lack and S_ISLNK, after configure, whose
+`char f();` probes it would contradict; SVR4's `-lucb` taken out of the
+link).  Output: work/mtools-4.0.49-asv.tar, unpacked in / on the TT:
+/usr/local/bin/mtools with its 24 command names hard-linked, and
+/usr/local/etc/mtools.conf.
+
+A drive type of its own, `ub:N` (ub_io.c, hooked into OpenImage): the
+kernel USB driver's storage unit N read and written by block number
+through /dev/ub0's UBIOC_RD/UBIOC_WR, since a 32-bit lseek caps
+/dev/rdsk/usbN at 2 GB and a 16 GB stick's FAT32 lives beyond it.
+mtools.conf: `drive u: file="ub:0" partition=1` (and v: the raw device,
+first 2 GB).  Needs `ubtool daemon` running.  On the TT 2026-10-19:
+mdir/minfo/mtype/mcopy/mdu/mshowfat all work on a 16 GB FlashFloppy
+stick (15.6 GB free shown, 64-bit offsets in order); a 170 KB file
+copied off it matched the public FlashFloppy 3.43 release byte for byte;
+43 KB/s.  Writes untested (the stick is the user's).

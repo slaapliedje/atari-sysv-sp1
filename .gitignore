@@ -4,6 +4,7 @@ __pycache__/
 amix/work/
 amix/bash/work/
 amix/vim/work/
+amix/mtools/work/
 .rsyncpass
 rsync/work/
 driver-*/*.o
