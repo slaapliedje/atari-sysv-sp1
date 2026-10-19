@@ -46,24 +46,29 @@ then mtools for the FAT side, then HID.
 
 2026-10-18, later: the block device.  /dev/dsk/usbN and /dev/rdsk/usbN
 are the whole stick (no slices: mtools takes an offset, a file system
-on a stick would be made over the whole device).  The first version ran
-the stack from the open and strategy paths (opening a unit started the
-stack and polled; ubstrategy did the transfer there and then): the TT
-died twice, once in a raw read, once in a plain open of /dev/rdsk/usb0 -
-the kernel stack is shallow on those paths and the USB stack keeps 512-byte
-buffers on it, is the likely reason, since the same work from the ioctl
-path has always been fine.  So now the stack runs ONLY from ioctls:
-ubstrategy checks the request and queues it (av_forw), and `ubtool daemon`
-sits in UBIOC_WORK, which serves the queue (bp_mapin for raw buffers,
-64 KB chunks), polls the hubs and sleeps until the next request or half a
-second (timeout + sleep at PZERO+1, so the daemon can be killed; its
-close fails what is queued).  Without the daemon a disk request fails at
-once with EIO; the open only checks that the unit is there.  b_blkno
-counts 512-byte blocks; a request past the end is cut short.  ubsize
-gives the size for swap; ubprint names the unit.  Test: ubtool daemon &;
+on a stick would be made over the whole device).  ubstrategy does the
+transfer there and then, in the caller's process context, through the
+class driver in chunks (the stack sleeps while the chip works, which
+the caller may); `ubtool daemon` sits in UBIOC_WORK, which starts the
+stack if need be, polls the hubs and sleeps half a second (interruptible,
+so the daemon can be killed).  Without the daemon the units are never
+enumerated and a disk open fails with ENXIO.  b_blkno counts 512-byte
+blocks; a request past the end is cut short.  ubsize gives the size for
+swap; ubprint names the unit.  The raw device's data goes through a
+16 KB kernel buffer with copyin/copyout: on this kernel user space is
+its own address space (copyin is a moves loop), so a physio buffer's
+address means nothing to the kernel, and bp_mapin is no help - this
+kernel's maps page lists (B_PAGEIO) only and panics on a B_PHYS buffer
+(ub 0.5 died of that; ub 0.6, which read the user address directly,
+died of a bus error).  Test: ubtool daemon &;
 dd if=/dev/rdsk/usb0 bs=512 count=1 | od -x (the MBR, 55aa at the end);
 dd if=/dev/dsk/usb0 bs=8k count=16 of=/dev/null (through the buffer
 cache); compare with ubtool read 0 0 1.  Next: mtools for the FAT side.
+
+The 2 GB limit: physck and the block-special read multiply the size in
+512-byte blocks by 512 in 32-bit arithmetic, so ubsize/physck are told
+at most 0x3fffff blocks; the raw and block devices reach the first 2 GB
+of a bigger stick, the ioctls (UBIOC_RD/WR) all of it.
 
 THE CRASHES, FOUND 2026-10-18 evening (crash(1M) on the live kernel,
 `od -x cdevsw`, `ts` on the entries): a driver whose master entry has
@@ -80,5 +85,7 @@ SVR4-style, read the device number as a pointer and passed garbage to
 physiock: every open of a disk minor reset the machine, silently (no
 panic: a jump through garbage).  ub 0.4 uses the old conventions
 (ubopen(dev, flag, otyp), ubread(dev) = physck + physio, ubioctl(dev,
-cmd, arg, mode), u_error/u_rval1/u_cred by their offsets 0x4d1/0x4e4/
-0x4dc in u, since sys/user.h does not compile with GCC 2.7.2's headers).
+cmd, arg, mode), u_error/u_rval1/u_procp by their offsets 0x4d1/0x4e4/
+0x4dc in u (u_cred is u_procp->p_cred, at 16: what the kernel's own
+suser calls pass), since sys/user.h does not compile with GCC 2.7.2's
+headers).

@@ -54,15 +54,16 @@
 /*
  * The u-area fields the old conventions use.  sys/user.h does not
  * compile with this compiler's headers (sigset_t and friends are hidden
- * from an ANSI compiler), so the two fields are reached by their offsets
- * in this kernel's struct user, read off the kernel's own gen_ioctl and
- * physck code: u_error the byte at 0x4d1, u_rval1 the int at 0x4e4, u_cred the pointer
- * at 0x4dc.
+ * from an ANSI compiler), so the fields are reached by their offsets in
+ * this kernel's struct user, read off the kernel's own gen_ioctl,
+ * physck and suser code: u_error the byte at 0x4d1, u_rval1 the int at
+ * 0x4e4, u_procp the pointer at 0x4dc (u_cred is its p_cred, at 16).
  */
 extern char u[];
 #define UB_UERROR	(*(char *)(u + 0x4d1))
 #define UB_URVAL1	(*(int *)(u + 0x4e4))
-#define UB_UCRED	(*(struct cred **)(u + 0x4dc))	/* u_cred, from the kernel's suser calls */
+#define UB_UPROCP	(*(char **)(u + 0x4dc))
+#define UB_UCRED	(*(struct cred **)(UB_UPROCP + 16))
 /* no sys/ddi.h: it turns getminor into a function the kernel lacks */
 
 #include "ub.h"
@@ -77,9 +78,6 @@ extern int ioprobe();
 
 extern void biodone();
 extern int physio(), physck();
-extern int bp_mapin(), bp_mapout();
-extern int timeout(), spl6();
-extern void splx();
 extern int hertz;
 
 int ub_state = UB_NOCHIP;
@@ -253,7 +251,6 @@ ubinit()
 
 static int ub_start();
 static void ub_poll_hubs();
-static void ub_noworker();
 
 /* a storage unit that is there and ready, or 0 */
 static struct ub_stor *
@@ -304,8 +301,8 @@ ubclose(dev, flag, otyp)
 dev_t dev;
 int flag, otyp;
 {
-	if (UB_MINOR(dev) == 0 && ub_open_count > 0 && --ub_open_count == 0)
-		ub_noworker();
+	if (UB_MINOR(dev) == 0 && ub_open_count > 0)
+		ub_open_count--;
 	return 0;
 }
 
@@ -430,6 +427,8 @@ int write;
 	return r;
 }
 
+static int ub_work();
+
 /* the error of an old-style entry point goes to u.u_error */
 static int
 ub_err(r)
@@ -490,15 +489,36 @@ int cmd, arg, mode;
 /* ---- the storage units as disks ------------------------------------- */
 
 /*
- * Requests wait on a queue (av_forw links) for the daemon: a process in
- * UBIOC_WORK takes them one at a time and does the transfer through the
- * class driver in chunks, in its own (ioctl) context; b_blkno counts
- * 512-byte blocks whatever the unit's block size; a request past the end
- * is cut short, one entirely past it transfers nothing.  Without a
- * daemon a request fails at once rather than hang.
+ * A request is done there and then, in the caller's process context,
+ * through the class driver in chunks; the stack sleeps while the chip
+ * works, which the caller may.  b_blkno counts 512-byte blocks whatever
+ * the unit's block size; a request past the end is cut short, one
+ * entirely past it transfers nothing.
+ *
+ * Where the data goes depends on the buffer.  A cache buffer's address
+ * is the kernel's own.  A raw request's (B_PHYS, from physio) is the
+ * calling process's: user space is its own address space on this
+ * kernel (copyin reaches it with moves), so the transfer goes through
+ * a kernel buffer and copyin/copyout, which work because physio calls
+ * the strategy routine from that process, with the pages locked.
+ * bp_mapin is no use for it: this kernel's maps page lists only
+ * (B_PAGEIO) and panics on anything else, which is how ub 0.5 died.  A
+ * page list (B_PAGEIO: paging to the stick) is mapped with bp_mapin.
+ *
+ * UB_TRACE prints each step to the console; the kernel replays its
+ * message buffer into console.log at the next boot, which is how a
+ * silent reset is placed.
  */
-static struct buf *ub_qhead, *ub_qtail;
-static int ub_worker;			/* a process serves UBIOC_WORK */
+#define UB_BOUNCE	(16 * 1024)	/* a raw request's kernel buffer */
+static char ub_bounce[UB_BOUNCE];
+extern int copyin(), copyout(), bp_mapin(), bp_mapout();
+
+/* #define UB_TRACE 1 */	/* each strategy/raw call to the console */
+#ifdef UB_TRACE
+#define TR(x)	cmn_err x
+#else
+#define TR(x)
+#endif
 
 static void
 ub_fail(bp, err)
@@ -511,14 +531,43 @@ int err;
 	biodone(bp);
 }
 
+/* one piece of a request from or to where the buffer's data lives */
+static int
+ub_piece(s, bp, lba, chunk, addr, write)
+struct ub_stor *s;
+struct buf *bp;
+unsigned long lba, chunk;
+unsigned char *addr;
+int write;
+{
+	unsigned long len = chunk * s->blocksize;
+
+	if ((bp->b_flags & B_PHYS) == 0)
+		return write ? ub_stor_write(s, lba, chunk, addr)
+		    : ub_stor_read(s, lba, chunk, addr);
+	if (write) {
+		if (copyin((caddr_t)addr, ub_bounce, len))
+			return -1;
+		return ub_stor_write(s, lba, chunk, (unsigned char *)ub_bounce);
+	}
+	if (ub_stor_read(s, lba, chunk, (unsigned char *)ub_bounce) < 0)
+		return -1;
+	return copyout(ub_bounce, (caddr_t)addr, len) ? -1 : 0;
+}
+
 void
 ubstrategy(bp)
 struct buf *bp;
 {
 	struct ub_stor *s;
-	unsigned long bs;
-	int sp;
+	unsigned long bs, lba, n, done, chunk, max;
+	unsigned char *addr;
+	int write = (bp->b_flags & B_READ) == 0;
+	int mapped = 0;
 
+	TR((CE_CONT, "ub: strat bp %x dev %x flags %x blk %d cnt %d addr %x\n",
+	    bp, bp->b_dev, bp->b_flags, bp->b_blkno, bp->b_bcount, bp->b_un.b_addr));
+	bp->b_resid = bp->b_bcount;
 	if ((s = ub_unit(bp->b_dev)) == (struct ub_stor *)0) {
 		ub_fail(bp, ENXIO);
 		return;
@@ -529,65 +578,10 @@ struct buf *bp;
 		ub_fail(bp, EINVAL);
 		return;
 	}
-	if (!ub_worker) {
-		ub_fail(bp, EIO);
+	if ((bp->b_flags & B_PHYS) && bp->b_proc != (struct proc *)UB_UPROCP) {
+		ub_fail(bp, EIO);	/* another process's pages: not reachable */
 		return;
 	}
-	bp->av_forw = (struct buf *)0;
-	sp = spl6();
-	if (ub_qtail)
-		ub_qtail->av_forw = bp;
-	else
-		ub_qhead = bp;
-	ub_qtail = bp;
-	splx(sp);
-	wakeup((caddr_t)&ub_qhead);
-}
-
-/* the next queued request, or 0 */
-static struct buf *
-ub_dequeue()
-{
-	struct buf *bp;
-	int sp;
-
-	sp = spl6();
-	if ((bp = ub_qhead) != (struct buf *)0) {
-		ub_qhead = bp->av_forw;
-		if (ub_qhead == (struct buf *)0)
-			ub_qtail = (struct buf *)0;
-	}
-	splx(sp);
-	return bp;
-}
-
-/* the daemon is gone: what it would have served fails */
-static void
-ub_noworker()
-{
-	struct buf *bp;
-
-	ub_worker = 0;
-	while ((bp = ub_dequeue()) != (struct buf *)0)
-		ub_fail(bp, EIO);
-}
-
-/* one request, in the daemon's context */
-static void
-ub_doio(bp)
-struct buf *bp;
-{
-	struct ub_stor *s;
-	unsigned long bs, lba, n, done, chunk;
-	unsigned char *addr;
-	int mapped = 0, write = (bp->b_flags & B_READ) == 0;
-
-	bp->b_resid = bp->b_bcount;
-	if ((s = ub_unit(bp->b_dev)) == (struct ub_stor *)0) {
-		ub_fail(bp, ENXIO);		/* gone since it was queued */
-		return;
-	}
-	bs = s->blocksize;
 	lba = bp->b_blkno / (bs / DEV_BSIZE);
 	n = bp->b_bcount / bs;
 	if (lba >= s->blocks) {
@@ -596,75 +590,76 @@ struct buf *bp;
 	}
 	if (lba + n > s->blocks)
 		n = s->blocks - lba;
-	/* a raw or paging request: its pages mapped for the kernel */
-	if (bp->b_flags & B_PHYS) {
+	if (bp->b_flags & B_PAGEIO) {
 		bp_mapin(bp);
 		mapped = 1;
 	}
 	addr = (unsigned char *)bp->b_un.b_addr;
+	max = (bp->b_flags & B_PHYS) ? UB_BOUNCE / bs : UB_CHUNK / bs;
 	ub_lock();
 	for (done = 0; done < n; done += chunk) {
 		chunk = n - done;
-		if (chunk * bs > UB_CHUNK)
-			chunk = UB_CHUNK / bs;
-		if ((write ? ub_stor_write(s, lba + done, chunk, addr)
-		    : ub_stor_read(s, lba + done, chunk, addr)) < 0)
+		if (chunk > max)
+			chunk = max;
+		if (ub_piece(s, bp, lba + done, chunk, addr, write) < 0)
 			break;
 		addr += chunk * bs;
 	}
 	ub_unlock();
 	if (mapped)
 		bp_mapout(bp);
+	TR((CE_CONT, "ub: strat done %d of %d\n", done, n));
 	bp->b_resid = bp->b_bcount - done * bs;
 	if (done < n) {
 		bp->b_error = EIO;
 		bp->b_flags |= B_ERROR;
 	}
 	biodone(bp);
+	TR((CE_CONT, "ub: biodone\n"));
 }
 
 /*
  * UBIOC_WORK, the daemon's loop body: the stack started if need be, the
- * queued requests served, the hubs polled, then a wait for the next
- * request, half a second at most.  Interruptible, so the daemon can be
- * killed; its close fails what is left.
+ * hubs polled, then a wait of half a second (interruptible, so the
+ * daemon can be killed).
  */
 static int
 ub_work()
 {
-	struct buf *bp;
-	int r = 0, sp;
+	int r = 0;
 
 	ub_lock();
 	if (ub_state != UB_RUNNING)
 		r = ub_start();
+	if (r == 0)
+		ub_poll_hubs();
 	ub_unlock();
 	if (r)
 		return r;
-	ub_worker = 1;
-	while ((bp = ub_dequeue()) != (struct buf *)0)
-		ub_doio(bp);
-	ub_lock();
-	ub_poll_hubs();
-	ub_unlock();
-	timeout(wakeup, (caddr_t)&ub_qhead, hertz / 2);
-	sp = spl6();
-	if (ub_qhead == (struct buf *)0)
-		sleep((caddr_t)&ub_qhead, PZERO + 1);
-	splx(sp);
+	delay(hertz / 2);
 	return 0;
 }
 
-/* the unit's size in 512-byte blocks */
+/*
+ * The unit's size in 512-byte blocks, as the kernel may be told it:
+ * physck and the block-special read multiply it by 512 in 32-bit
+ * arithmetic, so more than 2 GB would come out negative and refuse
+ * everything.  The raw and block devices reach the first 2 GB of a
+ * bigger stick; the ioctls (UBIOC_RD/WR) reach all of it.
+ */
+#define UB_MAXBLOCKS	0x3fffffUL	/* 2 GB less a block */
+
 static daddr_t
 ub_nblocks(dev)
 dev_t dev;
 {
 	struct ub_stor *s = ub_unit(dev);
+	unsigned long n;
 
 	if (s == (struct ub_stor *)0)
 		return 0;
-	return s->blocks * (s->blocksize / DEV_BSIZE);
+	n = s->blocks * (s->blocksize / DEV_BSIZE);
+	return n > UB_MAXBLOCKS ? UB_MAXBLOCKS : n;
 }
 
 /* the raw device: the request is in u.u_base/u_count/u_offset (the
@@ -678,8 +673,11 @@ int rw;
 		UB_UERROR = ENXIO;
 		return;
 	}
+	TR((CE_CONT, "ub: raw %s dev %x base %x count %x off %x\n", rw == B_READ ? "read" : "write",
+	    dev, *(long *)(u + 0x4ec), *(long *)(u + 0x4f0), *(long *)(u + 0x4f4)));
 	if (physck(ub_nblocks(dev), rw))
 		physio(ubstrategy, (struct buf *)0, dev, rw);
+	TR((CE_CONT, "ub: raw back, error %d\n", UB_UERROR));
 }
 
 int
