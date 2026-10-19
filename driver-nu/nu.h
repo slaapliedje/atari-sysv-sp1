@@ -11,7 +11,15 @@
 
 #include "nureg.h"
 
-#define NU_NTX		2		/* transmit buffers, 6 pages each */
+/*
+ * One transmit buffer, not two: the chip's 8 KB (32 pages) less the
+ * transmit buffers is the receive ring, which must hold a whole TCP
+ * window with a page to spare, or every burst overflows it.  ASV's TCP
+ * offers 4096 bytes and segments of 1024: four frames of five pages
+ * each, 20 - more than the 19 a 20-page ring takes (seen: 222
+ * overflows for 2 MB in).  26 pages hold them.
+ */
+#define NU_NTX		1		/* transmit buffers, 6 pages each */
 #define NU_TXPAGES	6
 #define NU_MINFRAME	60		/* without CRC */
 #define NU_MAXFRAME	1514		/* without CRC */
