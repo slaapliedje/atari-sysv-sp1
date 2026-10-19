@@ -289,6 +289,134 @@ volatile unsigned char *a, *p;
 	return t & 0xff;
 }
 
+/*
+ * A frame through the data port: n reads of the card address a into buf,
+ * the instruction cache frozen for the whole run, so a byte costs a few
+ * bus cycles instead of nu_acc's whole dance (tens of microseconds, the
+ * reason a frame took 20 ms and the 5 KB ring overflowed on every TCP
+ * burst).  As in nu_acc: a dry pass (two turns, reading the pad) brings
+ * the loop into the cache, then the real one; a pad store with the same
+ * A1-A13 as the card access comes right before it and right after it -
+ * the store into buf in between is what the second one undoes.  The
+ * caller keeps n to NU_RUN bytes: the run is at spl7.
+ */
+static void
+nu_accrd(a, p, buf, n)
+volatile unsigned char *a, *p;
+unsigned char *buf;
+int n;
+{
+	register unsigned long c = nu_getcacr();
+	register unsigned long fi = c | 0x2;
+	int s = spl7();
+
+	asm volatile (
+	    "\tmovel %0,%%d1\n"		/* the frozen CACR, ready */
+	    "\tmoveal %1,%%a1\n"		/* x = p: the dry pass */
+	    "\tmoveal %3,%%a2\n"		/* out = buf */
+	    "\tmovel %5,%%d2\n"		/* two turns (no "#": the assembler's comment) */
+	    "1:\n"
+	    "\tclrb %1@\n"			/* *p = 0 */
+	    "\tmoveb %%a1@,%%d0\n"		/* t = *x */
+	    "\tmoveb %%d0,%%a2@+\n"		/* *out++ = t */
+	    "\tmoveb %%d0,%1@\n"		/* *p = t */
+	    "\tdbf %%d2,1b\n"
+	    "\tcmpal %2,%%a1\n"		/* the real pass done? */
+	    "\tbeqs 2f\n"
+	    "\t.short 0x4e7b,0x1002\n"	/* movec %d1,%cacr: FI */
+	    "\tmoveal %2,%%a1\n"		/* x = a: the real one */
+	    "\tmoveal %3,%%a2\n"		/* out = buf again */
+	    "\tmovel %4,%%d2\n"		/* n - 1 turns more */
+	    "\tbras 1b\n"
+	    "2:\n"
+	    : : "d" (fi), "a" (p), "a" (a), "a" (buf), "d" (n - 1), "d" (1)
+	    : "d0", "d1", "d2", "a1", "a2", "memory");
+	nu_setcacr(c);
+	splx(s);
+}
+
+/*
+ * The same for writes: the byte v goes out as a read of ab + (v << 1),
+ * with pad stores at pb + (v << 1) around it.
+ */
+static void
+nu_accwr(ab, pb, buf, n)
+volatile unsigned char *ab, *pb;
+unsigned char *buf;
+int n;
+{
+	register unsigned long c = nu_getcacr();
+	register unsigned long fi = c | 0x2;
+	int s = spl7();
+
+	asm volatile (
+	    "\tmovel %0,%%d1\n"
+	    "\tmoveal %1,%%a1\n"		/* x = pb: the dry pass */
+	    "\tmoveal %3,%%a2\n"		/* in = buf */
+	    "\tmovel %5,%%d2\n"
+	    "1:\n"
+	    "\tclrl %%d0\n"
+	    "\tmoveb %%a2@+,%%d0\n"		/* v */
+	    "\taddl %%d0,%%d0\n"		/* v << 1 */
+	    "\tclrb %1@(%%d0:l)\n"		/* pb[v << 1] = 0 */
+	    "\tmoveb %%a1@(%%d0:l),%%d3\n"	/* the write: a read of x[v << 1] */
+	    "\tmoveb %%d3,%1@(%%d0:l)\n"	/* pb[v << 1] = what came back */
+	    "\tdbf %%d2,1b\n"
+	    "\tcmpal %2,%%a1\n"
+	    "\tbeqs 2f\n"
+	    "\t.short 0x4e7b,0x1002\n"	/* movec %d1,%cacr: FI */
+	    "\tmoveal %2,%%a1\n"		/* x = ab */
+	    "\tmoveal %3,%%a2\n"
+	    "\tmovel %4,%%d2\n"
+	    "\tbras 1b\n"
+	    "2:\n"
+	    : : "d" (fi), "a" (pb), "a" (ab), "a" (buf), "d" (n - 1), "d" (1)
+	    : "d0", "d1", "d2", "d3", "a1", "a2", "memory");
+	nu_setcacr(c);
+	splx(s);
+}
+
+#define NU_RUN	256		/* bytes a run: about a third of a millisecond at spl7 */
+
+/* the chip core's data port transfers (nuchip.c nu_rdmem / nu_wrmem) */
+void
+nu_rddata(buf, n)
+unsigned char *buf;
+int n;
+{
+	unsigned long o = (unsigned long)NU_DATA << NU_REGSHIFT;
+	int k;
+
+	if ((nu_padmode & 8) == 0) {
+		for (k = 0; k < n; k++)
+			buf[k] = nu_rd(NU_DATA);
+		return;
+	}
+	for (; n > 0; n -= k, buf += k) {
+		k = n > NU_RUN ? NU_RUN : n;
+		nu_accrd((volatile unsigned char *)(nu_rbase + o), nu_pad + o, buf, k);
+	}
+}
+
+void
+nu_wrdata(buf, n)
+unsigned char *buf;
+int n;
+{
+	unsigned long o = (unsigned long)NU_DATA << NU_REGSHIFT;
+	int k;
+
+	if ((nu_padmode & 8) == 0) {
+		for (k = 0; k < n; k++)
+			nu_wr(NU_DATA, buf[k]);
+		return;
+	}
+	for (; n > 0; n -= k, buf += k) {
+		k = n > NU_RUN ? NU_RUN : n;
+		nu_accwr((volatile unsigned char *)(nu_wbase + o), nu_pad + o, buf, k);
+	}
+}
+
 static unsigned long
 nu_dcoff()
 {
@@ -1098,6 +1226,8 @@ queue_t *q;
 	}
 	nu_dcon(c);
 	nu_ifstats();
+	if (work)		/* frames still coming: again before the next tick */
+		qenable(q);
 	return 0;
 }
 

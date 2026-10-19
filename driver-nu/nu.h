@@ -98,6 +98,11 @@ void		nu_spin();	/* (microseconds) */
 #define NU_DELAY(n)	nu_spin(n)
 #define NU_YIELD()
 #define NU_CLKDUE()	0
+/* a frame's bytes through the data port in runs, the cache frozen once a
+ * run (nu.c): a byte through nu_rd/nu_wr costs tens of microseconds */
+#define NU_BLOCKIO	1
+void		nu_rddata();	/* (buf, n) */
+void		nu_wrdata();	/* (buf, n) */
 #elif defined(NU_DEVMEM)
 /*
  * A user program reaching the card through /dev/mem (nuuser.c).  With

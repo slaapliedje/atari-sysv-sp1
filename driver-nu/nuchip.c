@@ -78,7 +78,9 @@ nu_rdmem(a, buf, n)
 int a, n;
 register unsigned char *buf;
 {
+	#ifndef NU_BLOCKIO
 	register int i;
+#endif
 
 	if (n <= 0)
 		return;
@@ -91,6 +93,10 @@ register unsigned char *buf;
 	}
 	if (i < n)
 		*buf = NU_RD16() >> 8;
+	nu_dmadone();
+#elif defined(NU_BLOCKIO)
+	nu_dma(a, n, CR_RREAD);
+	nu_rddata(buf, n);
 	nu_dmadone();
 #else
 	nu_dma(a, n, CR_RREAD);
@@ -108,7 +114,9 @@ nu_wrmem(a, buf, n)
 int a, n;
 register unsigned char *buf;
 {
+	#ifndef NU_BLOCKIO
 	register int i;
+#endif
 
 	if (n <= 0)
 		return;
@@ -118,6 +126,10 @@ register unsigned char *buf;
 		NU_WR16((buf[0] << 8) | buf[1]);
 	if (i < n)
 		NU_WR16(buf[0] << 8);
+	nu_dmadone();
+#elif defined(NU_BLOCKIO)
+	nu_dma(a, n, CR_RWRITE);
+	nu_wrdata(buf, n);
 	nu_dmadone();
 #else
 	nu_dma(a, n, CR_RWRITE);

@@ -21,7 +21,7 @@
 #define NU_RAW_RD	0
 #define NU_RAW_WR	1
 #define NU_RAW_SPIN	2
-#define NU_RAWMAX	64
+#define NU_RAWMAX	512
 
 struct nu_rawop {
 	unsigned char	op, reg, val, pad;
