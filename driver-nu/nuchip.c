@@ -253,6 +253,14 @@ register struct nu_softc *sc;
 	nu_setcr(CR_NODMA | CR_STP);
 #endif
 	sc->rtl = NU_RD(NU_ID0) == 'P' && (NU_RD(NU_ID1) == 'p' || NU_RD(NU_ID1) == 'C');
+	if (sc->rtl && !sc->cfgok) {
+		/* what the chip came up with: nu_recover puts it back */
+		nu_setcr(CR_NODMA | CR_STP | CR_PAGE3);
+		for (i = 0; i < 3; i++)
+			sc->cfg[i] = NU_RD(NU_CONFIG1 + i);
+		nu_setcr(CR_NODMA | CR_STP);
+		sc->cfgok = 1;
+	}
 
 	NU_WR(NU_DCR, NU_DCRMODE);
 	NU_WR(NU_RCR, RCR_MON);
@@ -400,6 +408,43 @@ register struct nu_softc *sc;
 	NU_WR(NU_IMR, sc->imr);
 	sc->running = 1;
 	return 0;
+}
+
+/*
+ * A chip that fails nu_init time after time gets what the boot gave it:
+ * the probe over again (its reset, scratch and memory tests), and on an
+ * RTL8019AS the configuration registers CONFIG1-3 put back as they were
+ * first found - a write that went astray could have changed them, and a
+ * soft reset does not touch them without an EEPROM to reload.  Seen on
+ * the TT: after heavy traffic the chip failed every init for minutes,
+ * and came back with a reboot, which the cartridge port cannot pass on
+ * as a reset - so software did it.
+ */
+int
+nu_recover(sc)
+register struct nu_softc *sc;
+{
+	register int i, fixed = 0;
+
+	sc->st.recover++;
+	sc->running = 0;
+	if (nu_probe(sc) < 0)
+		return -1;
+	if (sc->rtl && sc->cfgok) {
+		nu_setcr(CR_NODMA | CR_STP | CR_PAGE3);
+		for (i = 0; i < 3; i++)
+			if (NU_RD(NU_CONFIG1 + i) != sc->cfg[i])
+				fixed++;
+		if (fixed) {
+			NU_WR(NU_9346CR, EEM_CONFIG);
+			for (i = 0; i < 3; i++)
+				NU_WR(NU_CONFIG1 + i, sc->cfg[i]);
+			NU_WR(NU_9346CR, 0);
+			sc->st.cfgfix += fixed;
+		}
+		nu_setcr(CR_NODMA | CR_STP);
+	}
+	return nu_init(sc);
 }
 
 void

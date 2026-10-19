@@ -257,6 +257,8 @@ main(int argc, char **argv)
 	    st.txfu, st.txowc, st.txtimeout);
 	printf("chip re-inits %lu, failed inits %lu, page selects redone %lu, "
 	    "polls %lu\n", st.reinit, st.initbad, st.crmiss, st.polls);
+	printf("re-probes %lu, config registers put back %lu, frames dropped "
+	    "while down %lu\n", st.recover, st.cfgfix, st.txdead);
 	if (!regs)
 		return 0;
 	if (nuioctl(fd, NUIOC_REGS, (char *)&rg, sizeof rg) < 0) {

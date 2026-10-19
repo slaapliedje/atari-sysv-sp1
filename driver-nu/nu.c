@@ -407,7 +407,8 @@ nu_ifstats()
 	en_if.if_stats.ifs_ierrors = st->ierrors + st->rxbad + st->ovw +
 	    st->nomem;
 	en_if.if_stats.ifs_opackets = st->opackets;
-	en_if.if_stats.ifs_oerrors = st->oerrors + st->txtimeout + nu_txdrop;
+	en_if.if_stats.ifs_oerrors = st->oerrors + st->txtimeout + st->txdead +
+	    nu_txdrop;
 	en_if.if_stats.ifs_collisions = st->collisions;
 }
 
@@ -424,15 +425,21 @@ nu_tick()
 
 /*
  * An init that failed: a chip stuck in reset, or one that did not keep
- * what it was given (nu_verify).  Said once; nursrv tries again each
- * second, and nustat shows the count.
+ * what it was given (nu_verify).  Said once an outage; nursrv tries
+ * again each second, every NU_RECOVER_EVERY'th time with nu_recover,
+ * and nustat shows the counts.  Frames are dropped meanwhile (from the
+ * second failure on, so a boot's first init is not affected): queued
+ * frames would make the close of the stream wait for a chip that may
+ * never take them, which is how `inetinit stop` hung on 2026-10-18.
  */
+#define NU_RECOVER_EVERY	3
+static int nu_said;
+
 static void
 nu_initfail()
 {
-	static int said;
-
-	if (said++)
+	nu_sc.failrun++;
+	if (nu_said++)
 		return;
 	if (nu_sc.st.initbad)
 		cmn_err(CE_CONT, "nu0: the chip did not keep its setup: page %d "
@@ -442,6 +449,18 @@ nu_initfail()
 	else
 		cmn_err(CE_CONT, "nu0: the chip does not come out of reset; "
 		    "retrying each second\n");
+}
+
+/* an init that worked after failures */
+static void
+nu_initok()
+{
+	if (nu_sc.failrun)
+		cmn_err(CE_CONT, "nu0: the chip is back after %d failed inits "
+		    "(%d re-probes, %d config registers put back)\n",
+		    nu_sc.failrun, nu_sc.st.recover, nu_sc.st.cfgfix);
+	nu_sc.failrun = 0;
+	nu_said = 0;
 }
 
 /* EN_LINIT: find the card and set it going. Process context (first open). */
@@ -467,6 +486,8 @@ nu_linit()
 	nu_sc.imr = 0;
 	if (nu_init(&nu_sc) < 0)
 		nu_initfail();
+	else
+		nu_initok();
 	nu_dcon(c);
 	/* two digits a byte: the kernel's cmn_err has no field widths */
 	for (i = 0; i < 6; i++) {
@@ -758,6 +779,11 @@ mblk_t *mp;
 		hp->b_cont = mp->b_cont;
 		mp->b_cont = (mblk_t *)0;
 		freeb(mp);
+		if (!nu_sc.running && nu_sc.failrun >= 2) {
+			nu_sc.st.txdead++;	/* the chip is down: no queue */
+			freemsg(hp);
+			return;
+		}
 		/* only queued here: nursrv puts it on the wire */
 		s = splstr();
 		putq(q, hp);
@@ -1058,8 +1084,11 @@ queue_t *q;
 	if (!nu_sc.running && lbolt - nu_retry >= 0) {
 		/* the chip stopped answering: try again once a second */
 		nu_retry = lbolt + HZ;
-		if (nu_init(&nu_sc) < 0)
+		if ((nu_sc.failrun && nu_sc.failrun % NU_RECOVER_EVERY == 0 ?
+		    nu_recover(&nu_sc) : nu_init(&nu_sc)) < 0)
 			nu_initfail();
+		else
+			nu_initok();
 	}
 	for (i = 0; i < 4; i++) {
 		work = nu_poll(&nu_sc);

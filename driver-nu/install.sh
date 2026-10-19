@@ -12,7 +12,7 @@
 # strcf would make inetinit unlink every interface, en0 too.)
 cd "`dirname $0`" || exit 1
 [ -f nu.pc.o ] || { echo "no nu.pc.o: build it on the PC"; exit 1; }
-cat nu.c nuchip.c nu.h nureg.h nustat.h install.sh nu.pc.o > .src.c
+cat nu.c nuchip.c nu.h nureg.h nustat.h master.d-nu install.sh nu.pc.o > .src.c
 if cmp -s .src.c .built.c 2>/dev/null; then echo "kernel already carries this nu.c"; exit 0; fi
 cp nu.pc.o nu.o
 cp master.d-nu /etc/master.d/nu

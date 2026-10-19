@@ -1,7 +1,7 @@
 *ident	"nu 0.1 - NetUSBee Ethernet (RTL8019AS on the cartridge port), DLPI"
 *
 * NU - software STREAMS driver, polled: no interrupt reaches the
-* cartridge port. Flags as dp's (fs).
+* cartridge port.  h: on the boot's hardware page (its EDT row), as dp.
 *
 *FLAG	PREFIX	MAJOR	#DEV	DEPENDENCIES/VARIABLES
 hf	nu	45

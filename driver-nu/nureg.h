@@ -50,6 +50,13 @@
 #define NU_P2TCR	0x0d	/* low 5 bits */
 #define NU_P2DCR	0x0e	/* low 7 bits */
 #define NU_P2IMR	0x0f	/* low 7 bits */
+/* page 3 (RTL8019AS only): the EEPROM port and the configuration */
+#define NU_9346CR	0x01
+#define NU_CONFIG0	0x03	/* r */
+#define NU_CONFIG1	0x04
+#define NU_CONFIG2	0x05
+#define NU_CONFIG3	0x06
+#define EEM_CONFIG	0xc0	/* 9346CR: CONFIG1-3 writable */
 /* NE2000 ASIC */
 #define NU_DATA		0x10
 #define NU_RESET	0x1f
@@ -63,6 +70,7 @@
 #define CR_NODMA	0x20
 #define CR_PAGE1	0x40
 #define CR_PAGE2	0x80
+#define CR_PAGE3	(CR_PAGE1 | CR_PAGE2)
 
 /* ISR */
 #define ISR_PRX		0x01

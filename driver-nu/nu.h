@@ -25,6 +25,9 @@ struct nu_stats {
 	unsigned long	polls;
 	unsigned long	initbad;	/* inits whose read-back differed */
 	unsigned long	crmiss;		/* page selects that had to be redone */
+	unsigned long	recover;	/* full re-probes after failed inits */
+	unsigned long	cfgfix;		/* RTL8019AS config registers put back */
+	unsigned long	txdead;		/* frames dropped while the chip was down */
 };
 
 struct nu_softc {
@@ -47,6 +50,9 @@ struct nu_softc {
 	unsigned char	mc[NU_NMC][6];
 	int		mcref[NU_NMC];
 	int		running;
+	int		failrun;	/* failed inits in a row */
+	unsigned char	cfg[3];		/* CONFIG1-3 as first probed (RTL8019AS) */
+	unsigned char	cfgok;		/* cfg holds them */
 	/* the last init read-back that differed: page << 8 | reg, want, got */
 	int		badreg, badwant, badgot;
 	unsigned char	txbuf[NU_MAXFRAME];
@@ -56,6 +62,7 @@ struct nu_softc {
 
 int	nu_probe();		/* (sc) 0 found, -1 none */
 int	nu_init();		/* (sc) 0 or -1 */
+int	nu_recover();		/* (sc) probe again, CONFIG1-3 back, init: 0 or -1 */
 void	nu_stop();		/* (sc) */
 int	nu_txroom();		/* (sc) */
 void	nu_txstart();		/* (sc, len) send sc->txbuf */
