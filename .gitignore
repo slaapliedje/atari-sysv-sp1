@@ -5,6 +5,7 @@ amix/work/
 amix/bash/work/
 amix/vim/work/
 amix/mtools/work/
+amix/nano/work/
 .rsyncpass
 rsync/work/
 driver-*/*.o

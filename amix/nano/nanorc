@@ -1,0 +1,7 @@
+## /usr/local/etc/nanorc - the system-wide settings of nano on Atari
+## System V / AMIX (atari-sysv-sp1).  ~/.nanorc adds to them.
+## The terminal is Latin-1 (no UTF-8 locale here); colours need a TERM
+## whose terminfo has them (xterm-color, xterm-xfree86), ASV's xterm has none.
+
+## Syntax colouring for the usual file types
+include "/usr/local/share/nano/*.nanorc"

@@ -262,6 +262,51 @@ The assembler warns "Bignum too big for f format; truncated" for negative
 single-precision constants. That warning is harmless: the bits come out
 right.
 
+## nano
+
+```sh
+AMIX_SYSROOT=../work/sysroot sh nano/build.sh
+# -> nano/work/nano, and nano/work/nano-9.2-amix.tar to unpack in /
+```
+
+GNU nano 9.2 as a static AMIX program (0.7 MB stripped), built the way
+vim is (`nano/amix-cc`, the mint GCC through Manx's `sysv4-cc`, `rt.c`
+for what AMIX's libc lacks), on an ncurses 6.5 built first the same way:
+static, narrow characters, no C++, no programs, and reading the system's
+own terminfo database (`/usr/share/lib/terminfo`, SVR4's compiled
+format is what ncurses reads; `xterm` there has no colours,
+`xterm-color` and `xterm-xfree86` have 8).  The tar holds
+`/usr/local/bin/nano`, the syntax files in `/usr/local/share/nano` and a
+system nanorc in `/usr/local/etc` that includes them.  No UTF-8 (neither
+system has such a locale), no NLS, no libmagic.  Tested on the TT over
+telnet with a scripted terminal: a file typed, written out and read back.
+
+What it took:
+
+- **ncurses' host tools.** `make_hash` and `make_keys` run on the PC but
+  include the target's `ncurses_cfg.h`, whose `#define ssize_t int`
+  breaks glibc's headers: guarded with `USE_BUILD_CC`.  `select` and
+  `gettimeofday` have no prototypes on AMIX (`nano/amixfix.h`, put ahead
+  of each source with `-include`).
+- **GCC 15.** A pointer type mismatch (ncurses' `twalk` callback) and an
+  implicit `int` (gnulib's 64-bit check in its `stdint.h`) are errors now:
+  `-Wno-incompatible-pointer-types -Wno-implicit-int`.
+- **gnulib wants config.h first.** Its replacement headers refuse any
+  source that included a system header before `config.h`, so for nano
+  `amixfix.h` goes at the end of `config.h` instead.  It also declares
+  `getrlimit`, `fchmod`, `strncasecmp` (gnulib's own, undeclared because
+  AMIX has no `strings.h`) and sets `AVOID_ANY_THREADS` (gnulib's
+  `mbrtowc` otherwise wants a lock from a threads library).
+- **Not in AMIX's libc**: `getprogname`, `gethostname` (SVR4 keeps it in
+  libsocket, with libnsl behind) and `mkstemp`: `rt.c`, the last two
+  over `uname` and `mktemp`.  `basename` and `dirname` are in libgen
+  (`LIBS=-lgen`).
+- **struct stat's times** are `timestruc_t` on AMIX, the same two fields
+  as `struct timespec` under another name; nano's backup code assigns one
+  to the other, so build.sh turns the two assignments into field copies.
+- **sysv4-ld knows `-l` in the sysroot only**: `amix-cc` resolves a `-l`
+  against the `-L` directories itself (the static ncurses).
+
 ## mtools
 
 GNU mtools 4.0.49 as a static AMIX program, for the USB stick's FAT file
