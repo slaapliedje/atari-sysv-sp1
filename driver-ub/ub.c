@@ -237,16 +237,34 @@ long a1, a2, a3, a4, a5, a6, a7, a8;
 
 /* ---- the driver ------------------------------------------------------ */
 
-int
-ubinit()
+static char *
+ub_busname(bus)
+int bus;
+{
+	return bus == UB_LIGHTNING ? "Lightning VME" : bus == UB_NETUSBEE ? "NetUSBee" : "no bus";
+}
+
+/* the chip on the given bus, or -1.  The Lightning VME: its address
+ * register answers (an empty VME slot bus-errors) and the chip behind it
+ * says 0x61xx; the NetUSBee: the cartridge port always answers, the chip
+ * ID decides. */
+static int
+ub_probe(bus)
+int bus;
 {
 	int v;
 
-	/* the Lightning VME: its address register answers (an empty VME
-	 * slot bus-errors) and the chip behind it says 0x61xx */
-	if (ioprobe(IOP_READ | IOP_SHORT, (caddr_t)0xFEFF8004, &v) == 0 && ub_io_init(UB_LIGHTNING) == 0) {
+	if (bus == UB_LIGHTNING && ioprobe(IOP_READ | IOP_SHORT, (caddr_t)0xFEFF8004, &v) != 0)
+		return -1;
+	return ub_io_init(bus);
+}
+
+int
+ubinit()
+{
+	if (ub_probe(UB_LIGHTNING) == 0 || ub_probe(UB_NETUSBEE) == 0) {
 		ub_state = UB_CHIP;
-		cmn_err(CE_CONT, "ub0: ISP1160 USB host controller on the Lightning VME\n");
+		cmn_err(CE_CONT, "ub0: ISP1160 USB host controller on the %s\n", ub_busname(ub_bus));
 	} else
 		cmn_err(CE_CONT, "ub0: no USB host controller\n");
 	return 0;
@@ -309,18 +327,69 @@ int flag, otyp;
 	return 0;
 }
 
+static int ub_udd_registered;
+
 static int
 ub_start()
 {
 	if (ub_state == UB_RUNNING)
 		return 0;
+	if (ub_state == UB_NOCHIP)
+		return ENXIO;
 	usb_init();
-	ub_stor_init();
-	ub_hid_init();
+	if (!ub_udd_registered) {
+		ub_stor_init();
+		ub_hid_init();
+		ub_udd_registered = 1;
+	}
 	if (ub_hcd_init() < 0)
 		return EIO;
 	ub_state = UB_RUNNING;
 	return 0;
+}
+
+/* the stack down: every device gone for its class driver, the host
+ * controller stopped and unregistered, so ub_start can bring it up again
+ * (on another bus, see ub_setbus) */
+static void
+ub_stop()
+{
+	struct usb_device *root;
+	int i;
+
+	if (ub_state != UB_RUNNING)
+		return;
+	if ((root = ub_root_hub()) != (struct usb_device *)0) {
+		for (i = 0; i < root->maxchild; i++) {
+			if (root->children[i])
+				usb_disconnect(root->children[i]);
+			root->children[i] = NULL;
+		}
+		if (root->privptr)
+			usb_hub_disconnect(root);
+	}
+	ub_hcd_stop();
+	ub_state = UB_CHIP;
+}
+
+/* the chip on another bus (the stack stopped first); when it is not
+ * there, back to the one in use */
+static int
+ub_setbus(bus)
+int bus;
+{
+	int old = ub_bus;
+
+	if (ub_state == UB_RUNNING && bus == ub_bus)
+		return 0;
+	ub_stop();
+	if (ub_probe(bus) == 0) {
+		ub_state = UB_CHIP;
+		cmn_err(CE_CONT, "ub0: ISP1160 USB host controller on the %s\n", ub_busname(bus));
+		return 0;
+	}
+	ub_state = old && ub_probe(old) == 0 ? UB_CHIP : UB_NOCHIP;
+	return ENXIO;
 }
 
 static void
@@ -544,14 +613,22 @@ int cmd, arg, mode;
 
 	switch (cmd) {
 	case UBIOC_STATUS:
-		UB_URVAL1 = ub_state;
+		UB_URVAL1 = ub_state | (ub_bus << 8);
 		return 0;
 	case UBIOC_START:
 		ub_lock();
-		if ((r = ub_start()) == 0)
+		r = 0;
+		if (arg == UB_LIGHTNING || arg == UB_NETUSBEE)
+			r = ub_setbus(arg);
+		if (r == 0 && (r = ub_start()) == 0)
 			ub_poll_hubs();
 		ub_unlock();
 		return ub_err(r);
+	case UBIOC_STOP:
+		ub_lock();
+		ub_stop();
+		ub_unlock();
+		return 0;
 	case UBIOC_POLL:
 		if (ub_state != UB_RUNNING)
 			return ub_err(ENXIO);

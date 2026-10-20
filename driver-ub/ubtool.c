@@ -7,6 +7,8 @@
  *   ubtool stor             the mass storage devices
  *   ubtool read UNIT LBA N  N blocks from LBA of storage UNIT, hex dump
  *   ubtool dd UNIT LBA N    the same, raw, to stdout
+ *   ubtool start netusbee   the same on the NetUSBee (the Lightning VME is the
+ *                           default when both are in); ubtool stop = the stack down
  *   ubtool daemon           serve the disk devices and poll the hubs (UBIOC_WORK)
  *   ubtool hid              the keyboards and mice
  *   ubtool ikbd HH ...      bytes as from the keyboard controller (root)
@@ -124,15 +126,29 @@ char **argv;
 	int n, i, r;
 
 	if (argc < 2) {
-		printf("usage: ubtool start|poll [N]|devs|stor|read UNIT LBA N|dd UNIT LBA N|daemon|hid|ikbd HH ...\n");
+		printf("usage: ubtool start [lightning|netusbee]|stop|poll [N]|devs|stor|read UNIT LBA N|dd UNIT LBA N|daemon|hid|ikbd HH ...\n");
 		return 2;
 	}
 	if ((fd = open("/dev/ub0", O_RDWR)) < 0)
 		fail("/dev/ub0");
 	if (strcmp(argv[1], "start") == 0) {
-		if (ioctl(fd, UBIOC_START, 0) < 0)
+		n = 0;
+		if (argc > 2) {
+			if (strcmp(argv[2], "lightning") == 0)
+				n = UB_BUS_LIGHTNING;
+			else if (strcmp(argv[2], "netusbee") == 0)
+				n = UB_BUS_NETUSBEE;
+			else {
+				printf("ubtool start: the bus is lightning or netusbee\n");
+				return 2;
+			}
+		}
+		if (ioctl(fd, UBIOC_START, n) < 0)
 			fail("UBIOC_START");
 		devs();
+	} else if (strcmp(argv[1], "stop") == 0) {
+		if (ioctl(fd, UBIOC_STOP, 0) < 0)
+			fail("UBIOC_STOP");
 	} else if (strcmp(argv[1], "poll") == 0) {
 		n = argc > 2 ? (int)number(argv[2]) : 1;
 		for (i = 0; i < n; i++) {
@@ -180,7 +196,8 @@ char **argv;
 				fail("UBIOC_WORK");
 	} else {
 		r = ioctl(fd, UBIOC_STATUS, 0);
-		printf("state %d\n", r);
+		printf("state %d on the %s\n", r & 0xff, (r >> 8) == UB_BUS_LIGHTNING ? "Lightning VME" :
+		    (r >> 8) == UB_BUS_NETUSBEE ? "NetUSBee" : "no bus");
 	}
 	return 0;
 }

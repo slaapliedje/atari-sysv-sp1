@@ -18,8 +18,9 @@ NetUSBee, which both carry a Philips ISP1160.
                        IKBD: their reports become the keyboard controller's
                        bytes, put into the kernel's ikbd ring (the X server
                        reads /dev/ikbd) or given to the console's termin
-    ubtool.c           its user side: start, poll, devs, stor, read, daemon,
-                       hid (the keyboards and mice), ikbd (inject bytes)
+    ubtool.c           its user side: start [lightning|netusbee], stop, poll,
+                       devs, stor, read, daemon, hid (the keyboards and
+                       mice), ikbd (inject bytes)
     ub.init            /etc/init.d/ub: `ubtool daemon` at boot (S75ub, K75ub)
     ubuser.c           user-space harness: ubuser [-l|-n] [SECONDS]
     ubstor.[ch]        mass storage, bulk-only: probe, CBW/CSW transport,
@@ -30,8 +31,8 @@ NetUSBee, which both carry a Philips ISP1160.
 Build the harness on the PC: m68k-cbm-sysv4-gcc -O -I. -o ubuser
 ubuser.c usb.c hub.c ucd.c udd.c isp116x.c ub_io.c ubstor.c (-DUB_DEBUG for
 the trace).  It talks to the chip through /dev/mem, so it runs from TT-RAM
-and the cartridge port sees clean cycles; the kernel driver will use the
-nu driver's frozen-cache accesses for the NetUSBee.
+and the cartridge port sees clean cycles; the kernel driver uses the
+nu driver's frozen-cache accesses for the NetUSBee (ub_io.c, ub_nuacc).
 
 Byte order, measured: register words come swapped on the Lightning's
 VME bus and as they are on the NetUSBee (ub_io_init reads HcChipID both
@@ -129,3 +130,26 @@ once.  On the TT with a Wooting Two HE and a Logitech M-UV55 on the
 Lightning: both probe (ubtool hid: polls, reports), the daemon takes
 about 3% of the CPU polling them, `ubtool ikbd f8 0 0` (UBIOC_IKBD,
 root) goes through to X.  Typing and moving: the user's test.
+
+2026-10-20, ub 0.9: the NetUSBee's USB side from the kernel.  The
+cartridge port shows the card the 68030's next instruction fetch on the
+address lines it samples (the nu driver's finding, driver-nu/nu.c), so
+in the kernel each access to the card is nu_acc's dance (ub_io.c,
+ub_nuacc): a 22-byte loop run once on a pad in ST-RAM with the same
+A1-A13 as the card address, which brings it into the instruction
+cache, then with the cache frozen (CACR FI) on the card, a pad store
+right before and after, at spl7; a word form for the 16-bit data read
+at 0xFA8000.  The two halves of a register access (the latched byte,
+then the command or data read) are at spl7 together, as the Ethernet
+side's register reads latch a byte too.  ubinit probes the Lightning
+VME first (ioprobe: an empty slot bus-errors), then the NetUSBee (the
+cartridge port always answers: the chip ID decides).  One host
+controller runs at a time: `ubtool start netusbee` (UBIOC_START with
+the bus) stops the stack (ub_stop: every device gone for its class
+driver, the controller unregistered), probes the chip on the other bus
+and starts again there; `ubtool stop` (UBIOC_STOP) takes it down, the
+daemon's next turn brings it up on the same bus; ubtool status says
+which bus.  Speed on the NetUSBee: each access costs the dance (tens
+of microseconds), a 64-byte packet a few milliseconds; runs of FIFO
+words with the cache frozen once (as nu_accrd/nu_accwr) are the next
+step if storage through the cartridge port is wanted.

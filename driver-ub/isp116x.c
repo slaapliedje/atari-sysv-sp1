@@ -2034,6 +2034,14 @@ ub_hcd_init(void)
 	return 0;
 }
 
+/* the controller stopped and forgotten: ub_hcd_init can run again */
+void
+ub_hcd_stop(void)
+{
+	ucd_unregister(&netusbee_uif);
+	root_hub_dev = NULL;
+}
+
 /* the root hub's device, for the poll */
 struct usb_device *
 ub_root_hub(void)

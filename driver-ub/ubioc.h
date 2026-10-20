@@ -13,6 +13,12 @@
 #define UBIOC_WORK	(UBIOC | 8)	/* the daemon: serve disk requests, poll, wait */
 #define UBIOC_HID	(UBIOC | 9)	/* arg: struct ub_hidinfo[UB_NHID] */
 #define UBIOC_IKBD	(UBIOC | 10)	/* arg: struct ub_ikbd, bytes as from the IKBD (root) */
+#define UBIOC_STOP	(UBIOC | 11)	/* the stack down (the daemon brings it up again) */
+
+/* UBIOC_START's arg: the bus to use, 0 = the one found at boot (the
+ * Lightning VME first); UBIOC_STATUS returns ub_state | bus << 8 */
+#define UB_BUS_LIGHTNING	1
+#define UB_BUS_NETUSBEE		2
 
 #define UB_NDEV		32		/* USB_MAX_DEVICE */
 #define UB_NSTOR	4		/* UB_STOR_MAX */

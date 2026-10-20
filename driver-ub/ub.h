@@ -30,7 +30,10 @@ extern void splx();
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#define ub_printf	printf
+/* the harness prints through write(2), unbuffered, so a log shows where
+ * it is while it runs (and no FILE is touched: see ubtool.c) */
+void ub_uprintf(char *fmt, ...);
+#define ub_printf	ub_uprintf
 #endif
 
 #ifndef NULL
