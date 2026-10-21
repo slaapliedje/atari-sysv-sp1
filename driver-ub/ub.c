@@ -328,6 +328,7 @@ int flag, otyp;
 }
 
 static int ub_udd_registered;
+static int ub_held;		/* UBIOC_STOP: the daemon leaves the stack down */
 
 static int
 ub_start()
@@ -617,6 +618,7 @@ int cmd, arg, mode;
 		return 0;
 	case UBIOC_START:
 		ub_lock();
+		ub_held = 0;
 		r = 0;
 		if (arg == UB_LIGHTNING || arg == UB_NETUSBEE)
 			r = ub_setbus(arg);
@@ -626,6 +628,7 @@ int cmd, arg, mode;
 		return ub_err(r);
 	case UBIOC_STOP:
 		ub_lock();
+		ub_held = 1;
 		ub_stop();
 		ub_unlock();
 		return 0;
@@ -814,6 +817,10 @@ ub_work()
 	int r = 0, hid = 0;
 
 	ub_lock();
+	if (ub_held) {
+		ub_unlock();
+		return 0;
+	}
 	if (ub_state != UB_RUNNING)
 		r = ub_start();
 	if (r == 0) {

@@ -3,7 +3,10 @@
  * NetUSBee (-n): sets the host controller going, polls the hubs for a
  * while, lists what was found.
  *
- *   ubuser [-l|-n] [SECONDS]
+ *   ubuser [-l|-n] [-h] [SECONDS]
+ *
+ * -h: then poll the first HID boot device's interrupt pipe for as long
+ *     again, printing every report (the kernel's ubhid does this).
  */
 #include "ub.h"
 #include "usb.h"
@@ -29,12 +32,75 @@ ub_uprintf(char *fmt, ...)
 long ub_hcd_init(void);
 struct usb_device *ub_root_hub(void);
 
+/* the kernel's ubhid probe + poll, flattened: one HID boot interface */
+static void
+hid_poll(secs)
+int secs;
+{
+	struct usb_device *dev = NULL;
+	struct usb_interface *iface;
+	struct usb_endpoint_descriptor *ep = NULL;
+	unsigned long pipe;
+	unsigned char buf[8];
+	long act, r, maxp;
+	int i, j, ifnum = 0, polls = 0, reports = 0, errs = 0, naks = 0;
+
+	for (i = 0; i < USB_MAX_DEVICE && !ep; i++) {
+		if ((dev = usb_get_dev_index(i)) == NULL)
+			continue;
+		for (j = 0; j < dev->config.no_of_if && !ep; j++) {
+			int k;
+			iface = &dev->config.if_desc[j];
+			if (iface->desc.bInterfaceClass != USB_CLASS_HID ||
+			    iface->desc.bInterfaceSubClass != USB_SUB_HID_BOOT)
+				continue;
+			for (k = 0; k < iface->desc.bNumEndpoints; k++)
+				if ((iface->ep_desc[k].bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) == USB_ENDPOINT_XFER_INT &&
+				    (iface->ep_desc[k].bEndpointAddress & USB_DIR_IN)) {
+					ep = &iface->ep_desc[k];
+					ifnum = j;
+				}
+		}
+	}
+	if (ep == NULL) {
+		ub_uprintf("hid: no HID boot interface with an interrupt IN endpoint\n");
+		return;
+	}
+	pipe = usb_rcvintpipe(dev, (long)(ep->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK));
+	maxp = usb_maxpacket(dev, pipe);
+	ub_uprintf("hid: device %d interface %d protocol %d, endpoint %d, maxp %ld, every %d ms\n",
+	    (int)dev->devnum, ifnum, iface->desc.bInterfaceProtocol,
+	    ep->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK, maxp, ep->bInterval);
+	r = usb_set_protocol(dev, ifnum, 0);
+	ub_uprintf("hid: set_protocol(boot) = %ld\n", r);
+	r = usb_set_idle(dev, ifnum, 0, 0);
+	ub_uprintf("hid: set_idle(0) = %ld\n", r);
+	for (i = 0; i < secs * 100; i++) {
+		polls++;
+		act = 0;
+		r = usb_bulk_msg(dev, pipe, buf, maxp > 8 ? 8 : maxp, &act, USB_CNTL_TIMEOUT, 0);
+		if (r < 0) {
+			if (dev->status & USB_ST_NAK_REC) naks++; else errs++;
+			if (polls <= 5 || (errs <= 5 && !(dev->status & USB_ST_NAK_REC)))
+				ub_uprintf("hid: poll %d: ret %ld status %lx act %ld\n", polls, r, dev->status, act);
+		} else {
+			reports++;
+			ub_uprintf("hid: poll %d: ret %ld act %ld:", polls, r, act);
+			for (j = 0; j < act && j < 8; j++)
+				ub_uprintf(" %02x", buf[j]);
+			ub_uprintf("\n");
+		}
+		mdelay(10);
+	}
+	ub_uprintf("hid: %d polls, %d reports, %d NAKs, %d other errors\n", polls, reports, naks, errs);
+}
+
 int
 main(argc, argv)
 int argc;
 char **argv;
 {
-	int bus = UB_LIGHTNING, secs = 5, i, t;
+	int bus = UB_LIGHTNING, secs = 5, i, t, hid = 0;
 	struct usb_device *d;
 
 	for (i = 1; i < argc; i++) {
@@ -42,6 +108,8 @@ char **argv;
 			bus = UB_NETUSBEE;
 		else if (strcmp(argv[i], "-l") == 0)
 			bus = UB_LIGHTNING;
+		else if (strcmp(argv[i], "-h") == 0)
+			hid = 1;
 		else
 			secs = atoi(argv[i]);
 	}
@@ -100,5 +168,7 @@ char **argv;
 				    sec + 3, sec[11] | (sec[12] << 8), sec[13]);
 		}
 	}
+	if (hid)
+		hid_poll(secs);
 	return 0;
 }
