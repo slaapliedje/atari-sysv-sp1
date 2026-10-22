@@ -40,7 +40,7 @@ def run(cmd, **kw):
 class Hatari:
     """One emulated TT, headless, in its own session (killed as a group)."""
 
-    def __init__(self, args, work, disks, telnet=None, extra=(), display=110, net=True):
+    def __init__(self, args, work, disks, telnet=None, extra=(), display=110, net=True, rtc_back=0):
         self.work = work; self.display = ':%d' % display
         os.makedirs(os.path.join(work, 'home'), exist_ok=True)
         self.log = open(os.path.join(work, 'hatari.log'), 'w')
@@ -54,7 +54,7 @@ class Hatari:
                '--fpu', '68882', '--memsize', '4', '--ttram', '16',
                # ASV reads the TT's clock chip two years ahead of what Hatari
                # puts in it (2028 for 2026): the files it writes get this year
-               '--rtc-year', str(time.localtime().tm_year - 2)]
+               '--rtc-year', str(time.localtime().tm_year - rtc_back)]
         for i, d in sorted(disks.items()):
             cmd += ['--scsi', '%d=%s' % (i, d)]
         if net:
@@ -241,7 +241,9 @@ def stage_1(a, w):
     base, new, pay, ex = (os.path.join(w, n) for n in ('base-patched.img', 'new.img', 'payload.img', 'exchange.img'))
     with open(ex, 'wb') as f:
         f.truncate(16 << 20)
-    h = Hatari(a, os.path.join(w, 'run1'), {0: base, 1: new, 2: pay, 3: ex})
+    # the stock kernel reads the clock chip's year two years ahead (the
+    # CLOCK patch goes in during this run); the kernels after it read it right
+    h = Hatari(a, os.path.join(w, 'run1'), {0: base, 1: new, 2: pay, 3: ex}, rtc_back=2)
     try:
         ok = wait_marker(ex, 'STAGE1 DONE', 'STAGE1 FAILED', a.deadline, h, shots=True)
         time.sleep(20)       # the last sync

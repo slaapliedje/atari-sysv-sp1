@@ -25,6 +25,10 @@ if [ ! -f /rel/phase1.done ]; then
 	tar xf /dev/rdsk/c2d0sf rel/sp1 rel/edt rel/stock rel/S75rpc.stock rel/vtoc-2g.dat rel/stage2.sh rel/cleanup.sh rel/manx-profile || die "payload tar"
 	ls /rel; df -t /
 	flush
+	echo "== the clock driver: the chip's year from 1968, as TOS counts it"
+	cp /boot/CLOCK /stand/CLOCK.pre-1968 || die "CLOCK aside"
+	cp /rel/edt/CLOCK.1968 /boot/CLOCK || die "CLOCK.1968"
+	ls -l /boot/CLOCK /stand/CLOCK.pre-1968
 	echo "== driver objects into /boot (buildsys itself waits for the probes)"
 	mv /sbin/buildsys /sbin/buildsys.real || die "buildsys aside"
 	echo "exit 0" > /sbin/buildsys; chmod 755 /sbin/buildsys

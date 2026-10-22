@@ -57,11 +57,16 @@ disk on SCSI 3 (`exchange.img`), which `build.py` watches.
 - **pack**: a sparse copy as `HD0.bin`, its SHA-256, `NE4.img` and
   `card/`, and all of it in `~/dev/asv-release/asv-sp1-card.zip`.
 
-The emulated clock matters: Hatari's TT clock chip is read two years
-ahead by Atari System V, so `build.py` sets it two years back, and the
-scripts never set the date themselves.  A guest clock in 1970 (what an
-ASV `date` with a two-digit year 26 gives) makes `login` demand a new
-root password, and the files of the build carry the wrong year.
+The clock matters.  The stock clock driver reads the TT's clock chip
+two years ahead (TOS counts the chip's year from 1968, the driver from
+1970: `tools/ttntp/README.md`), on a real TT as in Hatari, so stage 1
+puts the patched driver (`patch-clock.py`, made on the PC from the
+stock `/boot/CLOCK`) into `/boot` before any kernel is linked, keeping
+the original as `/stand/CLOCK.pre-1968`.  `build.py` sets Hatari's
+clock two years back only for the stock kernel's boot in stage 1, and
+the scripts never set the date themselves: a guest clock in 1970 (what
+an ASV `date` with a two-digit year 26 gives) makes `login` demand a
+new root password, and the files of the build carry the wrong year.
 
 The loader probe templates are read from the stock `/stand` (BFS) with
 `~/dev/asv-release/bfs.py`; the stock root slice starts at sector 200

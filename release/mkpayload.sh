@@ -30,6 +30,11 @@ cp "$here/stage1.sh" "$here/stage2.sh" "$here/cleanup.sh" "$here/vtoc-2g.dat" "$
 # what the stock image had, to put back
 python3 -I "$sp1/tools/ufs.py" "$STOCK" 102400 get /etc/rc2.d/S75rpc "$p/S75rpc.stock"
 python3 -I "$sp1/tools/ufs.py" "$STOCK" 102400 get /etc/inet/hosts.net "$p/stock/hosts.net"
+# the clock driver with the chip's year counted from 1968, as TOS counts
+# it (tools/ttntp/README.md): the stock one reads a TT's clock two years
+# ahead.  Small, so it rides with the probes in rel/edt (phase 1).
+python3 -I "$sp1/tools/ufs.py" "$STOCK" 102400 get /boot/CLOCK "$p/stock/CLOCK"
+python3 -I "$sp1/tools/ttntp/patch-clock.py" "$p/stock/CLOCK" "$p/edt/CLOCK.1968" >/dev/null
 # the userland
 f=$p/files
 need "$REL/amix/amx.tar"; cp "$REL/amix/amx.tar" "$f/amx.tar"

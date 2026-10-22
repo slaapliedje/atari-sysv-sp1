@@ -41,6 +41,9 @@ The system comes up in X (the stock X11R4 server on the TT's screen);
 `init 2` from a console login gives a plain text system, and editing
 /etc/inittab (is:4: -> is:2:) makes that the default.
 
+The clock is read as TOS sets it (the stock driver was two years
+ahead); the time zone is EST5EDT until you edit /etc/TIMEZONE.
+
 Network: /etc/inet/hosts.net gets the address from DHCP at every boot;
 `ifconfig en0` shows it, `netstat -rn` the route.  Without a DHCP server
 the static line in hosts.net stays in force.  Without a DaynaPORT the
