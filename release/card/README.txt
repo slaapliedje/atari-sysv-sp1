@@ -1,0 +1,77 @@
+Atari System V for the TT030 - ready-to-run card image
+=======================================================
+
+What this is
+------------
+Atari System V Release 4.0 (UniSoft's SVR4 for the TT030, 1991-92) with
+the unofficial Service Pack 1 already installed:
+
+  - drivers for today's hardware: the DaynaPORT network device that
+    ZuluSCSI and BlueSCSI emulate (WiFi), the NetUSBee (Ethernet and USB:
+    sticks, keyboard, mouse), the Lightning VME's USB, the TT's own
+    sound and MIDI ports
+  - the address, name servers and route from DHCP at boot
+  - a kernel that boots with up to 96 MB of TT-RAM
+  - Manx, a web browser with HTTPS (text mode and X11), and its mail
+    program
+  - bash 5.2, vim 9.2, nano 9.2, GNU tar, gzip, less, grep, make, zlib,
+    mtools, rsync, and apkg (the AMIX package client) for more
+
+The card
+--------
+On a FAT32 card for a ZuluSCSI or BlueSCSI:
+
+  HD0.bin        the system disk, SCSI ID 0 (2 GiB)
+  NE4.img        an empty file: it makes the DaynaPORT appear at SCSI ID 4
+  zuluscsi.ini   or bluescsi.ini: put your WiFi name and password in
+                 (2.4 GHz networks only)
+
+Set the TT's NVRAM boot preference to "Atari System V" if the machine
+has one from before (the loader prints "Boot:" and waits otherwise).
+
+First boot
+----------
+The boot takes about seven minutes.  The kernel on the image was built
+for a TT with the DaynaPORT; when the loader finds a different set of
+devices (a NetUSBee but no DaynaPORT, or neither) the boot rebuilds the
+kernel first, which adds a few minutes and prints "/stand/unix is being
+created".  Log in as root at the console; root has no password - set
+one with `passwd` and add users with `useradd`.
+The system comes up in X (the stock X11R4 server on the TT's screen);
+`init 2` from a console login gives a plain text system, and editing
+/etc/inittab (is:4: -> is:2:) makes that the default.
+
+Network: /etc/inet/hosts.net gets the address from DHCP at every boot;
+`ifconfig en0` shows it, `netstat -rn` the route.  Without a DHCP server
+the static line in hosts.net stays in force.  Without a DaynaPORT the
+boot says so ("/dev/en0: No such device", "slink failed") and goes on.
+telnet and ftp are open for your own LAN as the stock system had them.
+A /core in the root directory after every boot is the stock NFS mountd
+crashing at start: harmless, and as it was.
+
+Manx
+----
+  manx URL           the text browser (q quits, ? help)
+  xmanx URL          the same under X (/usr/bin/X11)
+  manxmail           IMAP/SMTP mail, see manxmail -h
+HTTPS works once a user has run `manxtrust seed` once (type for a while:
+the machine has no hardware randomness).  The CA bundle is
+/usr/local/share/manx/cacert.pem, named by /etc/profile.manx.
+
+NetUSBee
+--------
+Ethernet: the driver is in the kernel as nu0; `sh
+/usr/local/lib/netusbee/nuup.sh ADDRESS NETMASK` brings it up by hand
+(or `dhcpc -n /dev/nu0` to ask DHCP).  USB: `ubtool start netusbee`
+moves the USB stack to the card; `ubtool devs` lists what it found,
+`ubtool hid` the keyboard and mouse.  A USB stick appears as
+/dev/dsk/usb0 (`mdir u:` with mtools).  Power-hungry devices such as a
+backlit keyboard need a powered hub: the card feeds them from the
+cartridge port.
+
+More software
+-------------
+  apkg update; apkg search NAME; apkg install NAME
+installs AMIX packages from pkg.amigaux.org into /opt/amix.
+
+Source and notes: github.com/slaapliedje/atari-sysv-sp1 (GPL-2.0).

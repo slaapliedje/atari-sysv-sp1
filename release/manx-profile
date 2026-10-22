@@ -1,0 +1,7 @@
+# /etc/profile.manx - Manx on this system (sourced by /etc/profile).
+# HTTPS: the roots come from the CA bundle below (~/.manx/roots.bin is
+# built from it on first use); the random seed is per user: run
+#   manxtrust seed
+# once and type for a while.
+MANX_CAFILE=/usr/local/share/manx/cacert.pem
+export MANX_CAFILE
