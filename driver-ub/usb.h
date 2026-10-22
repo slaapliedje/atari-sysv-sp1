@@ -45,8 +45,10 @@
 #define USB_CNTL_TIMEOUT 		100	/* 100ms timeout */
 #define USB_BUFSIZ			512
 
+/* a configuration descriptor's size at most (wTotalLength can say 64 KB;
+ * a device of this bus's class has a few hundred bytes) */
 #if !defined(USB_CONFIG_BUFFER_SIZE)
-#define USB_CONFIG_BUFFER_SIZE 65536
+#define USB_CONFIG_BUFFER_SIZE 4096
 #endif
 
 /*
@@ -241,6 +243,18 @@ void		usb_main		(void);
 void 		usb_init		(void); /* initialize the USB Controller */
 void 		usb_stop		(void); /* stop the USB Controller */
 
+
+/* the device table and the configuration descriptor buffer: in the
+ * kernel they are taken from it the first time the stack starts on a
+ * host controller that answered (ub.c, ub_mem), so a TT without one
+ * gives them no memory; the harness has them static */
+#ifdef _KERNEL
+extern struct usb_device *usb_dev;
+extern unsigned char *usb_cfgbuf;
+#else
+extern struct usb_device usb_dev[USB_MAX_DEVICE];
+extern unsigned char usb_cfgbuf[USB_CONFIG_BUFFER_SIZE];
+#endif
 
 long		usb_set_protocol	(struct usb_device *dev, long ifnum, long protocol);
 long 		usb_set_idle		(struct usb_device *dev, long ifnum, long duration,

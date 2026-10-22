@@ -22,6 +22,7 @@ NetUSBee, which both carry a Philips ISP1160.
                        devs, stor, read, daemon, hid (the keyboards and
                        mice), ikbd (inject bytes)
     ub.init            /etc/init.d/ub: `ubtool daemon` at boot (S75ub, K75ub)
+    ub.default         /etc/default/ub: the bus to start on (BUS=netusbee)
     ubuser.c           user-space harness: ubuser [-l|-n] [SECONDS]
     ubstor.[ch]        mass storage, bulk-only: probe, CBW/CSW transport,
                        TEST UNIT READY, INQUIRY, READ CAPACITY, READ/WRITE 10
@@ -153,3 +154,22 @@ which bus.  Speed on the NetUSBee: each access costs the dance (tens
 of microseconds), a 64-byte packet a few milliseconds; runs of FIFO
 words with the cache frozen once (as nu_accrd/nu_accwr) are the next
 step if storage through the cartridge port is wanted.
+
+2026-10-22: a TT without a host controller gives the driver no memory.
+The stack's big arrays were static: U-Boot's 64 KB configuration
+descriptor buffer, the 32-device table (82 KB), the 16 KB raw I/O bounce
+buffer and the NetUSBee's 32 KB access pad, 200 KB of kernel bss on
+every machine.  Now `ub_mem` takes the first three from the kernel
+(kmem_alloc) the first time the stack starts, which only happens after
+`ubinit` found a chip, and `ub_io_init` takes the pad when the NetUSBee
+is the bus (KM_NOSLEEP: that runs from `ubinit` at boot; kmem_init is in
+mlsetup, long before the io_init table).  The descriptor buffer is 4 KB
+now (wTotalLength is 16 bits, but nothing on this bus comes near).  The
+harness keeps the arrays static (no malloc in AMIX-built ASV programs).
+What is left static: 5 KB.  The daemon follows the same rule: `ubtool
+status` exits 1 when there is no controller, `ubtool daemon` exits at
+once then, and /etc/init.d/ub does not start it.  The Lightning is
+probed with ioprobe (an empty VME slot bus-errors), the NetUSBee by its
+chip ID; the kernel's own choice when both answer is the Lightning,
+/etc/default/ub (`BUS=netusbee`) makes the rc script start the other one
+first.  install.sh puts the file in only when there is none.

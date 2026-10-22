@@ -4,11 +4,24 @@
 # the bus, serves the disk devices (/dev/dsk/usbN, /dev/rdsk/usbN, the
 # ub: drives of mtools) and polls the hubs.  Without it a disk open
 # fails with ENXIO.  Linked as /etc/rc2.d/S75ub and /etc/rc0.d/K75ub.
+# /etc/default/ub names the bus to start on (BUS=netusbee|lightning)
+# when the TT has both; without it the kernel picks the Lightning.
 pid=`/usr/bin/ps -e | /usr/bin/grep 'ubtool$' | /usr/bin/sed -e 's/^  *//' -e 's/ .*//'`
 case $1 in
 'start')
-	if [ "${pid}" = "" -a -x /usr/bin/ubtool -a -c /dev/ub0 ]
+	# no host controller (ubtool status exits 1): no daemon, no memory
+	if [ "${pid}" = "" -a -x /usr/bin/ubtool -a -c /dev/ub0 ] &&
+	   /usr/bin/ubtool status >/dev/null 2>&1
 	then
+		BUS=
+		[ -r /etc/default/ub ] && . /etc/default/ub
+		if [ "${BUS}" != "" ]
+		then
+			# the stack up on that bus first; when the bus is not
+			# there the kernel stays on its own choice and the
+			# daemon starts the stack there
+			/usr/bin/ubtool start ${BUS} >/dev/null 2>&1
+		fi
 		/usr/bin/nohup /usr/bin/ubtool daemon </dev/null >/dev/null 2>&1 &
 	fi
 	;;

@@ -7,9 +7,13 @@
  *   ubtool stor             the mass storage devices
  *   ubtool read UNIT LBA N  N blocks from LBA of storage UNIT, hex dump
  *   ubtool dd UNIT LBA N    the same, raw, to stdout
- *   ubtool start netusbee   the same on the NetUSBee (the Lightning VME is the
- *                           default when both are in); ubtool stop = the stack down
- *   ubtool daemon           serve the disk devices and poll the hubs (UBIOC_WORK)
+ *   ubtool start netusbee   the same on the NetUSBee (the kernel's own default
+ *                           is the Lightning VME when both are in; at boot
+ *                           /etc/init.d/ub starts the bus /etc/default/ub
+ *                           names); ubtool stop = the stack down
+ *   ubtool daemon           serve the disk devices and poll the hubs (UBIOC_WORK);
+ *                           exits at once when there is no host controller
+ *   ubtool status           the state and the bus; exit 1 = no host controller
  *   ubtool hid              the keyboards and mice
  *   ubtool ikbd HH ...      bytes as from the keyboard controller (root)
  */
@@ -189,6 +193,13 @@ char **argv;
 		if (ioctl(fd, UBIOC_IKBD, &k) < 0)
 			fail("UBIOC_IKBD");
 	} else if (strcmp(argv[1], "daemon") == 0) {
+		/* nothing to serve on a TT without a host controller: the
+		 * process would only cost memory and a wakeup every half
+		 * second */
+		if ((ioctl(fd, UBIOC_STATUS, 0) & 0xff) == UB_NOCHIP) {
+			printf("ubtool daemon: no USB host controller\n");
+			return 1;
+		}
 		/* each call serves what is queued, polls the hubs and waits
 		 * for the next request, half a second at most */
 		for (;;)
@@ -198,6 +209,8 @@ char **argv;
 		r = ioctl(fd, UBIOC_STATUS, 0);
 		printf("state %d on the %s\n", r & 0xff, (r >> 8) == UB_BUS_LIGHTNING ? "Lightning VME" :
 		    (r >> 8) == UB_BUS_NETUSBEE ? "NetUSBee" : "no bus");
+		if ((r & 0xff) == UB_NOCHIP)
+			return 1;
 	}
 	return 0;
 }

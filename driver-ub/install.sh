@@ -1,7 +1,7 @@
 # install.sh - build the ub driver (USB: the ISP1160 on the Lightning VME,
 # the NetUSBee next) into the kernel, make /dev/ub0 and the disk devices,
 # and install ubtool with its rc script (ub.init: `ubtool daemon` at
-# boot, /etc/rc2.d/S75ub).  Run as root:
+# boot, /etc/rc2.d/S75ub; /etc/default/ub names the bus).  Run as root:
 #   sh install.sh
 # Then reboot, or `/etc/init.d/ub start` if only the daemon changed.  The
 # object comes built on the PC (../kbuild.sh driver-ub/ub.c, GCC 2.7.2
@@ -21,10 +21,12 @@ if [ -f ubtool ]; then
 	cp ubtool /usr/bin/ubtool && chmod 755 /usr/bin/ubtool
 fi
 cp ub.init /etc/init.d/ub && chmod 744 /etc/init.d/ub
+# the settings file is the machine's own once it exists
+[ -f /etc/default/ub ] || { cp ub.default /etc/default/ub && chmod 644 /etc/default/ub; }
 rm -f /etc/rc2.d/S75ub /etc/rc0.d/K75ub
 ln /etc/init.d/ub /etc/rc2.d/S75ub
 ln /etc/init.d/ub /etc/rc0.d/K75ub
-cat ub.c ub.h ub_io.c usb.c hub.c ucd.c udd.c isp116x.c isp116x.h ubstor.c ubstor.h ubhid.c ubhid.h ubioc.h master.d-ub ub.pc.o > .src.c
+cat ub.c ub.h ub_io.c usb.c usb.h usb_defs.h usb_api.h hub.c hub.h ucd.c udd.c isp116x.c isp116x.h ubstor.c ubstor.h ubhid.c ubhid.h ubioc.h master.d-ub ub.pc.o > .src.c
 if cmp -s .src.c .built.c 2>/dev/null; then echo "kernel already carries this ub; the daemon's rc script is in"; exit 0; fi
 cp ub.pc.o ub.o
 cp master.d-ub /etc/master.d/ub

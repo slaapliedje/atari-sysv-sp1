@@ -62,9 +62,11 @@ NetUSBee
 --------
 Ethernet: the driver is in the kernel as nu0; `sh
 /usr/local/lib/netusbee/nuup.sh ADDRESS NETMASK` brings it up by hand
-(or `dhcpc -n /dev/nu0` to ask DHCP).  USB: `ubtool start netusbee`
-moves the USB stack to the card; `ubtool devs` lists what it found,
-`ubtool hid` the keyboard and mouse.  A USB stick appears as
+(or `dhcpc -n /dev/nu0` to ask DHCP).  USB: the stack starts on the
+card at boot (/etc/default/ub; `ubtool start lightning` moves it to a
+Lightning VME); `ubtool devs` lists what it found, `ubtool hid` the
+keyboard and mouse.  Without a card the USB driver stays idle and takes
+no memory.  A USB stick appears as
 /dev/dsk/usb0 (`mdir u:` with mtools).  Power-hungry devices such as a
 backlit keyboard need a powered hub: the card feeds them from the
 cartridge port.

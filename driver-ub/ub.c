@@ -330,13 +330,42 @@ int flag, otyp;
 static int ub_udd_registered;
 static int ub_held;		/* UBIOC_STOP: the daemon leaves the stack down */
 
+#define UB_BOUNCE	(16 * 1024)	/* a raw request's kernel buffer */
+static char *ub_bounce;
+
+/* The stack's memory, taken from the kernel the first time the stack
+ * starts: the device table (32 devices, 82 KB), the configuration
+ * descriptor buffer and the raw I/O bounce buffer.  Static arrays would
+ * sit in the kernel's bss on every TT, with or without a host
+ * controller (the NetUSBee's access pad is ub_io_init's, taken when
+ * that card is found). */
+static int
+ub_mem()
+{
+	if (usb_dev != (struct usb_device *)0)
+		return 0;
+	usb_dev = (struct usb_device *)kmem_alloc(sizeof(struct usb_device) * USB_MAX_DEVICE, KM_SLEEP);
+	usb_cfgbuf = (unsigned char *)kmem_alloc(USB_CONFIG_BUFFER_SIZE, KM_SLEEP);
+	ub_bounce = (char *)kmem_alloc(UB_BOUNCE, KM_SLEEP);
+	if (usb_dev == (struct usb_device *)0 || usb_cfgbuf == (unsigned char *)0 ||
+	    ub_bounce == (char *)0) {
+		cmn_err(CE_WARN, "ub0: no memory for the USB stack");
+		return ENOMEM;
+	}
+	return 0;
+}
+
 static int
 ub_start()
 {
+	int r;
+
 	if (ub_state == UB_RUNNING)
 		return 0;
 	if (ub_state == UB_NOCHIP)
 		return ENXIO;
+	if ((r = ub_mem()) != 0)
+		return r;
 	usb_init();
 	if (!ub_udd_registered) {
 		ub_stor_init();
@@ -690,8 +719,6 @@ int cmd, arg, mode;
  * message buffer into console.log at the next boot, which is how a
  * silent reset is placed.
  */
-#define UB_BOUNCE	(16 * 1024)	/* a raw request's kernel buffer */
-static char ub_bounce[UB_BOUNCE];
 extern int copyin(), copyout(), bp_mapin(), bp_mapout();
 
 /* #define UB_TRACE 1 */	/* each strategy/raw call to the console */

@@ -27,8 +27,6 @@
 
 struct uddif *alluddifs = NULL;
 
-extern struct usb_device usb_dev[USB_MAX_DEVICE];
-
 long udd_register(struct uddif *a);
 long udd_unregister(struct uddif *a);
 

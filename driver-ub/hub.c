@@ -47,7 +47,6 @@
  */
 
 static struct usb_hub_device hub_dev[USB_MAX_HUB];
-extern struct usb_device usb_dev[USB_MAX_DEVICE];
 
 #ifndef TOSONLY
 static void	sigterm			(void);

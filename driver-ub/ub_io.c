@@ -39,7 +39,13 @@ static volatile int ub_spin;
  * driver's Ethernet polling, whose reads latch a byte too, cannot come
  * between them.
  */
+#ifdef _KERNEL
+#define UB_PADRAW	0x8000		/* 16 KB, 16 KB aligned, from the kernel
+					 * when the NetUSBee is found */
+static unsigned char *ub_padraw;
+#else
 static unsigned char ub_padraw[0x8000];
+#endif
 static volatile unsigned char *ub_pad;
 #define UB_PAD(off)	(ub_pad + ((off) & 0x3fff))
 static unsigned ub_nuacc();
@@ -222,9 +228,15 @@ int bus;
 	ub_fifo_wswap = 1;
 	ub_fifo_rswap = 1;
 #ifdef _KERNEL
-	if (ub_pad == (volatile unsigned char *)0)
+	/* the NetUSBee's access pad, only for a NetUSBee; this runs from
+	 * ubinit at boot too, where sleeping for memory is not allowed */
+	if (bus == UB_NETUSBEE && ub_pad == (volatile unsigned char *)0) {
+		if (ub_padraw == (unsigned char *)0 &&
+		    (ub_padraw = (unsigned char *)kmem_alloc(UB_PADRAW, KM_NOSLEEP)) == (unsigned char *)0)
+			return -1;
 		ub_pad = (volatile unsigned char *)
 		    (((unsigned long)ub_padraw + 0x3fff) & ~0x3fffUL);
+	}
 #else
 	{
 		int fd;

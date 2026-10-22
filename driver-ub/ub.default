@@ -1,0 +1,8 @@
+# /etc/default/ub - the USB daemon's settings, read by /etc/init.d/ub
+# (sp1 driver-ub) at boot.
+#
+# BUS: the ISP1160 the USB stack runs on when the TT has both, the
+# NetUSBee on the cartridge port and the Lightning VME: netusbee or
+# lightning.  Empty or unset: the kernel's own choice, the Lightning
+# when it is in.  `ubtool start BUS` switches a running system.
+BUS=netusbee

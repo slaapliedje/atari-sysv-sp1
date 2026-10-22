@@ -19,7 +19,7 @@ python3 release/build.py --only pack
 | kernel | `kernel/patch-asv-image.py`: the 96 MB TT-RAM cap and the Lance probe moved off the ATW800/2's address |
 | kernel drivers | `dp` (DaynaPORT, as `/dev/en0`), `nu` (NetUSBee Ethernet), `ub` (USB on the NetUSBee or the Lightning VME: `/dev/ub0`, `/dev/dsk/usbN`, keyboard and mouse), `amx` (AMIX binaries), `snd` (`/dev/audio`), `midi` (`/dev/midi`) |
 | loader probes | `EDTP.dp`, `EDTP.nu` and their `edt_data` rows (`driver-nu/edt/mkedtp.py`, from the stock `/stand`) |
-| boot | `dhcpc` on `/dev/en0`: the address, name servers and default route from DHCP; `ubtool daemon` (`/etc/rc2.d/S75ub`) |
+| boot | `dhcpc` on `/dev/en0`: the address, name servers and default route from DHCP; `ubtool daemon` (`/etc/rc2.d/S75ub`, on the NetUSBee per `/etc/default/ub`; nothing when there is no controller) |
 | AMIX userland | `/usr/amx` (AMIX's shared C library), `apkg` with gzip, less, grep, make, GNU tar and zlib installed (patch and acompat want /usr/local, which the hook refuses), bash 5.2 (`/usr/local/bin/bash`), vim 9.2, nano 9.2, mtools (with the `ub:` drive) |
 | Manx | `manx`, `manxmail`, `manxtrust`, `ufetch` in `/usr/bin`, `xmanx` in `/usr/bin/X11` (beside the stock X11R4 clients); the CA bundle in `/usr/local/share/manx/cacert.pem`, pointed at by `/etc/profile.manx` |
 | tools | the `rsync` and `ttntp` programs (no daemon, no clock configuration) in `/usr/local/bin`; `nuup.sh` and `strcf.nu` in `/usr/local/lib/netusbee` |

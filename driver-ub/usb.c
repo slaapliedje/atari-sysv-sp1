@@ -41,7 +41,13 @@
 #ifndef TOSONLY
 #endif
 
-/*static*/ struct usb_device usb_dev[USB_MAX_DEVICE];
+#ifdef _KERNEL
+struct usb_device *usb_dev;		/* [USB_MAX_DEVICE], see usb.h */
+unsigned char *usb_cfgbuf;		/* [USB_CONFIG_BUFFER_SIZE] */
+#else
+struct usb_device usb_dev[USB_MAX_DEVICE];
+unsigned char usb_cfgbuf[USB_CONFIG_BUFFER_SIZE];
+#endif
 static long asynch_allowed;
 
 /***************************************************************************
@@ -469,7 +475,7 @@ long usb_get_configuration_no(struct usb_device *dev, long cfgno)
 	long result, err;
 	unsigned long tmp;
 	struct usb_config_descriptor config;
-	static unsigned char buffer[USB_CONFIG_BUFFER_SIZE];
+	unsigned char *buffer = usb_cfgbuf;
 
 	result = usb_get_descriptor(dev, USB_DT_CONFIG, cfgno, &config, USB_DT_CONFIG_SIZE);
 	if (result < 9) {
