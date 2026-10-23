@@ -122,6 +122,8 @@ cp /stand/* /mnt || die "cp stand"
 cp /rel/edt/unix.stock /mnt/unix.stock || die "unix.stock"
 cp /rel/stock/KERNEL /mnt/KERNEL.stock || die "KERNEL.stock"
 cp /rel/stock/PLATFORM /mnt/PLATFORM.stock || die "PLATFORM.stock"
+# the mini kernel with the clock driver's 1968 patch (see CLOCK above)
+cp /rel/edt/mUNIX.1968 /mnt/mUNIX || die "mUNIX.1968"
 ls -l /mnt
 umount /mnt || die "umount stand"
 echo "-- boot slices"

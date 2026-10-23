@@ -16,7 +16,7 @@ python3 release/build.py --only pack
 
 | | |
 |---|---|
-| kernel | `kernel/patch-asv-image.py` (the Lance probe moved off the ATW800/2's address), `kernel/patch-ttram.py` (the page bookkeeping in TT-RAM, the probe up to 256 MB: the image's kernel, since ASV does not boot without TT-RAM; the stock objects stay in `/stand`), `tools/ttntp/patch-clock.py` (the chip's year from 1968) |
+| kernel | `kernel/patch-asv-image.py` (the Lance probe moved off the ATW800/2's address), `kernel/patch-ttram.py` (the page bookkeeping in TT-RAM, the probe up to 256 MB: the image's kernel, since ASV does not boot without TT-RAM; the stock objects stay in `/stand`), `tools/ttntp/patch-clock.py` (the chip's year from 1968, in `/boot/CLOCK` and in the loader's `mUNIX`) |
 | kernel drivers | `dp` (DaynaPORT, as `/dev/en0`), `nu` (NetUSBee Ethernet), `ub` (USB on the NetUSBee or the Lightning VME: `/dev/ub0`, `/dev/dsk/usbN`, keyboard and mouse), `amx` (AMIX binaries), `snd` (`/dev/audio`), `midi` (`/dev/midi`) |
 | loader probes | `EDTP.dp`, `EDTP.nu` and their `edt_data` rows (`driver-nu/edt/mkedtp.py`, from the stock `/stand`) |
 | boot | `dhcpc` on `/dev/en0`: the address, name servers and default route from DHCP; `ubtool daemon` (`/etc/rc2.d/S75ub`, on the NetUSBee per `/etc/default/ub`; nothing when there is no controller) |

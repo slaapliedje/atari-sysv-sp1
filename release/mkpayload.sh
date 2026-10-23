@@ -43,6 +43,11 @@ python3 -I "$sp1/tools/ufs.py" "$STOCK" 102400 get /etc/inet/hosts.net "$p/stock
 # ahead.  Small, so it rides with the probes in rel/edt (phase 1).
 python3 -I "$sp1/tools/ufs.py" "$STOCK" 102400 get /boot/CLOCK "$p/stock/CLOCK"
 python3 -I "$sp1/tools/ttntp/patch-clock.py" "$p/stock/CLOCK" "$p/edt/CLOCK.1968" >/dev/null
+# the same for the mini kernel the loader boots to relink unix (it is
+# never relinked itself, so its clock driver is the stock one: a relink
+# on the real TT dated /stand/unix two years ahead)
+python3 -I "$here/bfs.py" "$STOCK" 122880000 get mUNIX "$p/stock/mUNIX" >/dev/null
+python3 -I "$sp1/tools/ttntp/patch-clock.py" "$p/stock/mUNIX" "$p/edt/mUNIX.1968" >/dev/null
 # the kernel objects with the page bookkeeping in TT-RAM and the probe
 # up to 256 MB (kernel/patch-ttram.py): the image's kernel, since Atari
 # System V does not boot without TT-RAM anyway; the stock ones stay in
