@@ -1,5 +1,5 @@
 #!/bin/bash
-# magic-install.sh IMAGE MAGIC.A
+# magic-install.sh IMAGE MAGIC.A [OFFSET]
 #
 # MagiC for Atari (Andreas Kromke's GPLv3 release, 6.30 and later:
 # gitlab.com/AndreasK/Atari-Mac-MagiC-Sources, MagiC/Releases) into the
@@ -16,7 +16,7 @@
 #   the rest unrun.
 # - LANG is left out (localised on the PC already).
 set -e
-IMG=$1; SRC=$2; D="$IMG@@1024"
+IMG=$1; SRC=$2; D="$IMG@@${3:-1024}"   # OFFSET: the partition's byte offset, C: by default
 [ -f "$IMG" ] && [ -f "$SRC/MAGIC.RAM" ] || { echo "usage: $0 IMAGE MAGIC.A (localised: MAGIC.RAM in it)" >&2; exit 1; }
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 mkdir "$T/auto"

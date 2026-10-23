@@ -145,7 +145,37 @@ cost an afternoon in Hatari:
 Tested in the ATW800/2-emulating Hatari (`--vme atw800 --vme-base
 0xA00000`): MagxDesk at 1024x768 on the card, C: and D: from HDDriver.
 Both shift keys held at boot skip MagiC ("Shift-Shift: MagiC not
-installed"); renaming `MAGXBOOT.PRG` back to `.TOS` makes plain TOS the
-default again, with MagiC started by hand from the AUTO folder.  The
-root-sector loader and the Unix side are untouched: the install writes
-only the C: partition (sectors 2 – 786433).
+installed").
+
+## Three ways to boot: `setboot tos|magic|unix`
+
+The NVRAM preference has a MagiC value, 0x08 (NetBSD's `bootpref`:
+TOS 0x80, System V 0x40, NetBSD 0x20, Linux 0x10, MagiC 0x08), and
+BOOTCONF.APP's *MagiC* button writes it, but nothing on a stock disk
+acts on it: HDDriver's root-sector loader boots the partition whose
+flag byte (masked 0xf8) equals the preference, so 0x08 matches nothing
+and the TT comes up on the ROM desktop without a hard disk; and
+`MAGXBOOT.PRG` never looks at the NVRAM (its source is in the MagiC
+repository).  Two small pieces make the choice real, with MagiC and
+TOS sharing C: and the Unix side untouched:
+
+- **D: is flagged 0x09** (`partinit`'s flag byte 0x01 plus the MagiC
+  bit) and carries HDDriver's partition boot sector, copied from C:
+  with D:'s own serial number, plus `HDDRIVER.SYS`.  For 0x08 the
+  loader boots D:, HDDriver loads from there and keeps C: as the boot
+  drive, so the boot goes on exactly as for TOS.
+- **`C:\AUTO\MAGXNVM.PRG`** (`tools/magxnvm`, 150 bytes, first in the
+  folder) reads the preference with NVMaccess and runs `C:\MAGXBOOT.PRG`
+  only when it is 0x08.  MagiC then re-runs the AUTO folder itself;
+  MAGXBOOT, started a second time under MagiC, just returns.
+
+| NVRAM | `setboot` | boot |
+|---|---|---|
+| 0x0080 | `tos` | C:, plain TOS |
+| 0x0008 | `magic` | C:, MagiC 6.30 on the ATW800/2 |
+| 0x0040 | `unix` | the UNX partition, Atari System V |
+| 0x0000 | `none` | first bootable partition: C:, plain TOS |
+
+Tested in Hatari with all four; `setboot` on the Unix side knows
+`magic` since the same commit, BOOTCONF.APP and SETBOOT.PRG on C: set
+it from TOS.  The AUTO order stays MAGXNVM, HNETDEV, the XVDI set.

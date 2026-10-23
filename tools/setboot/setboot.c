@@ -7,11 +7,14 @@
  *     setboot            print the current preference
  *     setboot tos        boot TOS       (NVRAM word 0x0080)
  *     setboot unix       boot System V  (NVRAM word 0x0040)
+ *     setboot magic      boot MagiC     (NVRAM word 0x0008: what BOOTCONF.APP's
+ *                        MagiC button writes; C:\AUTO\MAGXNVM.PRG acts on it)
  *     setboot none       no preference: first bootable partition
  *
  * The preference is the word at NVRAM offset 0..1 and the block-zero
  * bootstrap (/etc/T0boot) compares its LOW byte against the partition
- * flag bytes (0x80 St-boot, 0x40 Unix-boot).  The driver maintains the
+ * flag bytes (0x80 St-boot, 0x40 Unix-boot; 0x08 on a partition flagged
+ * for MagiC, tools/magxnvm).  The driver maintains the
  * checksum TOS verifies on boot.
  */
 #include <stdio.h>
@@ -46,6 +49,7 @@ static const char *name(v)
 	switch (v) {
 	case 0x80: return "TOS";
 	case 0x40: return "Atari System V";
+	case 0x08: return "MagiC";
 	case 0x00: return "no preference (first bootable partition)";
 	}
 	return "unknown";
@@ -61,9 +65,10 @@ int main(argc, argv)
 	if (argc > 1) {
 		if (!strcmp(argv[1], "tos")) want = 0x80;
 		else if (!strcmp(argv[1], "unix")) want = 0x40;
+		else if (!strcmp(argv[1], "magic")) want = 0x08;
 		else if (!strcmp(argv[1], "none")) want = 0x00;
 		else {
-			fprintf(stderr, "usage: setboot [tos|unix|none]\n");
+			fprintf(stderr, "usage: setboot [tos|unix|magic|none]\n");
 			return 2;
 		}
 	}
