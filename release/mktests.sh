@@ -9,13 +9,14 @@ here=$(cd "$(dirname "$0")" && pwd); sp1=$(cd "$here/.." && pwd)
 [ -d "$ASV_SYSROOT" ] || { echo "mktests.sh: no ASV sysroot at $ASV_SYSROOT" >&2; exit 1; }
 rm -rf "$out"; mkdir -p "$out"
 cc="$sp1/rsync/asv-static-cc"
-build() {	# build DIR NAME...
+build() {	# [LIBS=-lx] build DIR NAME...
 	d=$1; shift
 	for n; do
-		(cd "$sp1/$d" && bash "$cc" -O -o "$out/$n" "$n.c") || { echo "mktests.sh: $d/$n failed" >&2; exit 1; }
+		(cd "$sp1/$d" && bash "$cc" -O -o "$out/$n" "$n.c" $LIBS) || { echo "mktests.sh: $d/$n failed" >&2; exit 1; }
 	done
 }
-build tools/snd khz cachet mixbench sndprobe sndstat sndrate sndtest
+LIBS=-lelf build tools/snd khz		# the kernel's symbol table, nlist(3E)
+build tools/snd cachet mixbench sndprobe sndstat sndrate sndtest
 build driver-midi miditool
 build tools/atw atwprobe atw4mb atwstart atwbars atwtest atwblit atwblstat atwblspeed atwfill atwtorture
 build atw800 atwfb
