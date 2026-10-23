@@ -11,7 +11,10 @@ the unofficial Service Pack 1 already installed:
     sticks, keyboard, mouse), the Lightning VME's USB, the TT's own
     sound and MIDI ports
   - the address, name servers and route from DHCP at boot
-  - a kernel that boots with up to 96 MB of TT-RAM
+  - a kernel that uses all the TT-RAM in the machine, up to 256 MB,
+    with swap sized to match at the first boot
+  - for an ATW800/2: the transputer link driver, X11R6.3 with the Xatw
+    server, XView, all switched on when the card is found
   - Manx, a web browser with HTTPS (text mode and X11), and its mail
     program
   - bash 5.2, vim 9.2, nano 9.2, GNU tar, gzip, less, grep, make, zlib,
@@ -29,14 +32,36 @@ On a FAT32 card for a ZuluSCSI or BlueSCSI:
 Set the TT's NVRAM boot preference to "Atari System V" if the machine
 has one from before (the loader prints "Boot:" and waits otherwise).
 
+PiSCSI (RaSCSI), untested so far: attach HD0.bin as a hard disk at
+SCSI ID 0 (by type, or rename it HD0.hds), and its DaynaPORT emulation
+at any ID; the driver finds a "Dayna" device wherever it is.  The
+network is then the Pi's; NE4.img and the .ini files are not used.
+
 First boot
 ----------
 The boot takes about seven minutes.  The kernel on the image was built
-for a TT with the DaynaPORT; when the loader finds a different set of
-devices (a NetUSBee but no DaynaPORT, or neither) the boot rebuilds the
-kernel first, which adds a few minutes and prints "/stand/unix is being
-created".  Log in as root at the console; root has no password - set
-one with `passwd` and add users with `useradd`.
+for a TT with the DaynaPORT and the NetUSBee; when the loader finds a
+different set of devices the boot rebuilds the kernel first, which adds
+a few minutes and prints "/stand/unix is being created".  Log in as
+root at the console; root has no password - set one with `passwd` and
+add users with `useradd`.
+
+What the boot finds out (/etc/init.d/sp1hw, every boot, one line on
+the console and the details in /etc/sp1):
+  - memory: the kernel takes the TT-RAM there is (256 MB at most); a
+    machine with more than 160 MB gets a swap file of its memory's
+    size on /home at the first boot (a few minutes, once)
+  - the network card: the first of DaynaPORT, Riebl, NetUSBee found
+    gets DHCP; `static` in /etc/inet/sp1net keeps your own setup
+  - an ATW800/2: X11R6.3's Xatw server takes over from the stock X11R4
+    one, the T425 is wiped at boot, and tprobe's census of the
+    transputers is in /etc/sp1/transputers.  Without the card the
+    loader's Riebl probe is put back at its real address from the next
+    boot on (the image ships it moved, as the ATW800/2's video memory
+    answers there).
+The stock kernel objects stay in /stand (KERNEL.stock, PLATFORM.stock,
+CLOCK.pre-1968) and the stock kernel itself as /stand/unix.stock: boot
+it from the loader's prompt if ever needed.
 The system comes up in X (the stock X11R4 server on the TT's screen);
 `init 2` from a console login gives a plain text system, and editing
 /etc/inittab (is:4: -> is:2:) makes that the default.
@@ -51,6 +76,11 @@ boot says so ("/dev/en0: No such device", "slink failed") and goes on.
 telnet and ftp are open for your own LAN as the stock system had them.
 A /core in the root directory after every boot is the stock NFS mountd
 crashing at start: harmless, and as it was.
+
+Memory
+------
+/etc/profile raises the per-process data limit (16 MB by default) to
+256 MB at login, so programs can use what the machine has.
 
 Manx
 ----

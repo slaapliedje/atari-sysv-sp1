@@ -264,7 +264,8 @@ def stage_2(a, w):
             h.screenshot('nologin.png')
             raise SystemExit('stage 2: no login prompt')
         for script, marker in (('stage2.sh', 'STAGE2 DONE'), ('cleanup.sh', 'CLEANUP DONE')):
-            st, out = telnet_sh(TELNET_PORT, 'sh /rel/%s 2>&1' % script, a.deadline)
+            # root's shell limits files to 16 MB: the payload has bigger ones
+            st, out = telnet_sh(TELNET_PORT, 'ulimit -f 4194303; sh /rel/%s 2>&1' % script, a.deadline)
             open(os.path.join(w, script + '.log'), 'w').write(out)
             sys.stdout.write(out)
             if marker not in out:

@@ -2,6 +2,7 @@
 # telnet on the new disk's first boot (release/build.py): the userland.
 # /rel came over from the stock copy with the root file system.
 PATH=/sbin:/usr/sbin:/usr/bin:/usr/ccs/bin:/etc:/usr/local/bin; export PATH
+ulimit -f 4194303		# root's 16 MB file limit would stop the X trees
 die() { echo "STAGE2 FAILED: $*"; sync; sync; exit 1; }
 echo "== stage 2 `date`"
 uname -a
@@ -39,9 +40,24 @@ cp /rel/files/cacert.pem /usr/local/share/manx/cacert.pem || die cacert
 chmod 644 /usr/local/share/manx/cacert.pem
 cp /rel/manx-profile /etc/profile.manx || die "manx profile"
 grep "profile.manx" /etc/profile > /dev/null || echo '[ -r /etc/profile.manx ] && . /etc/profile.manx' >> /etc/profile
-echo "== rsync, ttntp (the programs only)"
+echo "== rsync, ttntp (and the clock from the network at boot: S99ttntp)"
 cp /rel/files/rsync /usr/local/bin/rsync && chmod 755 /usr/local/bin/rsync || die rsync
 cp /rel/files/ttntp /usr/local/bin/ttntp && chmod 755 /usr/local/bin/ttntp || die ttntp
+cp /rel/files/S99ttntp /etc/rc2.d/S99ttntp && chmod 744 /etc/rc2.d/S99ttntp || die S99ttntp
+echo "== X11R6.3 and XView for the ATW800/2 (used when the card is there)"
+(cd /usr && cpio -icdum < /rel/files/xtrees.cpio) || die "X trees"
+ls /usr/x11r6/bin/Xatw /usr/x11r6/bin/xdm /usr/openwin/bin/olwm || die "X trees incomplete"
+echo "== the hardware detection at boot (sp1hw), swap to match the memory"
+cp /rel/files/sp1hw /etc/init.d/sp1hw && chmod 744 /etc/init.d/sp1hw || die sp1hw
+rm -f /etc/rc2.d/S06sp1hw; ln /etc/init.d/sp1hw /etc/rc2.d/S06sp1hw
+cp /rel/files/swapfile.init /etc/init.d/swapfile && chmod 744 /etc/init.d/swapfile || die swapfile
+rm -f /etc/rc2.d/S03swapfile /etc/rc0.d/K99swapfile
+ln /etc/init.d/swapfile /etc/rc2.d/S03swapfile; ln /etc/init.d/swapfile /etc/rc0.d/K99swapfile
+cp /rel/files/tprobe /usr/local/bin/tprobe && chmod 755 /usr/local/bin/tprobe || die tprobe
+echo auto > /etc/inet/sp1net
+# the 16 MB per-process data limit made sense with 4 MB of ST-RAM; the
+# kernel now takes all the TT-RAM, with swap to match
+grep "ulimit -d" /etc/profile > /dev/null || echo 'ulimit -d 262144 2>/dev/null' >> /etc/profile
 echo "== NetUSBee helper"
 [ -d /usr/local/lib/netusbee ] || mkdir -p /usr/local/lib/netusbee
 cp /rel/sp1/driver-nu/nuup.sh /rel/sp1/driver-nu/strcf.nu /usr/local/lib/netusbee/ || die nuup

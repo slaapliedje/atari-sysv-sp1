@@ -1,0 +1,102 @@
+#!/sbin/sh
+# /etc/init.d/sp1hw - what this TT has, and the setup to match (sp1
+# release).  Runs at every boot as /etc/rc2.d/S06sp1hw, before the
+# network comes up, and is cheap and idempotent: it only changes what
+# differs.  Everything it decides is written under /etc/sp1 and said on
+# the console once per boot.
+#
+#   memory    prtconf's total; the kernel takes all the TT-RAM there is
+#             (up to 256 MB); /etc/init.d/swapfile sizes the swap to it
+#   network   the first card the loader found, in this order:
+#             DaynaPORT (dp, /dev/en0 c 63 41), Riebl/Lance (the stock
+#             la driver, /dev/en0 c 63 5), NetUSBee (nu, /dev/nu0);
+#             /etc/strcf and /etc/inet/rc.inet are pointed at it and
+#             dhcpc asks DHCP on it.  "static" in /etc/inet/sp1net keeps
+#             your hand-made files.
+#   ATW800/2  the loader's EDTP.tlk probe found the card's link (a TLK
+#             row): then xdm is X11R6.3's Xatw on the card, the T425 is
+#             wiped at boot (S04t425wipe) and tprobe's census of the
+#             transputers goes to /etc/sp1/transputers.  Without the
+#             card the stock X11R4 server runs, and the loader's Riebl
+#             probe is put back at the card's real address (the image
+#             ships it moved, because the ATW800/2's video memory answers
+#             there and hangs the stock driver): that takes effect at
+#             the next boot.
+PATH=/sbin:/usr/sbin:/usr/bin:/etc; export PATH
+[ "$1" = start ] || exit 0
+[ -d /etc/sp1 ] || mkdir /etc/sp1
+say() { echo "sp1: $*" > /dev/console; echo "$*" >> /etc/sp1/boot; }
+: > /etc/sp1/boot
+
+# ---- memory ----
+mem=`prtconf 2>/dev/null | sed -n 's/^Memory size: *\([0-9]*\) Megabytes.*/\1/p'`
+[ -n "$mem" ] && echo "$mem" > /etc/sp1/memory
+
+# ---- the network card ----
+devs=`prtconf 2>/dev/null | awk 'NF == 1 && $1 ~ /^[A-Z]+$/ { print $1 }'`
+have() { echo "$devs" | grep "^$1\$" > /dev/null; }
+net=none; ifn=""; node=""
+# the loader's NU row is there on every TT (the cartridge port never
+# bus-errors; the nu driver probes the chip itself), so a Riebl card
+# comes before it
+if have DP; then net=dp; ifn=en0; node="c 63 41"
+elif have LA; then net=la; ifn=en0; node="c 63 5"
+elif have NU; then net=nu; ifn=nu0; node="c 63 45"
+fi
+echo "$net" > /etc/sp1/network
+mode=`cat /etc/inet/sp1net 2>/dev/null`
+if [ "$mode" != static ]; then
+	if [ $net = none ]; then
+		cp /etc/inet/strcf.nonet /etc/strcf
+		rm -f /etc/inet/dhcpc.dev
+	else
+		# the device node for /dev/en0: dp's or the stock la's
+		if [ $ifn = en0 ]; then
+			cur=`ls -l /dev/en0 2>/dev/null | awk '{print $5 $6}'`
+			[ "$cur" = "63,`echo $node | awk '{print $3}'`" ] || {
+				rm -f /dev/en0; mknod /dev/en0 $node; chmod 644 /dev/en0; }
+		fi
+		dev=`echo $ifn | sed 's/0$//'`
+		sed "s|^\([ 	]*\)cenet ip /dev/[a-z]* [a-z]* 0|\1cenet ip /dev/$dev $dev 0|" /etc/inet/strcf.net > /etc/sp1/strcf.new
+		cmp -s /etc/sp1/strcf.new /etc/strcf || cp /etc/sp1/strcf.new /etc/strcf
+		sed "s|ifconfig en0 |ifconfig $ifn |; s|ifconfig nu0 |ifconfig $ifn |" /etc/inet/rc.inet > /etc/sp1/rc.inet.new
+		cmp -s /etc/sp1/rc.inet.new /etc/inet/rc.inet || cp /etc/sp1/rc.inet.new /etc/inet/rc.inet
+		echo /dev/$ifn > /etc/inet/dhcpc.dev
+	fi
+fi
+case $net in
+dp) netname="DaynaPORT (en0)";; nu) netname="NetUSBee (nu0)";; la) netname="Riebl (en0)";; *) netname="no network card";;
+esac
+
+# ---- the ATW800/2 ----
+# the loader's probe (EDTP.tlk) found the card's link: the table has a
+# TLK row and the kernel the tlk driver
+atw=no
+have TLK && atw=yes
+echo $atw > /etc/sp1/atw800
+if [ $atw = yes ]; then
+	if [ -x /usr/x11r6/bin/xdm ]; then
+		# X11R6.3's xdm with the Xatw server, instead of the stock X11R4 one
+		grep '^xd:4:respawn:/usr/x11r6/bin/xdm' /etc/inittab > /dev/null || {
+			sed 's|^xd:4:respawn:.*|xd:4:respawn:/usr/x11r6/bin/xdm -nodaemon -config /usr/x11r6/lib/X11/xdm/xdm-config > /usr/x11r6/lib/X11/xdm/xdm-init.out 2>\&1 < /dev/null|' /etc/inittab > /etc/sp1/inittab.new
+			cp /etc/sp1/inittab.new /etc/inittab; init q; }
+	fi
+	if [ -f /stand/edt_data.atw ]; then
+		cmp -s /stand/edt_data.atw /stand/edt_data || cp /stand/edt_data.atw /stand/edt_data
+	fi
+	if [ -x /usr/local/bin/tprobe ]; then
+		/usr/local/bin/tprobe > /etc/sp1/transputers 2>&1
+		trams=`egrep -ci 'transputer|T4|T8|C004' /etc/sp1/transputers`
+	fi
+else
+	grep '^xd:4:respawn:/usr/bin/X11/xdm' /etc/inittab > /dev/null || {
+		sed 's|^xd:4:respawn:.*|xd:4:respawn:/usr/bin/X11/xdm -nodaemon > /usr/lib/X11/xdm/xdm-init.out 2>\&1 < /dev/null|' /etc/inittab > /etc/sp1/inittab.new
+		cp /etc/sp1/inittab.new /etc/inittab; init q; }
+	if [ -f /stand/edt_data.la ]; then
+		cmp -s /stand/edt_data.la /stand/edt_data || {
+			cp /stand/edt_data.la /stand/edt_data
+			say "no ATW800/2: the loader will look for a Riebl Ethernet card from the next boot on"; }
+	fi
+fi
+say "${mem:-?} MB of memory, $netname, ATW800/2: $atw${trams:+ ($trams transputers, /etc/sp1/transputers)}"
+exit 0

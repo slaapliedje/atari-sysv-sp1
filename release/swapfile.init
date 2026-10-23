@@ -1,0 +1,41 @@
+#!/sbin/sh
+# /etc/init.d/swapfile - swap to match the memory (sp1 release).  System V
+# reserves swap for every page of memory a program takes, so the 128 MB
+# swap slice alone would cap programs well below a big TT-RAM board.
+# At the first boot on a machine with more memory than that, a swap
+# file of the memory's size (512 MB at most) is made on /home; it is
+# added here at every boot (S03swapfile) and removed at shutdown
+# (K99swapfile: before umountall, or /home stays busy and gets a full
+# fsck at the next boot).
+SWAPFILE=/home/swapfile
+case "$1" in
+start)
+	if [ ! -f $SWAPFILE ]; then
+		mem=`/usr/sbin/prtconf 2>/dev/null | sed -n 's/^Memory size: *\([0-9]*\) Megabytes.*/\1/p'`
+		if [ -n "$mem" ] && [ "$mem" -gt 160 ]; then
+			mb=$mem; [ $mb -gt 512 ] && mb=512
+			free=`/usr/sbin/df -t /home | sed -n '1s/.*): *\([0-9]*\) blocks.*/\1/p'`
+			need=`expr $mb \* 2048 + 20480`
+			if [ -n "$free" ] && [ "$free" -gt "$need" ]; then
+				echo "sp1: $mem MB of memory: making a $mb MB swap file on /home (once, a few minutes)" > /dev/console
+				ulimit -f 4194303
+				/usr/bin/dd if=/dev/zero of=$SWAPFILE bs=1048576 count=$mb > /dev/null 2>&1 && /usr/bin/chmod 600 $SWAPFILE || rm -f $SWAPFILE
+			else
+				echo "sp1: no room on /home for a $mb MB swap file: programs stay capped by the 128 MB swap slice" > /dev/console
+			fi
+		fi
+	fi
+	if [ -f $SWAPFILE ]
+	then
+		set -- `/usr/bin/ls -l $SWAPFILE`
+		/usr/sbin/swap -a $SWAPFILE 0 `expr $5 / 512`
+	fi
+	;;
+stop)
+	if /usr/sbin/swap -l 2>/dev/null | grep "^$SWAPFILE " > /dev/null
+	then
+		/usr/sbin/swap -d $SWAPFILE 0
+	fi
+	;;
+esac
+exit 0

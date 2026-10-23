@@ -16,6 +16,7 @@ fi
 # the build's leftovers (/.manx: stage 2 ran manx once; the packages
 # apkg downloaded, installed or not)
 rm -rf /rel /var/tmp/* /tmp/* /var/apkg/tmp/* /.manx 2>/dev/null
+rm -f /etc/sp1/boot /etc/sp1/transputers
 rm -f /.sh_history /.history /core /var/apkg/cache/*.pkg
 # logs and accounting: of the build session, and of the stock image's
 # own history before it (the files stay, empty: the daemons expect them)

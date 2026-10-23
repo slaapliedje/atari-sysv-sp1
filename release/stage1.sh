@@ -29,10 +29,16 @@ if [ ! -f /rel/phase1.done ]; then
 	cp /boot/CLOCK /stand/CLOCK.pre-1968 || die "CLOCK aside"
 	cp /rel/edt/CLOCK.1968 /boot/CLOCK || die "CLOCK.1968"
 	ls -l /boot/CLOCK /stand/CLOCK.pre-1968
+	echo "== the kernel's page bookkeeping in TT-RAM, the probe up to 256 MB"
+	# (the stock objects go to the new disk's /stand in phase 2: the
+	# stock image's /stand is nearly full)
+	cp /rel/edt/KERNEL.256 /boot/KERNEL || die "KERNEL.256"
+	cp /rel/edt/PLATFORM.256 /boot/PLATFORM || die "PLATFORM.256"
+	ls -l /boot/KERNEL /boot/PLATFORM
 	echo "== driver objects into /boot (buildsys itself waits for the probes)"
 	mv /sbin/buildsys /sbin/buildsys.real || die "buildsys aside"
 	echo "exit 0" > /sbin/buildsys; chmod 755 /sbin/buildsys
-	for d in driver-dp driver-amix driver-snd driver-midi driver-nu driver-ub; do
+	for d in driver-dp driver-amix driver-snd driver-midi driver-nu driver-ub driver-tlk; do
 		echo "-- $d"; flush
 		sh /rel/sp1/$d/install.sh || { mv /sbin/buildsys.real /sbin/buildsys; die "$d install"; }
 	done
@@ -43,11 +49,11 @@ if [ ! -f /rel/phase1.done ]; then
 	# auto-configure ("INCLUDE of hardware driver not in the EDT").
 	# The installers write the line for a machine that has the card;
 	# this image must boot on any TT.
-	grep -v "^INCLUDE:DP\$" /stand/system | grep -v "^INCLUDE:NU\$" > /tmp/system && cp /tmp/system /stand/system || die "system file"
+	grep -v "^INCLUDE:DP\$" /stand/system | grep -v "^INCLUDE:NU\$" | grep -v "^INCLUDE:TLK\$" > /tmp/system && cp /tmp/system /stand/system || die "system file"
 	rm -f /dev/en0
 	mknod /dev/en0 c 63 41 || die "mknod en0"
 	chmod 644 /dev/en0
-	ls -l /boot/DP /boot/NU /boot/UB /boot/AMX /boot/SND /boot/MIDI
+	ls -l /boot/DP /boot/NU /boot/UB /boot/AMX /boot/SND /boot/MIDI /boot/TLK
 	grep INCLUDE /stand/system
 	flush
 	echo "== dhcpc (the DaynaPORT, /dev/en0)"
@@ -55,9 +61,10 @@ if [ ! -f /rel/phase1.done ]; then
 	# the build's own address while dhcpc has not run (slirp's guest)
 	sed 's/^192.58.149.33/192.168.30.20/' /etc/inet/hosts.net > /tmp/hosts.net && cp /tmp/hosts.net /etc/inet/hosts.net
 	echo "== loader probes (EDT) into /stand"
-	cp /rel/edt/EDTP.dp /rel/edt/EDTP.nu /stand/ || die "EDTP files"
-	chmod 555 /stand/EDTP.dp /stand/EDTP.nu
-	cp /rel/edt/edt_data.rel /stand/edt_data || die edt_data
+	cp /rel/edt/EDTP.dp /rel/edt/EDTP.nu /rel/edt/EDTP.tlk /stand/ || die "EDTP files"
+	chmod 555 /stand/EDTP.dp /stand/EDTP.nu /stand/EDTP.tlk
+	cp /rel/edt/edt_data.atw /rel/edt/edt_data.la /stand/ || die "edt_data variants"
+	cp /rel/edt/edt_data.atw /stand/edt_data || die edt_data
 	ls -l /stand
 	touch /rel/phase1.done
 	echo "== phase 1 done: rebooting `date`"
@@ -75,6 +82,9 @@ for n in dpstart amxinit nustart ubinit sndinit midiinit; do
 	nm /stand/unix | grep "$n" > /dev/null || die "the kernel has no $n"
 done
 echo "kernel carries dp nu ub amx snd midi"
+# tlk is a hardware driver too: in the kernel only where the loader's
+# probe finds the ATW800/2's link (not in this emulator)
+nm /stand/unix | grep tlkinit > /dev/null && echo "and tlk" || echo "(no tlk: no ATW800/2 here, as expected)"
 echo "== the new disk"; flush
 partinit -I -i -b -Z -P 0:1:FILL:UNX:UNIXBOOT -o /dev/rdsk/c1d0sf || die partinit
 format -w /dev/rdsk/c1d0sf || die format
@@ -108,6 +118,10 @@ umount /mnt || die "umount home"
 echo "-- copying /stand `date`"; flush
 mount -F bfs /dev/dsk/c1d0s3 /mnt || die "mount stand"
 cp /stand/* /mnt || die "cp stand"
+# the stock kernel and objects, bootable from the loader if ever needed
+cp /rel/edt/unix.stock /mnt/unix.stock || die "unix.stock"
+cp /rel/stock/KERNEL /mnt/KERNEL.stock || die "KERNEL.stock"
+cp /rel/stock/PLATFORM /mnt/PLATFORM.stock || die "PLATFORM.stock"
 ls -l /mnt
 umount /mnt || die "umount stand"
 echo "-- boot slices"
