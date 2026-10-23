@@ -163,7 +163,10 @@ TOS sharing C: and the Unix side untouched:
   bit) and carries HDDriver's partition boot sector, copied from C:
   with D:'s own serial number, plus `HDDRIVER.SYS`.  For 0x08 the
   loader boots D:, HDDriver loads from there and keeps C: as the boot
-  drive, so the boot goes on exactly as for TOS.
+  drive, so the boot goes on exactly as for TOS.  HDDriver is Uwe
+  Seimet's commercial software: both pieces come from your own licensed
+  copy on C:, and nothing of HDDriver is in this repository or in the
+  release image (whose loader is Atari's `T0boot`).
 - **`C:\AUTO\MAGXNVM.PRG`** (`tools/magxnvm`, 150 bytes, first in the
   folder) reads the preference with NVMaccess and runs `C:\MAGXBOOT.PRG`
   only when it is 0x08.  MagiC then re-runs the AUTO folder itself;
