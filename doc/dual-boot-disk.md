@@ -120,3 +120,32 @@ geometry for an unlabelled disk; the fork's `hdc: a consistent disk
 geometry` commit fixes that.  With it the recipe above runs unchanged in
 the emulator, which is where this one was done and boot-tested before the
 image went on the card.
+
+## MagiC on the TOS side
+
+Andreas Kromke released MagiC for Atari as GPLv3 in October 2026
+(version 6.30 with MagxDesk 5: `MagiC/Releases/Atari-MagiC-*.zip` in
+gitlab.com/AndreasK/Atari-Mac-MagiC-Sources).  It is on C: since
+2026-10-23, put there with `tools/magic-install.sh` from the release's
+`MAGIC.A` folder after localising it on the PC the way `LANG/EN.BAT`
+does (MAGIC.RAM to the root, the EN resources over GEMSYS, EXTRAS and
+XTENSION; `LOCALISE.SH` is for MagicOnLinux and does nothing useful
+here).  The boot is HDDriver → `AUTO\MAGXBOOT.PRG` → MagiC, which runs
+HDDriver again and then the rest of the AUTO folder.  Two things that
+cost an afternoon in Hatari:
+
+- **`AUTO\AUTOEXEC.BAT` switches the AUTO folder off.**  MagiC's kernel
+  runs that file *instead of* `AUTO\*.PRG` when it exists
+  (`KERNEL/BIOS/COMMON/AUTO.S`), and the release ships an empty one:
+  MagiC came up on the TT's own screen with XVDI, HNETDEV and the rest
+  never run.  Without the file XVDI takes the ATW800/2 as under TOS.
+- **The XVDI set must come after `MAGXBOOT.PRG`.**  Loaded under TOS
+  first, MagiC's booter hangs after its banner.
+
+Tested in the ATW800/2-emulating Hatari (`--vme atw800 --vme-base
+0xA00000`): MagxDesk at 1024x768 on the card, C: and D: from HDDriver.
+Both shift keys held at boot skip MagiC ("Shift-Shift: MagiC not
+installed"); renaming `MAGXBOOT.PRG` back to `.TOS` makes plain TOS the
+default again, with MagiC started by hand from the AUTO folder.  The
+root-sector loader and the Unix side are untouched: the install writes
+only the C: partition (sectors 2 – 786433).
