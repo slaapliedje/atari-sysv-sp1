@@ -1,0 +1,69 @@
+/usr/local/lib/sp1/tests - the test and diagnostic programs of service
+pack 1, built static for Atari System V.  Most need root; those marked
+"screen" or "registers" change the hardware's state and say how they
+put it back.  Sources and notes: github.com/slaapliedje/atari-sysv-sp1
+(tools/snd, tools/atw, tools/tram, atw800, driver-midi, tools/setboot).
+
+The TT
+  khz              the kernel's HZ and the rate of its clock tick (lbolt),
+                   measured over 5 s
+  cachet           cycles per loop from registers, a cache-sized array and
+                   a big one: whether the 68030's caches are on and how
+                   fast this process's memory is
+  mixbench         what software audio mixing costs on this CPU
+
+DMA sound (/dev/audio, the snd driver)
+  sndprobe         the sound hardware's registers
+  sndstat          the driver's state and statistics
+  sndrate          2 s of silence at each rate, timed by the clock
+                   (6258, 12517, 25033, 50066 Hz)
+  sndtest [RATE]   2 s of 440 Hz mono, 2 s of 440/660 stereo, a 2 s
+                   sweep: listen
+
+MIDI (/dev/midi, /dev/midit, the midi driver)
+  miditool raw HEX...   bytes to /dev/midi
+  miditool phrase       C E G C on /dev/midi, the program waits
+  miditool timed        the same in one write to /dev/midit, timed by
+                        the kernel
+  miditool flush        4 s of notes queued, flushed after 1 s: MIDI_FLUSH
+
+ATW800/2 video (reads only unless said)
+  atwprobe         which 1 MB windows of 0xFEA00000-0xFEDFFFFF answer and
+                   where the card's id block is
+  atw4mb [keep]    registers: whether register 15 = 3 gives a real 4 MB;
+                   puts the 2 MB layout back unless told to keep it
+  atwstart LO HI SECONDS   registers: moves the display start (VTG 12/13)
+                   for SECONDS, then back to 0
+  atwbars 16|32    screen: 640x480 colour bars at 16 or 32 bits a pixel;
+                   restore the desktop with atwtest or a restart of X
+  atwtest, atwtest.sh   screen: the 16 and 32 bpp byte-order test screens,
+                   then X's 1024x768 8 bpp mode and the 2 MB layout
+                   back (the .sh adds xrefresh: run it from an xterm)
+  atwfb            screen: 640x480x256 with a test pattern, the card's
+                   first light from user space (via /dev/atw or /dev/mem)
+  atwblit          the 2D engine's copy and fill commands, byte-checked
+  atwblstat        the engine's status word at every register offset
+  atwblspeed       the engine's copy and fill throughput against the CPU
+  atwfill          what a fill takes as its source
+  atwtorture       300 random unaligned copies and fills against a CPU
+                   model (off-screen memory)
+
+Transputers (/dev/link0 = the C011 link to TRAM slot 1, /dev/link1 =
+the FPGA's T425; the tlk driver).  Each resets the transputer it talks to;
+a Helios or other session on it is lost.
+  tprobe           (in /usr/local/bin, run at boot) what answers on each
+                   link: POKE/PEEK and the type probe
+  ttest [-p PACE] [/dev/linkN]   POKE/PEEK, the type probe, then the
+                   manual's read test: throughput through the driver
+  tdiag [/dev/linkN]   where a link's time goes, byte by byte, timed
+                   inside the driver (TLK_DIAG)
+  tmem [-r] [/dev/linkN]   how much memory the transputer has, by
+                   POKE/PEEK at 2^n; -r: the one beyond relay.tas
+  tfpu [-n] [-r] [/dev/linkN]   whether the transputer has an FPU, and
+                   its lddevid; -n skips the FPU instructions, -r reaches
+                   the second transputer through the first
+  tspy [/dev/linkN]   which of the transputer's links 1-3 lead somewhere
+
+NVRAM
+  setboot          (in /usr/local/bin) the TT's boot preference:
+                   setboot tos | unix | none, no argument prints it

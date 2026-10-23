@@ -63,6 +63,9 @@ cp "$here/sp1hw" "$here/swapfile.init" "$here/xdm.sh" "$p/files/"
 need "$REL/tprobe"; cp "$REL/tprobe" "$p/files/tprobe"
 need "$REL/xtrees.cpio"; cp "$REL/xtrees.cpio" "$p/files/xtrees.cpio"
 cp "$sp1/tools/ttntp/S99ttntp" "$p/files/S99ttntp"
+# the test and diagnostic programs, setboot, xatwrun
+sh "$here/mktests.sh" "$p/files/tests" >/dev/null || exit 1
+cp "$sp1/xserver-r6/xatwrun.sh" "$p/files/xatwrun"
 # the userland
 f=$p/files
 need "$REL/amix/amx.tar"; cp "$REL/amix/amx.tar" "$f/amx.tar"

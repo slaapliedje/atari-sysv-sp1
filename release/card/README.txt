@@ -117,6 +117,14 @@ no memory.  A USB stick appears as
 backlit keyboard need a powered hub: the card feeds them from the
 cartridge port.
 
+Tests and tools
+---------------
+/usr/local/lib/sp1/tests holds the service pack's test programs (sound,
+MIDI, the ATW800/2's video and 2D engine, the transputer links) with a
+README that says what each one does and touches.  `setboot tos|unix|none`
+sets the TT's NVRAM boot preference; `xatwrun -mode 640x480 PROGRAM`
+runs one X program full screen on a second Xatw server (ATW800/2).
+
 More software
 -------------
   apkg update; apkg search NAME; apkg install NAME

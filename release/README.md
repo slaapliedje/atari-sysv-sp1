@@ -24,7 +24,8 @@ python3 release/build.py --only pack
 | Manx | `manx`, `manxmail`, `manxtrust`, `ufetch` in `/usr/bin`, `xmanx` in `/usr/bin/X11` (beside the stock X11R4 clients); the CA bundle in `/usr/local/share/manx/cacert.pem`, pointed at by `/etc/profile.manx` |
 | detection | `sp1hw` (`/etc/rc2.d/S06sp1hw`): the network card (DaynaPORT, NetUSBee, Riebl: `/etc/strcf`, `rc.inet`, `dhcpc.dev`), the ATW800/2 (`/etc/sp1/atw800`, read by the `xd` line's `xdm.sh` when init starts the display manager: X11R6.3's xdm on Xatw, else the stock one; the T425 wipe, `tprobe`'s census, the Riebl probe address), the memory; `swapfile.init` sizes the swap to the memory at the first boot |
 | ATW800/2 | `tlk` in the kernel (its link opens only with the card), X11R6.3 with Xatw and XView in `/usr/x11r6` and `/usr/openwin` (from the TT's build trees, `$REL/xtrees.cpio`), `tprobe`, `S04t425wipe` with Manx's `t425wipe` |
-| tools | the `rsync` and `ttntp` programs (no daemon, no clock configuration) in `/usr/local/bin`; `nuup.sh` and `strcf.nu` in `/usr/local/lib/netusbee` |
+| tools | the `rsync` and `ttntp` programs (no daemon, no clock configuration), `setboot` (the NVRAM boot preference) and `xatwrun` (a program on a second Xatw) in `/usr/local/bin`; `nuup.sh` and `strcf.nu` in `/usr/local/lib/netusbee` |
+| tests | the diagnostics of `tools/snd`, `tools/atw`, `tools/tram`, `atw800`, `driver-midi`, built static by `mktests.sh`, in `/usr/local/lib/sp1/tests` with `tests.README` |
 
 Left out on purpose: the INMOS toolset and iserver (not ours to ship),
 the rsync daemon setup (a per-machine configuration).

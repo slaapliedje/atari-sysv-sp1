@@ -60,6 +60,14 @@ cp /rel/files/tprobe /usr/local/bin/tprobe && chmod 755 /usr/local/bin/tprobe ||
 cp /rel/files/xdm.sh /usr/local/lib/sp1/xdm && chmod 755 /usr/local/lib/sp1/xdm || die "sp1 xdm"
 sed 's|^xd:4:respawn:.*|xd:4:respawn:/usr/local/lib/sp1/xdm|' /etc/inittab > /tmp/inittab && cp /tmp/inittab /etc/inittab || die inittab
 grep "^xd:4:respawn:/usr/local/lib/sp1/xdm$" /etc/inittab > /dev/null || die "inittab xd line"
+echo "== xatwrun, setboot, the test programs (/usr/local/lib/sp1/tests)"
+cp /rel/files/xatwrun /usr/local/bin/xatwrun && chmod 755 /usr/local/bin/xatwrun || die xatwrun
+cp /rel/files/tests/setboot /usr/local/bin/setboot && chmod 755 /usr/local/bin/setboot || die setboot
+rm -rf /usr/local/lib/sp1/tests; mkdir -p /usr/local/lib/sp1/tests || die "tests dir"
+cp /rel/files/tests/* /usr/local/lib/sp1/tests/ || die "tests"
+rm -f /usr/local/lib/sp1/tests/setboot
+chmod 755 /usr/local/lib/sp1/tests/*; chmod 644 /usr/local/lib/sp1/tests/README
+ls /usr/local/lib/sp1/tests | wc -l
 echo auto > /etc/inet/sp1net
 # the 16 MB per-process data limit made sense with 4 MB of ST-RAM; the
 # kernel now takes all the TT-RAM, with swap to match
