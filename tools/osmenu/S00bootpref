@@ -1,0 +1,13 @@
+#!/sbin/sh
+# /etc/rc2.d/S00bootpref: the Unix half of the boot menu's one-shot.
+# OSMENU.PRG on the TOS side sets the NVRAM boot preference to Atari
+# System V and resets when Unix is chosen; this puts TOS back so that
+# the next boot shows the menu again.  Remove it (or `setboot unix`
+# after every boot) to make the TT boot straight into Unix.
+case "$1" in
+start)
+	[ -x /usr/sbin/setboot ] || exit 0
+	/usr/sbin/setboot 2>/dev/null | grep -q "Atari System V" && /usr/sbin/setboot tos > /dev/null
+	;;
+esac
+exit 0

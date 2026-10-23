@@ -182,3 +182,41 @@ TOS sharing C: and the Unix side untouched:
 Tested in Hatari with all four; `setboot` on the Unix side knows
 `magic` since the same commit, BOOTCONF.APP and SETBOOT.PRG on C: set
 it from TOS.  The AUTO order stays MAGXNVM, HNETDEV, the XVDI set.
+
+## The boot menu: `tools/osmenu`
+
+`OSMENU.PRG`, first in `C:\AUTO`, replaces MAGXNVM with a menu on the
+console after HDDriver:
+
+```
+Boot:  1 TOS   2 MagiC   3 FreeMiNT   4 Unix
+       (MagiC in 5 s)
+```
+
+`\AUTO\OSMENU.INF` holds the default and the countdown (`default=tos|
+magic|mint|unix`, `timeout=SECONDS`, 0 for no menu) and the FreeMiNT
+kernel's path (`mint=`).  A MagiC preference in the NVRAM still makes
+MagiC the default, so BOOTCONF.APP and `setboot magic` keep working.
+What each choice does:
+
+- **TOS**: the program returns and the AUTO folder goes on.
+- **MagiC**: `\MAGXBOOT.PRG` is run.  MagiC then runs the AUTO folder
+  itself; OSMENU sees the `MagX` cookie on that pass and returns.
+- **FreeMiNT**: the kernel's path goes into `\AUTO\OSMENU.OUT`, and
+  `MINTBOOT.PRG`, last in AUTO, runs the kernel after the rest of the
+  folder (the VDI must be in before MiNT, as with NVDI) and deletes
+  the file.
+- **Unix**: the NVRAM preference is set to Atari System V and the TT
+  warm-starts (a jump through `_sysbase`); the loader then boots the
+  UNX partition.  `tools/osmenu/S00bootpref`, installed as
+  `/etc/rc2.d/S00bootpref` on the Unix side, puts TOS back at every
+  Unix boot, so the next boot shows the menu again: a one-shot choice,
+  the way GRUB does it.  Without that script the TT stays in Unix
+  until `setboot tos`.
+
+The menu is where the default lives; `setboot` on the Unix side is only
+needed to make Unix the default (`setboot unix` and no S00bootpref).
+Both programs are assembled by `build.sh` with the SVR4 GNU as of the
+ASV cross toolchain, position-free (no relocation table), about 2 KB
+together.  Tested in Hatari: countdown to MagiC, each key, the NVRAM
+write and reset, the OUT file written and removed.
