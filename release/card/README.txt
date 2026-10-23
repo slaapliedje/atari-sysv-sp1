@@ -66,8 +66,21 @@ The system comes up in X (the stock X11R4 server on the TT's screen);
 `init 2` from a console login gives a plain text system, and editing
 /etc/inittab (is:4: -> is:2:) makes that the default.
 
+Time
+----
 The clock is read as TOS sets it (the stock driver was two years
-ahead); the time zone is EST5EDT until you edit /etc/TIMEZONE.
+ahead), and at every boot with a network the time is set from
+pool.ntp.org (/etc/rc2.d/S99ttntp).  The time zone that comes with the
+stock system is US Eastern, so SET YOUR ZONE in /etc/TIMEZONE first -
+with the wrong zone the clock shows the right moment in the wrong
+place, hours off your wall clock.  Change the file's TZ= line, as in
+
+    TZ=MST7MDT
+
+(standard-zone name, hours west of Greenwich, daylight name: PST8PDT,
+CST6CDT, GMT0BST, MET-1DST...).  It counts from the next boot or login;
+`date` shows the result.  Without a network ttntp is skipped and the
+clock stays as TOS set it.
 
 Network: /etc/inet/hosts.net gets the address from DHCP at every boot;
 `ifconfig en0` shows it, `netstat -rn` the route.  Without a DHCP server
