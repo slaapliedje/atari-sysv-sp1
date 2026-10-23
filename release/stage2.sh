@@ -54,6 +54,12 @@ cp /rel/files/swapfile.init /etc/init.d/swapfile && chmod 744 /etc/init.d/swapfi
 rm -f /etc/rc2.d/S03swapfile /etc/rc0.d/K99swapfile
 ln /etc/init.d/swapfile /etc/rc2.d/S03swapfile; ln /etc/init.d/swapfile /etc/rc0.d/K99swapfile
 cp /rel/files/tprobe /usr/local/bin/tprobe && chmod 755 /usr/local/bin/tprobe || die tprobe
+# the display manager is picked when init starts it (init reads inittab
+# before rc2 runs, so sp1hw cannot change the line for the same boot)
+[ -d /usr/local/lib/sp1 ] || mkdir -p /usr/local/lib/sp1
+cp /rel/files/xdm.sh /usr/local/lib/sp1/xdm && chmod 755 /usr/local/lib/sp1/xdm || die "sp1 xdm"
+sed 's|^xd:4:respawn:.*|xd:4:respawn:/usr/local/lib/sp1/xdm|' /etc/inittab > /tmp/inittab && cp /tmp/inittab /etc/inittab || die inittab
+grep "^xd:4:respawn:/usr/local/lib/sp1/xdm$" /etc/inittab > /dev/null || die "inittab xd line"
 echo auto > /etc/inet/sp1net
 # the 16 MB per-process data limit made sense with 4 MB of ST-RAM; the
 # kernel now takes all the TT-RAM, with swap to match

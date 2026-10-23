@@ -54,7 +54,7 @@ python3 -I "$sp1/kernel/patch-ttram.py" "$p/stock/KERNEL" "$p/edt/KERNEL.256" "$
 # /stand has no room for a second kernel)
 python3 -I "$here/bfs.py" "$STOCK" 122880000 get unix "$p/edt/unix.stock" >/dev/null
 # what the first boot finds out, and the pieces it switches on
-cp "$here/sp1hw" "$here/swapfile.init" "$p/files/"
+cp "$here/sp1hw" "$here/swapfile.init" "$here/xdm.sh" "$p/files/"
 need "$REL/tprobe"; cp "$REL/tprobe" "$p/files/tprobe"
 need "$REL/xtrees.cpio"; cp "$REL/xtrees.cpio" "$p/files/xtrees.cpio"
 cp "$sp1/tools/ttntp/S99ttntp" "$p/files/S99ttntp"

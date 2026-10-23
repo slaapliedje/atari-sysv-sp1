@@ -14,10 +14,12 @@
 #             dhcpc asks DHCP on it.  "static" in /etc/inet/sp1net keeps
 #             your hand-made files.
 #   ATW800/2  the loader's EDTP.tlk probe found the card's link (a TLK
-#             row): then xdm is X11R6.3's Xatw on the card, the T425 is
-#             wiped at boot (S04t425wipe) and tprobe's census of the
-#             transputers goes to /etc/sp1/transputers.  Without the
-#             card the stock X11R4 server runs, and the loader's Riebl
+#             row): then /etc/sp1/atw800 says yes, which makes the xd
+#             line's /usr/local/lib/sp1/xdm start X11R6.3's xdm on the
+#             card's Xatw server, the T425 is wiped at boot (S04t425wipe)
+#             and tprobe's census of the transputers goes to
+#             /etc/sp1/transputers.  Without the card the stock X11R4
+#             server runs, and the loader's Riebl
 #             probe is put back at the card's real address (the image
 #             ships it moved, because the ATW800/2's video memory answers
 #             there and hangs the stock driver): that takes effect at
@@ -70,17 +72,13 @@ esac
 
 # ---- the ATW800/2 ----
 # the loader's probe (EDTP.tlk) found the card's link: the table has a
-# TLK row and the kernel the tlk driver
+# TLK row and the kernel the tlk driver.  /etc/sp1/atw800 is read by
+# the xd line's /usr/local/lib/sp1/xdm when init starts the display
+# manager (after rc2)
 atw=no
 have TLK && atw=yes
 echo $atw > /etc/sp1/atw800
 if [ $atw = yes ]; then
-	if [ -x /usr/x11r6/bin/xdm ]; then
-		# X11R6.3's xdm with the Xatw server, instead of the stock X11R4 one
-		grep '^xd:4:respawn:/usr/x11r6/bin/xdm' /etc/inittab > /dev/null || {
-			sed 's|^xd:4:respawn:.*|xd:4:respawn:/usr/x11r6/bin/xdm -nodaemon -config /usr/x11r6/lib/X11/xdm/xdm-config > /usr/x11r6/lib/X11/xdm/xdm-init.out 2>\&1 < /dev/null|' /etc/inittab > /etc/sp1/inittab.new
-			cp /etc/sp1/inittab.new /etc/inittab; init q; }
-	fi
 	if [ -f /stand/edt_data.atw ]; then
 		cmp -s /stand/edt_data.atw /stand/edt_data || cp /stand/edt_data.atw /stand/edt_data
 	fi
@@ -89,9 +87,6 @@ if [ $atw = yes ]; then
 		trams=`egrep -ci 'transputer|T4|T8|C004' /etc/sp1/transputers`
 	fi
 else
-	grep '^xd:4:respawn:/usr/bin/X11/xdm' /etc/inittab > /dev/null || {
-		sed 's|^xd:4:respawn:.*|xd:4:respawn:/usr/bin/X11/xdm -nodaemon > /usr/lib/X11/xdm/xdm-init.out 2>\&1 < /dev/null|' /etc/inittab > /etc/sp1/inittab.new
-		cp /etc/sp1/inittab.new /etc/inittab; init q; }
 	if [ -f /stand/edt_data.la ]; then
 		cmp -s /stand/edt_data.la /stand/edt_data || {
 			cp /stand/edt_data.la /stand/edt_data
