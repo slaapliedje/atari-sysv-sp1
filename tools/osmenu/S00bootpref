@@ -7,7 +7,7 @@
 case "$1" in
 start)
 	[ -x /usr/sbin/setboot ] || exit 0
-	/usr/sbin/setboot 2>/dev/null | grep -q "Atari System V" && /usr/sbin/setboot tos > /dev/null
+	/usr/sbin/setboot 2>/dev/null | grep "Atari System V" > /dev/null && /usr/sbin/setboot tos > /dev/null
 	;;
 esac
 exit 0

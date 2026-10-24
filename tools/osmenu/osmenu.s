@@ -10,7 +10,7 @@
 #   FreeMiNT  leaves the kernel's path in \AUTO\OSMENU.OUT for
 #             MINTBOOT.PRG, last in AUTO, so the VDI (XVDI) loads first
 #   Unix      writes "Atari System V" into the NVRAM boot preference and
-#             warm-resets; the Unix side's rc puts TOS back so that the
+#             cold-starts the TT (a warm start ignores the preference); the Unix side's rc puts TOS back so that the
 #             next boot shows the menu again (one-shot, as GRUB does it)
 #
 # \AUTO\OSMENU.INF, plain text:  default=tos|magic|mint|unix
@@ -356,7 +356,10 @@ c_no:	moveq	&0,%d0
 	rts
 c_yes:	moveq	&1,%d0
 	rts
-reset:	move.l	0x4f2,%a0		# _sysbase: the ROM's entry, a warm start
+reset:	clr.l	0x420			# memvalid, memval2, memval3: a COLD start.  After a
+	clr.l	0x43a			# warm one the ROM does not hand the NVRAM preference
+	clr.l	0x51a			# to the root-sector loader, which then boots TOS again
+	move.l	0x4f2,%a0		# _sysbase: the ROM's entry
 	jmp	(%a0)
 
 banner:	.byte	13,10

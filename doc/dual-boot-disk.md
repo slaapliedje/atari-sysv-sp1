@@ -207,8 +207,11 @@ What each choice does:
   folder (the VDI must be in before MiNT, as with NVDI) and deletes
   the file.
 - **Unix**: the NVRAM preference is set to Atari System V and the TT
-  warm-starts (a jump through `_sysbase`); the loader then boots the
-  UNX partition.  `tools/osmenu/S00bootpref`, installed as
+  cold-starts (memvalid, memval2 and memval3 cleared, then a jump
+  through `_sysbase`); the loader then boots the UNX partition.  A
+  warm start is not enough: the ROM then hands the loader the old
+  preference and TOS comes up again (seen on the TT and in Hatari), so
+  the memory test runs once more on the way to Unix.  `tools/osmenu/S00bootpref`, installed as
   `/etc/rc2.d/S00bootpref` on the Unix side, puts TOS back at every
   Unix boot, so the next boot shows the menu again: a one-shot choice,
   the way GRUB does it.  Without that script the TT stays in Unix
