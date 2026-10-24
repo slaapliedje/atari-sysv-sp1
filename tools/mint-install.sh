@@ -20,6 +20,8 @@
 # NetUSBee ones (the ENEC3.XIF EtherNEC driver loads by itself; it hangs
 # a Hatari without a NetUSBee, so take it out for emulator tests).
 # The ext2 userland (drive E: in MINT.CNF) is a separate step.
+# With mint/ufsxfs/UFS.XFS built, it goes into MINT\1-19-CUR too: the
+# Unix slices of the same disk as MiNT drives V: W: X: (read-only).
 set -e
 IMG=$1; CARD=$2; D="$IMG@@${3:-1024}"
 [ -f "$IMG" ] && [ -f "$CARD" ] || { echo "usage: $0 IMAGE CARD.IMG [OFFSET]" >&2; exit 1; }
@@ -48,4 +50,6 @@ open(p, 'wb').write(s.encode('latin1'))
 EOF
 find . -type d ! -path . | sort | while read -r d; do mmd -i "$D" "::/${d#./}" 2>/dev/null || true; done
 find . -type f | sort | while read -r f; do mcopy -m -D o -i "$D" "$f" "::/${f#./}"; done
+UFS="$(dirname "$0")/../mint/ufsxfs/UFS.XFS"
+[ -f "$UFS" ] && mcopy -m -D o -i "$D" "$UFS" ::/MINT/1-19-CUR/UFS.XFS && echo "ufs.xfs installed"
 echo "FreeMiNT installed: $(find . -type f | wc -l) files; kernel chooser ::/MINT/MTLOAD.PRG"
