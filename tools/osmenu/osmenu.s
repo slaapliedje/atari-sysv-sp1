@@ -9,9 +9,12 @@
 #             this program sees the MagX cookie then and returns at once)
 #   FreeMiNT  leaves the kernel's path in \AUTO\OSMENU.OUT for
 #             MINTBOOT.PRG, last in AUTO, so the VDI (XVDI) loads first
-#   Unix      writes "Atari System V" into the NVRAM boot preference and
-#             cold-starts the TT (a warm start ignores the preference); the Unix side's rc puts TOS back so that the
-#             next boot shows the menu again (one-shot, as GRUB does it)
+#   Unix      writes "Atari System V" into the NVRAM boot preference,
+#             says that the TT must be switched off and on (the loader
+#             reads the preference at power-up only: neither a warm nor
+#             a cold reset gets there), waits for a key and goes on with
+#             TOS.  The TT then boots Unix at every power-up until
+#             `setboot tos` or `setboot magic` there.
 #
 # \AUTO\OSMENU.INF, plain text:  default=tos|magic|mint|unix
 #                                timeout=SECONDS      (0 = no menu)
@@ -185,9 +188,14 @@ unix:
 	lea	12(%sp),%sp
 	tst.l	%d0
 	bne.s	nonvw
-	pea	reset(%pc)
-	move.w	&38,-(%sp)		# Supexec: warm reset, never back
-	trap	&14
+	pea	poweroff(%pc)
+	move.w	&9,-(%sp)		# Cconws
+	trap	&1
+	addq.l	&6,%sp
+	move.w	&8,-(%sp)		# Cnecin: a key, then TOS
+	trap	&1
+	addq.l	&2,%sp
+	bra	quit
 nonvw:	pea	nonvram(%pc)
 	move.w	&9,-(%sp)
 	trap	&1
@@ -356,12 +364,6 @@ c_no:	moveq	&0,%d0
 	rts
 c_yes:	moveq	&1,%d0
 	rts
-reset:	clr.l	0x420			# memvalid, memval2, memval3: a COLD start.  After a
-	clr.l	0x43a			# warm one the ROM does not hand the NVRAM preference
-	clr.l	0x51a			# to the root-sector loader, which then boots TOS again
-	move.l	0x4f2,%a0		# _sysbase: the ROM's entry
-	jmp	(%a0)
-
 banner:	.byte	13,10
 	.ascii	"Boot:  1 TOS   2 MagiC   3 FreeMiNT   4 Unix"
 	.byte	13,10,0
@@ -380,6 +382,15 @@ crlf:	.byte	13,10,0
 nomagic: .ascii	"OSMENU: MagiC did not start (\\MAGXBOOT.PRG, \\MAGIC.RAM?)"
 	.byte	13,10,0
 nonvram: .ascii	"OSMENU: no NVRAM access, staying with TOS"
+	.byte	13,10,0
+poweroff: .byte	13,10
+	.ascii	"OSMENU: Unix is now the boot preference.  Switch the TT off"
+	.byte	13,10
+	.ascii	"and on to boot it (a reset is not enough); it boots Unix at"
+	.byte	13,10
+	.ascii	"every power-up until 'setboot tos' or 'setboot magic' there."
+	.byte	13,10
+	.ascii	"Any key goes on with TOS for now."
 	.byte	13,10,0
 magxboot: .asciz "\\MAGXBOOT.PRG"
 infname: .asciz	"\\AUTO\\OSMENU.INF"

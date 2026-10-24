@@ -206,23 +206,23 @@ What each choice does:
   `MINTBOOT.PRG`, last in AUTO, runs the kernel after the rest of the
   folder (the VDI must be in before MiNT, as with NVDI) and deletes
   the file.
-- **Unix**: the NVRAM preference is set to Atari System V and the TT
-  cold-starts (memvalid, memval2 and memval3 cleared, then a jump
-  through `_sysbase`); the loader then boots the UNX partition.  A
-  warm start is not enough: the ROM then hands the loader the old
-  preference and TOS comes up again (seen on the TT and in Hatari), so
-  the memory test runs once more on the way to Unix.  `tools/osmenu/S00bootpref`, installed as
-  `/etc/rc2.d/S00bootpref` on the Unix side, puts TOS back at every
-  Unix boot, so the next boot shows the menu again: a one-shot choice,
-  the way GRUB does it.  Without that script the TT stays in Unix
-  until `setboot tos`.
+- **Unix**: the NVRAM preference is set to Atari System V, and the
+  program says that the TT must be switched off and on, waits for a
+  key and goes on with TOS.  No reset does it: HDDriver's root-sector
+  loader is handed the preference at power-up only; after a warm or a
+  cold reset (memvalid cleared, a jump through `_sysbase`, the memory
+  test and all) TOS comes up again, seen on the TT.  From then on the
+  TT boots Unix at every power-up; `setboot tos` or `setboot magic`
+  on the Unix side (and BOOTCONF.APP on the TOS side) switch back.
 
-The menu is where the default lives; `setboot` on the Unix side is only
-needed to make Unix the default (`setboot unix` and no S00bootpref).
+So the menu is for the TOS-side systems, which it starts in place; Unix
+is reached through the NVRAM preference and the power switch, in both
+directions.  (An earlier one-shot, an rc script putting TOS back at
+every Unix boot, is gone with the reset that it needed.)
 Both programs are assembled by `build.sh` with the SVR4 GNU as of the
 ASV cross toolchain, position-free (no relocation table), about 2 KB
 together.  Tested in Hatari: countdown to MagiC, each key, the NVRAM
-write and reset, the OUT file written and removed.
+write, the OUT file written and removed.
 
 ## FreeMiNT on C: too
 
