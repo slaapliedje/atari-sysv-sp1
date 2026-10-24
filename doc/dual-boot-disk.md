@@ -220,3 +220,29 @@ Both programs are assembled by `build.sh` with the SVR4 GNU as of the
 ASV cross toolchain, position-free (no relocation table), about 2 KB
 together.  Tested in Hatari: countdown to MagiC, each key, the NVRAM
 write and reset, the OUT file written and removed.
+
+## FreeMiNT on C: too
+
+`tools/mint-install.sh` takes the FreeMiNT OS Distro's card image
+(github.com/rootadm79/freemint_os_distro, 26.2, a byte-swapped CF
+image) and puts its kernel, XaAES, TeraDesk and applications on C:
+beside MagiC: `C:\MINT` (kernel 1.19 and drivers, the distro's loader
+as `MINT\MTLOAD.PRG`, which picks the kernel for the CPU), `APPS`,
+`ACC`, `CPX`, `BTFONTS`, `CLIPBRD`, `GUIDES`.  The menu starts it
+through MINTBOOT after the AUTO folder, so XVDI is the VDI XaAES draws
+with: TeraDesk at 1024x768 on the ATW800/2 in Hatari.  Left out, each
+on purpose: NVDI and WDIALOG (commercial; XVDI does the job), the demo
+HDDriver and its CPX, the CT60/Falcon-only pieces (maprom, fVDI,
+Videlity, the Videl and CT60 CPXs), the logs.  `MINT.CNF` keeps the
+distro's layout: its ext2 userland is drive E: (`sln e:/bin u:/bin`
+and so on), which is the next step; without it the GEM side still
+boots, with the `exec u:/sbin/...` lines failing harmlessly.
+
+Two traps from the Hatari runs: `ENEC3.XIF`, the EtherNEC driver (the
+NetUSBee's Ethernet under MiNT), probes the cartridge port when loaded
+and never returns on a machine without the card, which is every Hatari
+so far (the loop reads `0xFB0FFE`/`0xFB0044`/... and waits on `_hz_200`
+with the MFP masked); take it out of `MINT\1-19-CUR` for emulator tests
+and the same goes for `exec u:/sysdir/usb/loader.prg`.  And XaAES's
+`XA_BOOT.LOG` is only as long as its directory entry says while the
+file is open: read the clusters, or boot with `FS_WB_ENABLE` off.
