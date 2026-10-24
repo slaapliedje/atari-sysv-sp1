@@ -16,3 +16,5 @@ driver-ub/ub.pc.o
 driver-ub/ubuser
 driver-ub/ubuserd
 driver-ub/ubtool
+driver-midi/miditool
+tools/ttntp/ttntp

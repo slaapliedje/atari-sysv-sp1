@@ -54,7 +54,12 @@ per program (terminal, the file manager - Atari's `wish`, not Tcl's - an
 editor, a calculator, the
 manuals, a load meter, OpenUA) and a clock. Its buttons come from
 `~/.ttpanelrc`, one `Label : icon : command` per line (see `xdm/ttpanel.c`
-for the icons). The OpenLook Workspace menu (right button on the
+for the icons), and the panel edits that file itself: the right button on
+a launcher opens a menu with Edit..., Add after..., Remove, Move left and
+Move right (elsewhere on the panel, Add... and Reload), and Edit and Add
+open a dialog with the label, the command and the twelve icons to pick
+from. With olvwm the panel also has a workspace switcher and a Log out
+button. The OpenLook Workspace menu (right button on the
 background) has the terminal and the file manager too.
 
 Start it with `/usr/x11r6/bin/xdm -config /usr/x11r6/lib/X11/xdm/xdm-config`
