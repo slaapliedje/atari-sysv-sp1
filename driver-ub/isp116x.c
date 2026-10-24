@@ -1208,6 +1208,131 @@ retry_same:
 	return done;
 }
 
+/*
+ * The daemon's HID poll: several interrupt IN transfers in one ATL
+ * list, and no spinning.  The PTDs go into the buffer each followed by
+ * its data area (len rounded up to 4; filler on the way in, none after
+ * the last PTD), the layout the Linux driver uses; then the process
+ * sleeps a tick - with B5_5 the chip tries each transfer once, in the
+ * next frame - and the list is read back.  On the NetUSBee every
+ * register access is a frozen-cache dance at spl7, so this is what
+ * makes a poll cheap: a few dozen accesses, not a millisecond of them
+ * per device.  A root hub change seen meanwhile is left to the hub
+ * poll.  Each job's act: the bytes received, 0 for a NAK, -1 when the
+ * transfer failed.  Returns 0, or -1 when the list could not be run.
+ */
+long
+isp116x_poll_int(struct ub_intjob *jobs, int n)
+{
+	struct isp116x *isp116x = &isp116x_dev;
+	static const unsigned char zeros[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	PTD ptds[UB_NINTJOB];
+	long wlen = 0, rlen = 0, stat = 0, cc, i, t, done;
+
+	if (n <= 0 || n > UB_NINTJOB || isp116x->disabled)
+		return -1;
+	if (!lock_usb(&job_in_progress))
+		return -1;
+	for (i = 0; i < n; i++) {
+		struct ub_intjob *j = &jobs[i];
+		long epnum = usb_pipeendpoint(j->pipe);
+		PTD *p = &ptds[i];
+
+		j->act = -1;
+		if (j->len > 8 || j->len < 1 || devgone == j->dev) {
+			unlock_usb(&job_in_progress);
+			return -1;
+		}
+		p->count = PTD_CC_MSK | PTD_ACTIVE_MSK |
+			   PTD_TOGGLE(usb_gettoggle(j->dev, epnum, 0));
+		p->mps = PTD_MPS(usb_maxpacket(j->dev, j->pipe)) |
+			 PTD_SPD(usb_pipeslow(j->pipe)) | PTD_EP(epnum) |
+			 (i == n - 1 ? PTD_LAST_MSK : 0);
+		p->len = PTD_LEN(j->len) | PTD_DIR(PTD_DIR_IN) | PTD_B5_5(1);
+		p->faddr = PTD_FA(usb_pipedevice(j->pipe));
+		rlen += sizeof(PTD) + ((j->len + 3) & ~3);
+		wlen += sizeof(PTD) + (i == n - 1 ? 0 : ((j->len + 3) & ~3));
+	}
+
+	MINT_INT_OFF;
+	if (isp116x_read_reg16(isp116x, HCBUFSTAT) & HCBUFSTAT_ATL_FULL) {
+		MINT_INT_ON;
+		DEBUG(("poll_int: ATL buffer still full"));
+		unlock_usb(&job_in_progress);
+		return -1;
+	}
+	isp116x_write_reg32(isp116x, HCINTSTAT, 0xff);
+	isp116x_write_reg16(isp116x, HCuPINT, HCuPINT_AIIEOT);
+	isp116x_write_reg16(isp116x, HCXFERCTR, wlen);
+	isp116x_write_addr(isp116x, HCATLPORT | ISP116x_WRITE_OFFSET);
+	for (i = 0; i < n; i++) {
+		isp116x_raw_write_data16(isp116x, ptds[i].count);
+		isp116x_raw_write_data16(isp116x, ptds[i].mps);
+		isp116x_raw_write_data16(isp116x, ptds[i].len);
+		isp116x_raw_write_data16(isp116x, ptds[i].faddr);
+		if (i < n - 1)
+			write_ptddata_to_fifo(isp116x, (void *)zeros,
+					      (jobs[i].len + 3) & ~3);
+	}
+	MINT_INT_ON;
+
+	/* asleep until the frame has been: a tick, two when the first
+	 * ended at once; five and it is a failure */
+	for (t = 0; t < 5 && stat == 0; t++) {
+		mdelay(1);
+		stat = isp116x_interrupt(isp116x);
+	}
+	got_rhsc = 0;
+	MINT_INT_OFF;
+	done = isp116x_read_reg16(isp116x, HCBUFSTAT) & HCBUFSTAT_ATL_DONE;
+	if (!done) {
+		MINT_INT_ON;
+		DEBUG(("poll_int: not done, stat %ld", stat));
+		unlock_usb(&job_in_progress);
+		return -1;
+	}
+	/* read back whatever the state: that empties the buffer */
+	isp116x_write_reg16(isp116x, HCuPINT, HCuPINT_AIIEOT);
+	isp116x_write_reg16(isp116x, HCXFERCTR, rlen);
+	isp116x_write_addr(isp116x, HCATLPORT);
+	for (i = 0; i < n; i++) {
+		ptds[i].count = isp116x_raw_read_data16(isp116x);
+		ptds[i].mps = isp116x_raw_read_data16(isp116x);
+		ptds[i].len = isp116x_raw_read_data16(isp116x);
+		ptds[i].faddr = isp116x_raw_read_data16(isp116x);
+		read_ptddata_from_fifo(isp116x, jobs[i].buf, (jobs[i].len + 3) & ~3);
+	}
+	MINT_INT_ON;
+	if (stat <= 0) {
+		unlock_usb(&job_in_progress);
+		return -1;
+	}
+
+	for (i = 0; i < n; i++) {
+		struct ub_intjob *j = &jobs[i];
+		PTD *p = &ptds[i];
+		long epnum = usb_pipeendpoint(j->pipe);
+
+		cc = PTD_GET_CC(p);
+		if (!cc && !PTD_GET_COUNT(p)) {
+			/* a NAK: the chip toggled anyway (the B5_5 bug) */
+			p->count ^= PTD_TOGGLE_MSK;
+			usb_settoggle(j->dev, epnum, 0, PTD_GET_TOGGLE(p));
+			j->act = 0;
+		} else if (cc == TD_CC_NOERROR || cc == TD_DATAUNDERRUN) {
+			usb_settoggle(j->dev, epnum, 0, PTD_GET_TOGGLE(p));
+			j->act = PTD_GET_COUNT(p);
+		} else if (cc == TD_NOTACCESSED)
+			j->act = 0;	/* no frame for it: next time */
+		else {
+			DEBUG(("poll_int: device %ld cc %lx", usb_pipedevice(j->pipe), cc));
+			j->act = -1;
+		}
+	}
+	unlock_usb(&job_in_progress);
+	return 0;
+}
+
 /* Adapted from au1x00_usb_ohci.c
  */
 static long

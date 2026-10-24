@@ -830,17 +830,25 @@ struct buf *bp;
  * UBIOC_WORK, the daemon's loop body: the stack started if need be, the
  * hubs polled, then a wait (interruptible, so the daemon can be killed).
  * Half a second between hub polls; with a keyboard or a mouse on the bus
- * their interrupt pipes are tried every UB_HID_TICKS ticks instead (about
- * 50 times a second: a try costs a USB frame, a millisecond of the CPU's
- * time at most), the hubs every UB_HUB_EVERY of those.
+ * their interrupt pipes are tried instead: the poll itself sleeps a
+ * tick for the USB frame (isp116x_poll_int), then UB_HID_TICKS more -
+ * about 50 polls a second while reports come, and once UB_HID_QUIET
+ * polls have brought none, UB_HID_IDLE ticks: some 10 a second, so an
+ * idle TT spends next to nothing on its keyboard and mouse and the
+ * first key or move brings the rate back.  The hubs every UB_HUB_EVERY
+ * polls.  (The first daemon spun through each transfer: on the
+ * NetUSBee, where every register access is a frozen-cache dance, that
+ * was 60% of the CPU for a keyboard and a mouse doing nothing.)
  */
-#define UB_HID_TICKS	2
+#define UB_HID_TICKS	1
+#define UB_HID_QUIET	50
+#define UB_HID_IDLE	(hertz / 10)
 #define UB_HUB_EVERY	25
 
 static int
 ub_work()
 {
-	static int since_hubs;
+	static int since_hubs, quiet;
 	int r = 0, hid = 0;
 
 	ub_lock();
@@ -856,13 +864,17 @@ ub_work()
 			ub_poll_hubs();
 			since_hubs = 0;
 		}
-		if (hid)
-			ub_hid_poll();
+		if (hid) {
+			if (ub_hid_poll() > 0)
+				quiet = 0;
+			else if (quiet <= UB_HID_QUIET)
+				quiet++;
+		}
 	}
 	ub_unlock();
 	if (r)
 		return r;
-	delay(hid ? UB_HID_TICKS : hertz / 2);
+	delay(!hid ? hertz / 2 : quiet > UB_HID_QUIET ? UB_HID_IDLE : UB_HID_TICKS);
 	return 0;
 }
 

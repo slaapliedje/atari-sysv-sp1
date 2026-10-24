@@ -9,9 +9,10 @@
  * usb_keyboard.c (Christian Zietz, GPL-2): a US layout to Atari ST
  * scancodes, F11/F12 as Help/Undo, End/PgUp/PgDn as Shift+Home/Up/Down.
  * The devices are polled from the daemon (ub_hid_poll), as FreeMiNT does
- * from a kernel thread: an interrupt pipe is read as a bulk message that
- * the host controller driver tries once (a NAK, nothing to report, is
- * the usual answer).
+ * from a kernel thread: the interrupt pipes go to the host controller
+ * as one list (isp116x_poll_int), which tries each once in the next USB
+ * frame while the daemon sleeps (a NAK, nothing to report, is the usual
+ * answer).
  */
 #include "ub.h"
 #include "usb.h"
@@ -208,13 +209,15 @@ ub_hid_present()
 	return 0;
 }
 
-/* the daemon's poll: one try at each device's interrupt pipe */
-void
+/* the daemon's poll: one try at each device's interrupt pipe, all in
+ * one list; returns the number of reports that came */
+int
 ub_hid_poll()
 {
-	unsigned char buf[8];
-	long act;
-	int i;
+	struct ub_intjob jobs[UB_HID_MAX];
+	struct ub_hid *hs[UB_HID_MAX];
+	unsigned char bufs[UB_HID_MAX][8];
+	int i, n = 0, got = 0;
 
 	for (i = 0; i < UB_HID_MAX; i++) {
 		struct ub_hid *h = &ub_hid[i];
@@ -222,16 +225,28 @@ ub_hid_poll()
 		if (h->dev == (struct usb_device *)0)
 			continue;
 		h->polls++;
-		act = 0;
-		if (usb_bulk_msg(h->dev, h->pipe, buf, h->maxp > 8 ? 8 : h->maxp, &act,
-		    USB_CNTL_TIMEOUT, 0) < 0 || act < 3)
+		hs[n] = h;
+		jobs[n].dev = h->dev;
+		jobs[n].pipe = h->pipe;
+		jobs[n].buf = bufs[n];
+		jobs[n].len = h->maxp > 8 ? 8 : h->maxp;
+		n++;
+	}
+	if (n == 0 || isp116x_poll_int(jobs, n) < 0)
+		return 0;
+	for (i = 0; i < n; i++) {
+		struct ub_hid *h = hs[i];
+
+		if (jobs[i].act < 3)
 			continue;
 		h->reports++;
+		got++;
 		if (h->kind == UB_HID_KBD)
-			kbd_report(h, buf, (int)act);
+			kbd_report(h, bufs[i], (int)jobs[i].act);
 		else
-			mouse_report(h, buf, (int)act);
+			mouse_report(h, bufs[i], (int)jobs[i].act);
 	}
+	return got;
 }
 
 static long

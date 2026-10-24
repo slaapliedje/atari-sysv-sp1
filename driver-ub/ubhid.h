@@ -23,6 +23,6 @@ extern struct ub_hid ub_hid[UB_HID_MAX];
 
 long ub_hid_init();
 int ub_hid_present();
-void ub_hid_poll();
+int ub_hid_poll();		/* the reports that came */
 void ub_ikbd_put();		/* (unsigned char *bytes, int n): ub.c */
 #endif

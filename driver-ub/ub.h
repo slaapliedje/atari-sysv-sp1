@@ -84,6 +84,17 @@ void ub_mdelay();		/* (ms) */
 /* interrupts around a chip transaction (the kernel: spl) */
 void ub_int_off();
 void ub_int_on();
+/* one interrupt IN transfer of a HID poll: isp116x_poll_int runs a
+ * list of them in one ATL buffer (ubhid.c fills it, isp116x.c runs it) */
+struct ub_intjob {
+	struct usb_device *dev;
+	unsigned long	pipe;		/* the interrupt IN pipe */
+	unsigned char	*buf;		/* 8 bytes */
+	long		len;		/* wanted, <= 8 */
+	long		act;		/* received; 0 = NAK, -1 = failed */
+};
+#define UB_NINTJOB	4
+
 #define MINT_INT_OFF	ub_int_off()
 #define MINT_INT_ON	ub_int_on()
 #define TOS_INT_OFF
