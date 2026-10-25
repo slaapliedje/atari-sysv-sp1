@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 
 #include "atw.h"
 #include "servermd.h"
@@ -551,6 +552,38 @@ atwScreenInit(index, pScreen, argc, argv)
     return cfbCreateDefColormap(pScreen);
 }
 
+/*
+ * The memory limits. Atari System V gives a process 16 MB of data
+ * (RLIMIT_DATA, what brk may grow to) and 16 MB of address space in
+ * all (RLIMIT_VMEM, what as_map lets it map), soft and hard limits
+ * alike, and xdm's server inherits them. A 1024x768 screen at 32 bpp
+ * fills that with a browser's pixmaps, and from then on R6.3's os/io.c
+ * drops a client whose reply buffer cannot grow (xwd -root, a full
+ * xlsfonts: "X connection to :0 broken"). Both are raised here, before
+ * anything is allocated: root may raise the hard limits.
+ */
+static unsigned long atwDataMB = ATW_DATA_MB;
+
+static void
+atwDataLimit()
+{
+    static int res[] = { RLIMIT_DATA, RLIMIT_VMEM };
+    struct rlimit rl;
+    rlim_t want = atwDataMB << 20;
+    int i;
+
+    for (i = 0; i < 2; i++) {
+	if (getrlimit(res[i], &rl) != 0 || rl.rlim_cur >= want)
+	    continue;
+	rl.rlim_cur = want;
+	if (rl.rlim_max < want)
+	    rl.rlim_max = want;
+	if (setrlimit(res[i], &rl) != 0)
+	    ErrorF("atw: the %s limit stays below -datalimit %lu: %s\n",
+		   i ? "address space" : "data", atwDataMB, strerror(errno));
+    }
+}
+
 void
 InitOutput(pScreenInfo, argc, argv)
     ScreenInfo	*pScreenInfo;
@@ -559,6 +592,7 @@ InitOutput(pScreenInfo, argc, argv)
 {
     int i;
 
+    atwDataLimit();		/* OsVendorInit runs only with DDXOSINIT */
     atwVtInit();		/* before the card: are we on show? */
     if (!atwScreen.fb && !atwMapCard())
 	FatalError("atw: no ATW800/2 found\n");
@@ -613,6 +647,7 @@ InitInput(argc, argv)
 void
 OsVendorInit()
 {
+    atwDataLimit();
 }
 
 void
@@ -657,6 +692,7 @@ atwListModesExit()
  * -vt N           switchable with other servers: this is Ctrl+Alt+FN
  * -fboffset B     our screen starts B bytes into video memory (so that
  *                 switchable servers each have their own)
+ * -datalimit MB   the data limit the server is raised to (128)
  */
 int
 ddxProcessArgument(argc, argv, i)
@@ -692,6 +728,10 @@ ddxProcessArgument(argc, argv, i)
 	atwScreen.fboff = strtoul(argv[i + 1], (char **)0, 0) & ~63UL;
 	return 2;
     }
+    if (strcmp(argv[i], "-datalimit") == 0 && i + 1 < argc) {
+	atwDataMB = strtoul(argv[i + 1], (char **)0, 0);
+	return 2;
+    }
     if (strcmp(argv[i], "-listmodes") == 0) {
 	atwListModesExit();
 	return 1;
@@ -708,4 +748,5 @@ ddxUseMsg()
     ErrorF("-listmodes             list the modes and exit\n");
     ErrorF("-vt N                  switchable with Ctrl+Alt+F1..F9: this is FN\n");
     ErrorF("-fboffset B            the screen starts B bytes into video memory\n");
+    ErrorF("-datalimit MB          raise the data limit to MB (%d)\n", ATW_DATA_MB);
 }

@@ -38,6 +38,7 @@
 #define ATW_OFF_LUT	(atwScreen.size - 0x1000)	/* 256 x RGB565, big-endian words */
 #define ATW_OFF_INFO	(atwScreen.size - 0xE00)	/* 32-byte FPGA id string */
 #define ATW_OFF_VTG	(atwScreen.size - 0x800)	/* word registers, write-only */
+#define ATW_DATA_MB	128	/* -datalimit default: see atwDataLimit */
 #define ATW_FB_MAX	(atwScreen.size - 0x1000)	/* the frame buffer ends at the LUT */
 #define ATW_ID		0x2063706DUL			/* " cpm" at INFO + 24 */
 #define ATW_R_CTRL	0x00
