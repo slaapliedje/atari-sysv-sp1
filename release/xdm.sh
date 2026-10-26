@@ -6,11 +6,11 @@
 # X11R6.3's xdm on the ATW800/2's Xatw server when the boot found the
 # card (/etc/sp1/atw800), the stock X11R4 one otherwise.
 #
-# The hard memory limits, 16 MB of data and of address space by default,
-# raised for the sessions xdm starts: a user's program may then raise
-# its own soft limits (Manx does; Xatw, root's, raises its hard ones).
-ulimit -Hd 131072
-ulimit -Hv 131072
+# The memory limits, 16 MB of data and of address space by default, soft
+# and hard, raised for the sessions xdm starts: a user's program may
+# have up to 128 MB (/sbin/sh's ulimit sets both limits; it ignores -H).
+ulimit -d 131072
+ulimit -v 131072
 if [ "`cat /etc/sp1/atw800 2>/dev/null`" = yes -a -x /usr/x11r6/bin/xdm ]; then
 	exec /usr/x11r6/bin/xdm -nodaemon -config /usr/x11r6/lib/X11/xdm/xdm-config > /usr/x11r6/lib/X11/xdm/xdm-init.out 2>&1 < /dev/null
 fi
