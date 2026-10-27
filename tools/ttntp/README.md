@@ -21,7 +21,9 @@ ttntp [-q] -b
 The records init wrote before `-b` ran (the boot record, the run level,
 rc2) carried the uncorrected time, so `uptime` and `who -b` counted the
 zone's offset as uptime and `last` showed the boot hours before its own
-rc2. `-b` moves those stamps along with the clock; `-u` repairs a system
+rc2. `-b` moves those stamps along with the clock, and so does a step of
+five minutes or more from the network (a chip set under another zone
+would otherwise leave the boot's records as far off); `-u` repairs a system
 booted without it (the early records are the ones within a quarter of an
 hour of the boot record when the rest of the boot sits about the offset
 away from them, so a second `-u` finds nothing to do).

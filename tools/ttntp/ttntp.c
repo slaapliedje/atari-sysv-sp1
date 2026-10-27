@@ -240,6 +240,8 @@ static int query(unsigned long addr, double *offset, double *delay)
 	return 1;
 }
 
+static void shift_records(long delta, long t0, int dry);
+
 /* correct the clock by offset seconds: step the whole seconds, slew the
  * rest. Returns -1 (errno set) on failure, 1 if it stepped, 0 if not. */
 static int setclock(double offset)
@@ -260,6 +262,11 @@ static int setclock(double offset)
 
 			if (stime(&s) < 0)
 				return -1;
+			/* a step of minutes or more means the chip was off by
+			 * that much (set under another zone, or Hatari's): the
+			 * boot's records so far carry the same error */
+			if (k >= 300 || k <= -300)
+				shift_records(k, (long)t, 0);
 		}
 		stepped = 1;
 	}
