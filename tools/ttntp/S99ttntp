@@ -6,7 +6,8 @@
 # on local time, as TOS keeps it.
 #
 # The kernel has read the chip's local time as GMT: ttntp -b moves the
-# clock by the zone's offset at once. Then the network: after a power-on
+# clock by the zone's offset at once, and the boot's utmp/wtmp records
+# with it (else uptime counts the offset). Then the network: after a power-on
 # it can take a minute or more (a BlueSCSI's WiFi has to join first), so
 # keep trying, every 15 seconds for 10 minutes.
 case "$1" in

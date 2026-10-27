@@ -62,6 +62,8 @@
 #define DNS_PORT	53
 #define JAN_1970	2208988800UL	/* 1900 to 1970 in seconds */
 #define TIMEOUT		3		/* seconds per query */
+#include <utmp.h>
+#include <utmpx.h>
 
 extern int stime(), adjtime();
 extern long timezone, altzone;		/* libc: seconds west of GMT (tzset) */
@@ -300,6 +302,121 @@ static int chip_local(void)
 	return 0;
 }
 
+/* The login records init wrote before -b ran carry the uncorrected
+ * time: the boot record, the run level, the sysinit and rc2 entries, in
+ * utmp/utmpx and appended to wtmp/wtmpx.  uptime and who -b count from
+ * the boot record, so a six-hour zone showed six hours of uptime right
+ * after boot, and last(1) listed the boot's first records hours before
+ * the rest.  Move the stamps of this boot's records by the same offset:
+ * those from the last boot record on whose time lies between it and the
+ * clock's reading before the move (t0).  Without t0 (-u, after the
+ * fact) the early records are the ones within a quarter of an hour of
+ * the boot record, and they are early only if the boot's other records
+ * (or the clock) sit about the offset away from them: moved forward,
+ * the next record is at least offset - window later; moved back, some
+ * record after the boot record is stamped before it.  The log file
+ * (wtmp) decides that for the table (utmp) too, whose dead entries are
+ * overwritten.  A second -u then finds nothing.  TTNTP_ADM names
+ * another directory than /var/adm (tests). */
+#define EARLY_WINDOW 900
+
+static int shift_file(const char *name, int xfmt, int log, long delta, long t0, int dry, int *early)
+{
+	char path[256];
+	FILE *f;
+	union { struct utmp u; struct utmpx x; } r;
+	int sz = xfmt ? sizeof(struct utmpx) : sizeof(struct utmp);
+	long pos, boot = -1, tb = 0, hi, n = 0, t, tnext, before = 0;
+	long mag = delta < 0 ? -delta : delta;
+	const char *dir = getenv("TTNTP_ADM");
+
+	sprintf(path, "%s/%s", dir ? dir : "/var/adm", name);
+	if ((f = fopen(path, dry ? "r" : "r+")) == NULL)
+		return -1;
+	for (pos = 0; fread(&r, sz, 1, f) == 1; pos += sz)
+		if ((xfmt ? r.x.ut_type : r.u.ut_type) == BOOT_TIME) {
+			boot = pos;
+			tb = xfmt ? r.x.ut_tv.tv_sec : r.u.ut_time;
+		}
+	if (boot < 0) {
+		fclose(f);
+		return 0;
+	}
+	pos = log ? boot : 0;		/* utmp: the whole table is this boot's */
+	if (t0)
+		hi = t0 + 1;
+	else if (!log) {
+		hi = tb + EARLY_WINDOW;
+		if (!*early) {
+			fclose(f);
+			return 0;
+		}
+	} else {
+		hi = tb + EARLY_WINDOW;
+		tnext = time((time_t *)0);
+		fseek(f, pos, SEEK_SET);
+		for (; fread(&r, sz, 1, f) == 1;) {
+			if ((xfmt ? r.x.ut_type : r.u.ut_type) == EMPTY)
+				continue;
+			t = xfmt ? r.x.ut_tv.tv_sec : r.u.ut_time;
+			if (t < tb)
+				before = 1;
+			else if (t > hi && t < tnext)
+				tnext = t;
+		}
+		*early = delta > 0 ? tnext >= tb + mag - EARLY_WINDOW : before;
+		if (!*early) {
+			fclose(f);
+			return 0;
+		}
+	}
+	fseek(f, pos, SEEK_SET);
+	for (; fread(&r, sz, 1, f) == 1; pos += sz) {
+		long *tp = xfmt ? (long *)&r.x.ut_tv.tv_sec : (long *)&r.u.ut_time;
+
+		if ((xfmt ? r.x.ut_type : r.u.ut_type) == EMPTY || *tp < tb || *tp > hi)
+			continue;
+		*tp += delta;
+		n++;
+		if (dry)
+			continue;
+		fseek(f, pos, SEEK_SET);
+		if (fwrite(&r, sz, 1, f) != 1)
+			break;
+		fseek(f, pos + sz, SEEK_SET);
+	}
+	fclose(f);
+	return n;
+}
+
+static void shift_records(long delta, long t0, int dry)
+{
+	static const struct { const char *name; int xfmt, log; } files[] = {
+		{ "wtmp", 0, 1 }, { "utmp", 0, 0 }, { "wtmpx", 1, 1 }, { "utmpx", 1, 0 }
+	};
+	int i, n, early = 0;
+
+	if (delta == 0)
+		return;
+	for (i = 0; i < 4; i++) {
+		n = shift_file(files[i].name, files[i].xfmt, files[i].log, delta, t0, dry, &early);
+		if (!quiet && n > 0)
+			printf("%s: %d record%s of this boot %s by %+ld s\n", files[i].name, n, n == 1 ? "" : "s",
+			       dry ? "would move" : "moved", delta);
+	}
+}
+
+/* -u: the records alone, by the zone's offset, for a system whose clock
+ * -b (or anything else) has already set right; -n shows what it would do */
+static int fix_records(int dry)
+{
+	time_t t = time((time_t *)0);
+	struct tm *tm = localtime(&t);
+
+	shift_records(tm->tm_isdst > 0 ? altzone : timezone, 0, dry);
+	return 0;
+}
+
 /* -b: the kernel read the chip's local time as GMT; add the zone's
  * offset (seconds west), daylight time included. The driver hasn't been
  * told an offset since boot, so it doesn't write the chip. */
@@ -316,6 +433,7 @@ static int boot_local(void)
 	}
 	if (!quiet)
 		printf("clock moved by the zone's offset: %+ld s\n", s - (long)t);
+	shift_records(s - (long)t, (long)t, 0);
 	return 0;
 }
 
@@ -336,13 +454,17 @@ int main(int argc, char **argv)
 			zone = 1;
 		else if (!strcmp(argv[1], "-b"))
 			boot = 1;
+		else if (!strcmp(argv[1], "-u"))
+			boot = 2;
 		else {
-			fprintf(stderr, "usage: ttntp [-n] [-q] [-z] [server ...] | ttntp [-q] -b\n");
+			fprintf(stderr, "usage: ttntp [-n] [-q] [-z] [server ...] | ttntp [-q] -b | ttntp [-n] [-q] -u\n");
 			return 2;
 		}
 		argc--, argv++;
 	}
 	tzset();
+	if (boot == 2)
+		return fix_records(dry);
 	if (boot)
 		return boot_local();
 	if (argc > 1) {

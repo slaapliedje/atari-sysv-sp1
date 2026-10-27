@@ -12,8 +12,20 @@ ttntp [-q] -b
   -z   once the clock is right, keep the TT's clock chip on local time, as
        TOS does, and write it
   -b   at boot: the kernel read the chip's local time as GMT; move the
-       clock by the zone's offset (once; the boot script does it)
+       clock by the zone's offset (once; the boot script does it), and
+       the boot's records in utmp/wtmp with it
+  -u   the records alone, for a system already running with the clock
+       set right (-n shows what it would do)
 ```
+
+The records init wrote before `-b` ran (the boot record, the run level,
+rc2) carried the uncorrected time, so `uptime` and `who -b` counted the
+zone's offset as uptime and `last` showed the boot hours before its own
+rc2. `-b` moves those stamps along with the clock; `-u` repairs a system
+booted without it (the early records are the ones within a quarter of an
+hour of the boot record when the rest of the boot sits about the offset
+away from them, so a second `-u` finds nothing to do).
+
 
 ASV steps its clock only in whole seconds (`stime()` keeps the fraction;
 `settimeofday()` just rounds and calls it), so `ttntp` steps the whole
