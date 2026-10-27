@@ -71,7 +71,7 @@ ls /usr/local/lib/sp1/tests | wc -l
 echo auto > /etc/inet/sp1net
 # the 16 MB per-process data limit made sense with 4 MB of ST-RAM; the
 # kernel now takes all the TT-RAM, with swap to match
-grep "ulimit -d" /etc/profile > /dev/null || echo 'ulimit -d 262144 2>/dev/null' >> /etc/profile
+grep "ulimit -v" /etc/profile > /dev/null || echo 'ulimit -d 131072 2>/dev/null; ulimit -v 131072 2>/dev/null' >> /etc/profile
 echo "== NetUSBee helper"
 [ -d /usr/local/lib/netusbee ] || mkdir -p /usr/local/lib/netusbee
 cp /rel/sp1/driver-nu/nuup.sh /rel/sp1/driver-nu/strcf.nu /usr/local/lib/netusbee/ || die nuup

@@ -92,8 +92,11 @@ crashing at start: harmless, and as it was.
 
 Memory
 ------
-/etc/profile raises the per-process data limit (16 MB by default) to
-256 MB at login, so programs can use what the machine has.
+A process may have 16 MB of data and 16 MB of address space by default,
+both as hard limits.  The display manager raises both to 128 MB for the
+sessions it starts, and /etc/profile does the same at root's logins;
+another user's console or telnet login keeps the 16 MB (only root may
+raise a hard limit), so run big programs such as xmanx under X.
 
 Manx
 ----
