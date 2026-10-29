@@ -131,8 +131,15 @@ int dpdevflag = 0;
 
 static struct scsijoblock *dpjob;
 static struct buf dpbuf;
+#ifdef DP_MODULE
+/* in pages of their own: the SCSI core is given physical addresses (vtop),
+ * and a module's memory is not physically contiguous across pages */
+static unsigned char *dpdata, *dptx, *dprx;
+static dev_t dp_dev;			/* for the disable at unload */
+#else
 static unsigned char dpdata[64];
 static unsigned char dptx[1600], dprx[3100];
+#endif
 static struct buf dpabuf;		/* the one ASYNC command */
 static int dp_busy;			/* dpabuf is queued or in flight */
 static int dp_up;			/* interface enabled, poll running */
@@ -513,6 +520,9 @@ dev_t dev;
 
 	if (en_if.if_flags & ENF_RUNNING)
 		return;
+#ifdef DP_MODULE
+	dp_dev = dev;
+#endif
 	if (dpjob == (struct scsijoblock *)0 && (t = dpfind()) < 0) {
 		cmn_err(CE_CONT, "dp0: no DaynaPORT on the SCSI bus\n");
 		return;
@@ -1083,3 +1093,78 @@ dpstart()
 	en_if.if_stats.ifs_next = ifstats;
 	ifstats = &en_if.if_stats;
 }
+
+#ifdef DP_MODULE
+/*
+ * dp as a loadable module (sp1 dlm/): a STREAMS driver on external major
+ * 41, registered at boot with `modadmin -r sdev dp 41`; the first open of
+ * /dev/en0 (the clone device, minor 41) loads it.  Built by
+ * driver-dp/mkmod.sh; the static driver (master.d-dp, install.sh) is the
+ * same file without DP_MODULE.
+ */
+#include <sys/conf.h>
+#include <sys/kmem.h>
+#include "sys/moddefs.h"
+
+static int dp_load(), dp_unload();
+static caddr_t dp_pages;
+#define DP_PAGES	(3 * PAGESIZE)		/* two whole pages inside */
+
+struct mod_drv_data dp_drvdata[] = {
+	{ { 0 }, 0, 0,
+	  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, dpdriverinfo, 0, 0, &dpinfo, &dpdevflag },
+	  41, 1 }
+};
+
+MOD_DRV_WRAPPER(dp, dp_load, dp_unload, 0, "DaynaPORT SCSI/Link (dp)");
+
+static int
+dp_load()
+{
+	unsigned long a;
+
+	dp_pages = kmem_zalloc(DP_PAGES, KM_SLEEP);
+	if (dp_pages == (caddr_t)0)
+		return ENOMEM;
+	a = ((unsigned long)dp_pages + PAGEOFFSET) & ~(unsigned long)PAGEOFFSET;
+	dprx = (unsigned char *)a;			/* 3100 bytes */
+	dpdata = (unsigned char *)a + 3200;		/* 64 */
+	dptx = (unsigned char *)a + PAGESIZE;		/* 1600, the next page */
+	dpstart();
+	return 0;
+}
+
+static int
+dp_unload()
+{
+	struct ifstats **pp;
+	int m, s;
+
+	for (m = 0; m < DP_NMINOR; m++)
+		if (en_min[m].min_rdq != (queue_t *)0)
+			return EBUSY;
+	if (dp_busy)
+		return EBUSY;
+	if (dp_up) {
+		dp_up = 0;
+		untimeout(dp_tid);
+	}
+	if (en_if.if_flags & ENF_RUNNING) {
+		(void)dpcmd(dp_dev, 0x0E, 0, dpdata, 0, B_READ);	/* disable */
+		en_if.if_flags &= ~ENF_RUNNING;
+	}
+	if (dpjob != (struct scsijoblock *)0) {
+		dpjob->sj_startf = sj_badstart;		/* the target is free again */
+		dpjob = (struct scsijoblock *)0;
+	}
+	s = splstr();
+	for (pp = &ifstats; *pp != (struct ifstats *)0; pp = &(*pp)->ifs_next)
+		if (*pp == &en_if.if_stats) {
+			*pp = en_if.if_stats.ifs_next;
+			break;
+		}
+	splx(s);
+	kmem_free(dp_pages, DP_PAGES);
+	return 0;
+}
+#endif	/* DP_MODULE */

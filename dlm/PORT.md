@@ -113,7 +113,16 @@ upstream fixes can be taken over.
    `master.d` entries for it and the spare rows, `mkksym` for ASV, and
    `buildsys` running it. Test in Hatari on a copy of the release image:
    `modadmin -s`, load and unload a small misc module, `getksym`.
-2. **One driver as a module.** nu or dp as a STREAMS driver module on its
+2. **One driver as a module.** DONE in Hatari 2026-10-29
+   (`probe/dlmdp.py`): dp built with `-DDP_MODULE` (`driver-dp/mkmod.sh`;
+   the static build is byte-identical without it), the static dp out (its
+   EDT rows and probe, a reboot so the in-core EDT forgets the card, then
+   `buildsys`: `cunix` refuses an EDT device without a driver), majors
+   registered at boot by `/etc/init.d/dlm` from `/etc/conf/mod_register`
+   ("sdev dp 41"). The DHCP client's open of `/dev/en0` loaded the module;
+   lease, route, `ufetch` 200; held by IP and ARP, `modadmin -U` EBUSY.
+   The module's buffers sit in whole pages (the SCSI core gets physical
+   addresses). Was: nu or dp as a STREAMS driver module on its
    registered major; `/dev/en0` or `/dev/nu0` opens load it; DHCP and
    `ufetch` through it. dp first: Hatari emulates the DaynaPORT, not the
    NetUSBee.

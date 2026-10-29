@@ -1,0 +1,16 @@
+#!/sbin/sh
+# /etc/init.d/dlm - the majors of the module drivers, registered at boot
+# (sp1 dlm/), before anything opens them.  /etc/conf/mod_register holds
+# one line per major: TYPE NAME MAJOR (TYPE sdev for a STREAMS driver,
+# cdev for a character driver); the first open of the device then loads
+# module NAME from /etc/conf/mod.d.  Linked as /etc/rc2.d/S02dlm.
+case "$1" in
+start)
+	[ -x /sbin/modadmin -a -f /etc/conf/mod_register ] || exit 0
+	grep -v '^#' /etc/conf/mod_register | while read type name major; do
+		[ -n "$major" -a -f /etc/conf/mod.d/$name ] || continue
+		/sbin/modadmin -r $type $name $major
+	done
+	;;
+esac
+exit 0
