@@ -7,12 +7,16 @@
 #
 #   memory    prtconf's total; the kernel takes all the TT-RAM there is
 #             (up to 256 MB); /etc/init.d/swapfile sizes the swap to it
-#   network   the first card the loader found, in this order:
-#             DaynaPORT (dp, /dev/en0 c 63 41), Riebl/Lance (the stock
-#             la driver, /dev/en0 c 63 5), NetUSBee (nu, /dev/nu0);
-#             /etc/strcf and /etc/inet/rc.inet are pointed at it and
-#             dhcpc asks DHCP on it.  "static" in /etc/inet/sp1net keeps
-#             your hand-made files.
+#   network   the card that reaches a network: of the cards the loader
+#             found - NetUSBee (nu, /dev/nu0), DaynaPORT (dp, /dev/en0
+#             c 63 41), Riebl/Lance (the stock la driver, /dev/en0
+#             c 63 5) - each is asked for a DHCP lease in that order,
+#             wired first, and the first that gets one is used; a card
+#             with no cable or no WiFi is passed over, and the last card
+#             left is used without asking.  /etc/strcf and
+#             /etc/inet/rc.inet are pointed at it and dhcpc's boot run
+#             uses it.  /etc/inet/sp1net: "auto" (the default), "static"
+#             to keep your hand-made files, or nu, dp or la for that card.
 #   ATW800/2  the loader's EDTP.tlk probe found the card's link (a TLK
 #             row): then /etc/sp1/atw800 says yes, which makes the xd
 #             line's /usr/local/lib/sp1/xdm start X11R6.3's xdm on the
@@ -37,37 +41,77 @@ mem=`prtconf 2>/dev/null | sed -n 's/^Memory size: *\([0-9]*\) Megabytes.*/\1/p'
 # ---- the network card ----
 devs=`prtconf 2>/dev/null | awk 'NF == 1 && $1 ~ /^[A-Z]+$/ { print $1 }'`
 have() { echo "$devs" | grep "^$1\$" > /dev/null; }
-net=none; ifn=""; node=""
+# /dev/en0 is dp's (c 63 41) or the stock la driver's (c 63 5)
+en0node() {
+	cur=`ls -l /dev/en0 2>/dev/null | awk '{print $5 $6}'`
+	[ "$cur" = "63,$1" ] || { rm -f /dev/en0; mknod /dev/en0 c 63 $1; chmod 644 /dev/en0; }
+}
+ifname() { case $1 in nu) echo nu0;; *) echo en0;; esac; }
+prepare() { case $1 in dp) en0node 41;; la) en0node 5;; esac; }
 # the loader's NU row is there on every TT (the cartridge port never
-# bus-errors; the nu driver probes the chip itself), so a Riebl card
-# comes before it
-if have DP; then net=dp; ifn=en0; node="c 63 41"
-elif have LA; then net=la; ifn=en0; node="c 63 5"
-elif have NU; then net=nu; ifn=nu0; node="c 63 45"
-fi
-echo "$net" > /etc/sp1/network
+# bus-errors; the nu driver looks for the chip itself), so whether a
+# NetUSBee is there is what dhcpc finds behind /dev/nu0
+cands=nu
+have DP && cands="$cands dp"
+have LA && cands="$cands la"
 mode=`cat /etc/inet/sp1net 2>/dev/null`
-if [ "$mode" != static ]; then
-	if [ $net = none ]; then
-		cp /etc/inet/strcf.nonet /etc/strcf
-		rm -f /etc/inet/dhcpc.dev
-	else
-		# the device node for /dev/en0: dp's or the stock la's
-		if [ $ifn = en0 ]; then
-			cur=`ls -l /dev/en0 2>/dev/null | awk '{print $5 $6}'`
-			[ "$cur" = "63,`echo $node | awk '{print $3}'`" ] || {
-				rm -f /dev/en0; mknod /dev/en0 $node; chmod 644 /dev/en0; }
+net=none; firstseen=""
+: > /etc/sp1/netprobe
+case "$mode" in
+nu|dp|la)
+	net=$mode
+	echo "$net: set in /etc/inet/sp1net" >> /etc/sp1/netprobe
+	;;
+static)
+	net=static
+	;;
+*)
+	left=`echo $cands | wc -w`
+	for c in $cands; do
+		if [ $left -eq 1 -o ! -x /usr/local/bin/dhcpc ]; then
+			# the last one left: dhcpc's boot run asks it anyway
+			net=$c
+			echo "$c: the last card left, not asked" >> /etc/sp1/netprobe
+			break
 		fi
-		dev=`echo $ifn | sed 's/0$//'`
-		sed "s|^\([ 	]*\)cenet ip /dev/[a-z]* [a-z]* 0|\1cenet ip /dev/$dev $dev 0|" /etc/inet/strcf.net > /etc/sp1/strcf.new
-		cmp -s /etc/sp1/strcf.new /etc/strcf || cp /etc/sp1/strcf.new /etc/strcf
-		sed "s|ifconfig en0 |ifconfig $ifn |; s|ifconfig nu0 |ifconfig $ifn |" /etc/inet/rc.inet > /etc/sp1/rc.inet.new
-		cmp -s /etc/sp1/rc.inet.new /etc/inet/rc.inet || cp /etc/sp1/rc.inet.new /etc/inet/rc.inet
-		echo /dev/$ifn > /etc/inet/dhcpc.dev
-	fi
+		left=`expr $left - 1`
+		prepare $c
+		out=`/usr/local/bin/dhcpc -n -t 20 /dev/\`ifname $c\` 2>&1`
+		if [ $? -eq 0 ]; then
+			net=$c
+			echo "$c: DHCP answered" >> /etc/sp1/netprobe
+			break
+		fi
+		case "$out" in
+		*"no DHCP server answered"*)
+			echo "$c: there, no DHCP answer in 20 s" >> /etc/sp1/netprobe
+			[ -n "$firstseen" ] || firstseen=$c
+			;;
+		*)
+			echo "$c: not there" >> /etc/sp1/netprobe
+			;;
+		esac
+	done
+	[ $net = none -a -n "$firstseen" ] && net=$firstseen
+	;;
+esac
+echo "$net" > /etc/sp1/network
+if [ $net = none ]; then
+	cp /etc/inet/strcf.nonet /etc/strcf
+	rm -f /etc/inet/dhcpc.dev
+elif [ $net != static ]; then
+	prepare $net
+	ifn=`ifname $net`
+	dev=`echo $ifn | sed 's/0$//'`
+	sed "s|^\([ 	]*\)cenet ip /dev/[a-z]* [a-z]* 0|\1cenet ip /dev/$dev $dev 0|" /etc/inet/strcf.net > /etc/sp1/strcf.new
+	cmp -s /etc/sp1/strcf.new /etc/strcf || cp /etc/sp1/strcf.new /etc/strcf
+	sed "s|ifconfig en0 |ifconfig $ifn |; s|ifconfig nu0 |ifconfig $ifn |" /etc/inet/rc.inet > /etc/sp1/rc.inet.new
+	cmp -s /etc/sp1/rc.inet.new /etc/inet/rc.inet || cp /etc/sp1/rc.inet.new /etc/inet/rc.inet
+	echo /dev/$ifn > /etc/inet/dhcpc.dev
 fi
 case $net in
-dp) netname="DaynaPORT (en0)";; nu) netname="NetUSBee (nu0)";; la) netname="Riebl (en0)";; *) netname="no network card";;
+dp) netname="DaynaPORT (en0)";; nu) netname="NetUSBee (nu0)";; la) netname="Riebl (en0)";;
+static) netname="network as set up by hand";; *) netname="no network card";;
 esac
 
 # ---- the ATW800/2 ----

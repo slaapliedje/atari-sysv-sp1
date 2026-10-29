@@ -51,8 +51,12 @@ the console and the details in /etc/sp1):
   - memory: the kernel takes the TT-RAM there is (256 MB at most); a
     machine with more than 160 MB gets a swap file of its memory's
     size on /home at the first boot (a few minutes, once)
-  - the network card: the first of DaynaPORT, Riebl, NetUSBee found
-    gets DHCP; `static` in /etc/inet/sp1net keeps your own setup
+  - the network card: the one that reaches a network gets DHCP.  With
+    more than one (a NetUSBee and the DaynaPORT, say), each is asked
+    for a lease, the NetUSBee first, then the DaynaPORT, then a Riebl
+    card, and the first that answers is used; what each said is in
+    /etc/sp1/netprobe.  Put nu, dp or la in /etc/inet/sp1net to choose
+    the card yourself, or `static` to keep your own network setup
   - an ATW800/2: X11R6.3's Xatw server takes over from the stock X11R4
     one, the T425 is wiped at boot, and tprobe's census of the
     transputers is in /etc/sp1/transputers.  Without the card the
