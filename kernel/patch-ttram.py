@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 """patch-ttram.py KERNEL-IN KERNEL-OUT [PLATFORM-IN PLATFORM-OUT [MB]]
+patch-ttram.py --linked UNIX-IN UNIX-OUT [MB]
 
 Lift ASV's ~128 MB RAM ceiling: the page structures move from ST-RAM to
 TT-RAM, and (optionally) the TT-RAM probe limit is raised.
+
+--linked patches a kernel the two objects are already linked into: the
+loader's mini kernel /stand/mUNIX, which relinks unix at boot and is never
+relinked itself, so it keeps the ceiling (with 256 MB of TT-RAM it panics
+before the relink writes anything, and every boot relinks again). kvm_init's
+range is found by its bytes with the five relocated addresses masked, and
+pdesc by the symbol table; the same 92 bytes go in, the addresses stay.
 
 Why there is a ceiling: kvm_init (in /boot/KERNEL) carves the per-page
 structures - 80 bytes a page, plus the page hash - out of physical memory
@@ -101,6 +109,72 @@ def text_and_relocs(d, want):
     return secs[idx][2], offs
 
 
+def symbol(d, name):
+    """the value of symbol NAME from .symtab, or None"""
+    secs = sections(d)
+    for s in secs:
+        if s[1] != 2:                     # SHT_SYMTAB
+            continue
+        strtab = secs[s[4]][2]
+        for i in range(0, s[3], 16):
+            st_name, st_value = struct.unpack(">II", d[s[2] + i:s[2] + i + 8])
+            if d[strtab + st_name:d.index(b"\0", strtab + st_name)] == name.encode():
+                return st_value
+    return None
+
+
+def file_offset(d, vaddr):
+    """the file offset of virtual address VADDR (in a loaded section)"""
+    shoff, = struct.unpack(">I", d[0x20:0x24])
+    shentsize, shnum = struct.unpack(">HH", d[0x2e:0x32])
+    for i in range(shnum):
+        s = struct.unpack(">IIIIIIIIII", d[shoff + i * shentsize:shoff + (i + 1) * shentsize])
+        if s[1] != 8 and s[3] <= vaddr < s[3] + s[5] and s[2] & 2:   # not NOBITS, SHF_ALLOC
+            return s[4] + vaddr - s[3]
+    sys.exit("virtual address 0x%x is in no loaded section" % vaddr)
+
+
+def patch_linked(src, dst, mb):
+    """a linked kernel (mUNIX): kvm_init's bytes found with the relocated
+    addresses masked, pdesc[1] through the symbol table"""
+    d = bytearray(open(src, "rb").read())
+    if d[:4] != b"\x7fELF" or struct.unpack(">H", d[16:18])[0] != 2:
+        sys.exit("%s: not a linked ELF kernel" % src)
+    slots = sorted(RELOCS)
+    hits = [o for o in range(len(d) - len(OLD))
+            if all(d[o + a:o + b] == OLD[a:b] for a, b in
+                   zip([0] + [r + 4 for r in slots], slots + [len(OLD)]))]
+    if len(hits) != 1:
+        done = [o for o in range(len(d) - len(NEW))
+                if all(d[o + a:o + b] == NEW[a:b] for a, b in
+                       zip([0] + [r + 4 for r in slots], slots + [len(NEW)]))]
+        if len(done) == 1:
+            sys.exit("%s: already patched" % src)
+        sys.exit("%s: kvm_init's range found %d times, expected once" % (src, len(hits)))
+    o = hits[0]
+    want = {"sptalloc": 0x0c, "page_hash": 0x1e, "pdesc": 0x26, "cmn_err": 0x54}
+    for name, r in want.items():
+        v = struct.unpack(">I", d[o + r:o + r + 4])[0]
+        if symbol(d, name) != v:
+            sys.exit("%s: the address at kvm_init's %s slot is 0x%x, the symbol is %s"
+                     % (src, name, v, symbol(d, name)))
+    new = bytearray(NEW)
+    for r in slots:
+        new[r:r + 4] = d[o + r:o + r + 4]
+    d[o:o + len(new)] = new
+    print("kvm_init's page structures now go to TT-RAM (file offset 0x%x, %d bytes)" % (o, len(new)))
+    pdesc = symbol(d, "pdesc")
+    if pdesc is None:
+        sys.exit("%s: no pdesc symbol" % src)
+    e = file_offset(d, pdesc + 28)
+    start, limit, flags = struct.unpack(">III", d[e:e + 12])
+    if start != 0x01000000 or flags != 0xA0000000:
+        sys.exit("%s: pdesc[1] is not the TT-RAM entry (%08x %08x %08x)" % (src, start, limit, flags))
+    d[e + 4:e + 8] = struct.pack(">I", mb << 20)
+    print("pdesc[1]: TT-RAM limit %d MB -> %d MB" % (limit >> 20, mb))
+    open(dst, "wb").write(d)
+
+
 def patch_kernel(src, dst):
     d = bytearray(open(src, "rb").read())
     if d[:4] != b"\x7fELF":
@@ -138,6 +212,14 @@ def patch_platform(src, dst, mb):
 
 if __name__ == "__main__":
     a = sys.argv[1:]
+    if a and a[0] == "--linked":
+        if len(a) not in (3, 4):
+            sys.exit(__doc__.split("\n\n")[0])
+        mb = int(a[3]) if len(a) == 4 else 256
+        if not 16 <= mb <= 256:
+            sys.exit("TT-RAM limit: 16..256 MB")
+        patch_linked(a[1], a[2], mb)
+        sys.exit(0)
     if len(a) not in (2, 4, 5):
         sys.exit(__doc__.split("\n\n")[0])
     patch_kernel(a[0], a[1])

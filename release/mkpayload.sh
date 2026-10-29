@@ -47,7 +47,13 @@ python3 -I "$sp1/tools/ttntp/patch-clock.py" "$p/stock/CLOCK" "$p/edt/CLOCK.1968
 # never relinked itself, so its clock driver is the stock one: a relink
 # on the real TT dated /stand/unix two years ahead)
 python3 -I "$here/bfs.py" "$STOCK" 122880000 get mUNIX "$p/stock/mUNIX" >/dev/null
-python3 -I "$sp1/tools/ttntp/patch-clock.py" "$p/stock/mUNIX" "$p/edt/mUNIX.1968" >/dev/null
+python3 -I "$sp1/tools/ttntp/patch-clock.py" "$p/stock/mUNIX" "$p/edt/mUNIX.clock" >/dev/null
+# ... and with the page bookkeeping in TT-RAM (kernel/patch-ttram.py
+# --linked): the stock mini kernel keeps the ~128 MB ceiling, and on a TT
+# with 256 MB it panics at the first boot's relink before writing anything,
+# so every boot relinks again (seen on the real TT, 2026-10-28)
+python3 -I "$sp1/kernel/patch-ttram.py" --linked "$p/edt/mUNIX.clock" "$p/edt/mUNIX.1968" >/dev/null
+rm -f "$p/edt/mUNIX.clock"
 # the kernel objects with the page bookkeeping in TT-RAM and the probe
 # up to 256 MB (kernel/patch-ttram.py): the image's kernel, since Atari
 # System V does not boot without TT-RAM anyway; the stock ones stay in
