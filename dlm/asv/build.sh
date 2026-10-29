@@ -33,7 +33,7 @@ for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlm_boot dlmconf; do
 	"$X-gcc" $KF -c "$S/$f.c" -o "$B/obj/$f.o" 2>> "$B/kobj.warn"
 done
 "$X-gcc" $KF -c "$here/dlm_asv.c" -o "$B/obj/dlm_asv.o" 2>> "$B/kobj.warn"
-"$X-gcc" -c "$S/dlm_cache.s" -o "$B/obj/dlm_cache.o"
+"$X-gcc" -c "$here/dlm_cache_asv.s" -o "$B/obj/dlm_cache.o"	# ASV: cputype is 68030, not 30
 "$X-gcc" -c "$S/dlm_hooksw.s" -o "$B/obj/dlm_hooksw.o"
 sed "s/163840/$KSYM/g" "$S/dlmksym.s" > "$B/obj/dlmksym.s"
 "$X-gcc" -c "$B/obj/dlmksym.s" -o "$B/obj/dlmksym.o"
