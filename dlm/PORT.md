@@ -83,9 +83,32 @@ upstream fixes can be taken over.
    works through the SCSI driver; tlk, snd and midi need a look at
    how their interrupts are wired (EDT vector, MFP) before they move.
 
+## Found while building stage 1
+
+- ASV's `tar` crashes (SIGILL) on an archive with unknown owners: payloads
+  are `tar --format=ustar --owner=root --group=root`, as the release's.
+- ASV's `cputype` holds 68030 or 68040; upstream's cache flush compares
+  with 30/40/60, so a 68030 ran the 68060's `cpusha` and the machine
+  reset on the first module load. `asv/dlm_cache_asv.s` compares with
+  68040 and 68060.
+- `cunix` gives a driver without entry points (the placeholders) open
+  and close `nulldev`, the rest `nodev`, `d_driver`/`d_devmap` 0 and
+  `d_flag = &nodevflag` (D_OLD). At boot ASV moves every D_OLD row's
+  entries into `shadowcsw` and fills the row with its gateway
+  (`gen_copen` .. `gen_ioctl`, SVR3 calling conventions behind them), so
+  `dlminit` recognises a placeholder by its shadow row and puts the row
+  back to the plain empty form; a module's row is D_NEW (upstream's
+  placeholder flag), so the kernel calls the trampolines directly.
+- `getmajor()` is a function on ASV (`MAJOR[]` lookup), as the macro.
+
 ## Stages
 
-1. **The loader in the kernel.** `asv/` builds `/boot/DLM` (upstream
+1. **The loader in the kernel.** DONE in Hatari 2026-10-29
+   (`~/dev/asv-release/probe/dlmtest.py`: build 18 + `install.sh`, a
+   reboot, then modules): `buildsys` fills the table (3248 symbols),
+   `modadmin` loads `dlmtest` with its dependency `dlmdep`, queries,
+   unloads, loads by path; eight majors register on the eight spare
+   rows, a ninth gets ECONFIG, a static driver's major EEXIST. `asv/` builds `/boot/DLM` (upstream
    core + ASV glue, misc and character/STREAMS driver linkages),
    `master.d` entries for it and the spare rows, `mkksym` for ASV, and
    `buildsys` running it. Test in Hatari on a copy of the release image:

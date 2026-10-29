@@ -56,7 +56,7 @@ diff -ru a/dlm_core.c b/dlm_core.c
  		void (*__volatile__ init)() = ds_modinit;
 diff -ru a/dlm_slot.c b/dlm_slot.c
 --- a/dlm_slot.c	2026-10-29 09:57:59.651335377 -0600
-+++ b/dlm_slot.c	2026-10-29 09:58:53.506801645 -0600
++++ b/dlm_slot.c	2026-10-29 10:29:28.619033155 -0600
 @@ -38,10 +38,13 @@
  #define	EXDSZ		12		/* struct mod_exec_data */
  #define	HKDSZ		8		/* struct mod_hook_data */
@@ -155,7 +155,7 @@ diff -ru a/dlm_slot.c b/dlm_slot.c
  
  struct dlm_cslot {
  	struct dlm_cslot *cs_next;
-@@ -451,7 +501,14 @@
+@@ -451,8 +501,24 @@
  	int k;
  
  	for (k = 0; k < CD_NFN; k++)
@@ -168,9 +168,19 @@ diff -ru a/dlm_slot.c b/dlm_slot.c
  		if (cfn(cp)[k] != nodev)
 +#endif
  			return 0;
++#ifdef DLM_ASV
++	/* cunix gives a row without a driver d_flag = &nodevflag (D_OLD) */
++	{
++		extern int nodevflag;
++
++		if (cp->d_flag == &nodevflag)
++			return cp->d_ttys == 0 && cp->d_str == 0;
++	}
++#endif
  	return cp->d_ttys == 0 && cp->d_str == 0 && (cp->d_flag == 0 || *cp->d_flag == 0);
  }
-@@ -475,7 +532,7 @@
+ 
+@@ -475,7 +541,7 @@
  	int k;
  
  	for (k = 0; k < CD_NFN; k++)
@@ -179,7 +189,7 @@ diff -ru a/dlm_slot.c b/dlm_slot.c
  	cp->d_open = dlm_cdev_open;
  	cp->d_close = dlm_cdev_close;
  	cp->d_ttys = 0;
-@@ -492,6 +549,11 @@
+@@ -492,6 +558,11 @@
  	struct dlm_cslot *cs, *fr;
  	int s, error;
  
@@ -191,7 +201,7 @@ diff -ru a/dlm_slot.c b/dlm_slot.c
  	if (mj < 0 || mj >= cdevcnt)
  		return ECONFIG;
  	if ((cs = cslot(mj)) != 0)
-@@ -520,6 +582,10 @@
+@@ -520,6 +591,10 @@
  	}
  	dlm_splx(s);
  	dlm_free((char *)fr, (long)sizeof *fr);
@@ -202,7 +212,7 @@ diff -ru a/dlm_slot.c b/dlm_slot.c
  	return error;
  }
  
-@@ -669,6 +735,11 @@
+@@ -669,6 +744,11 @@
  	c = d + DRV_CDEVSW;
  	mj = (int)S32(G32(r + DRV_CMAJOR));
  	n = (int)S32(G32(r + DRV_CCOUNT));
@@ -214,7 +224,7 @@ diff -ru a/dlm_slot.c b/dlm_slot.c
  	if (G32(r + DRV_BCOUNT) != 0 || mj < 0 || mj >= cdevcnt ||
  	    n < 1 || n > cdevcnt - mj)
  		return EINVAL;
-@@ -704,7 +775,7 @@
+@@ -704,7 +784,7 @@
  		s = dlm_splhi();
  		for (k = 2; k < CD_NFN; k++) {
  			f = G32(DLM_RP(m, c) + 4 * k);
@@ -223,7 +233,7 @@ diff -ru a/dlm_slot.c b/dlm_slot.c
  		}
  		cp->d_flag = fl ? (int *)DLM_RP(m, fl) : dlm_cflag;
  		cs->cs_open = G32(DLM_RP(m, c));
-@@ -759,6 +830,10 @@
+@@ -759,6 +839,10 @@
  #ifndef DLM_HOST
  	dlm_sdev_info(m, &st->mss_p1[0], &st->mss_p1[1]);
  #endif

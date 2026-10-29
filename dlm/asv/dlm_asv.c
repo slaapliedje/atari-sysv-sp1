@@ -63,6 +63,37 @@ CHECK(ck_stsz, sizeof (struct streamtab) == 16);
 
 #define	ROW(e)	((int)(unsigned char)MAJOR[e])
 
+/*
+ * At boot ASV moves the entries of every old-style row (d_flag =
+ * &nodevflag, D_OLD: what cunix gives a driver without entry points, the
+ * placeholders too) into shadowcsw and fills the row with its gateway,
+ * gen_copen .. gen_ioctl.  A placeholder's row is recognised by its
+ * shadow (nulldev open and close, nodev for the rest) and put back to
+ * the plain empty form, which upstream's tests and linkages expect.
+ */
+extern struct cdevsw shadowcsw[];
+extern int	nodevflag;
+extern int	nodev(), nulldev();
+
+static int
+asv_placeholder(r)
+	int r;
+{
+	struct cdevsw *cp = &cdevsw[r], *sp = &shadowcsw[r];
+
+	if (cp->d_flag != &nodevflag)
+		return dlm_cempty(cp);
+	if (sp->d_open != nulldev || sp->d_close != nulldev ||
+	    sp->d_read != nodev || sp->d_write != nodev ||
+	    sp->d_ioctl != nodev || cp->d_ttys != 0 || cp->d_str != 0)
+		return 0;
+	cp->d_open = cp->d_close = nulldev;
+	cp->d_read = cp->d_write = cp->d_ioctl = cp->d_mmap = nodev;
+	cp->d_segmap = cp->d_poll = cp->d_xpoll = cp->d_xhalt = nodev;
+	cp->d_driver = cp->d_devmap = 0;
+	return dlm_cempty(cp);
+}
+
 void
 dlminit()
 {
@@ -72,7 +103,7 @@ dlminit()
 		spare_row[i] = spare_ext[i] = -1;
 		e = DLM_SPARE_EXT + i;
 		r = ROW(e);
-		if (r < cdevcnt && dlm_cempty(&cdevsw[r])) {
+		if (r < cdevcnt && asv_placeholder(r)) {
 			spare_row[i] = r;
 			MAJOR[e] = cdevcnt;	/* the placeholder's own major: none */
 			dlm_nspare++;
