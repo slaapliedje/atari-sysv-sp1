@@ -1,0 +1,3 @@
+# rall: every relocation type
+$modtype misc
+rall	rall	m	0	0	0

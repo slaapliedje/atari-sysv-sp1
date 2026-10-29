@@ -1,0 +1,101 @@
+#!/bin/sh
+# mkmod -- build a loadable module from a module directory (MISC or FS type).
+#
+#   mkmod [-k kernel.elf | -e exports] [-d depmodule]... [-o outdir] dir
+#
+# dir holds:
+#   Driver.o   the module's code (any number of objects linked into it)
+#   Master     "$depend a b ..." lines (any number), "$modtype misc|fs",
+#              and a final line "name prefix flags ..." ('#' comments)
+#   Space.c    optional, compiled and linked in
+#   Mtune      optional, "PREFIX_UNLOAD_DELAY n" (seconds)
+#   System     optional, "name Y" loads the module at boot
+#
+# Out (outdir, default ./build):
+#   mod.d/<name>            the module (ELF relocatable, .moddata type 13)
+#   mod_register.d/<name>   its registration line for idmodreg
+#   loadmods.d/<name>       its /etc/loadmods line, when System says Y
+#
+# Undefined symbols are checked against the kernel's exports (mkksym -x
+# of the image, or -e file) and the dependencies (-d, or the $depend
+# modules already in outdir/mod.d); mkmod fails closed.
+set -e
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+DLM=$(cd "$HERE/.." && pwd)
+AUX=$(cd "$DLM/../.." && pwd)
+. "$AUX/toolchain/src/gcc-cross-amix/build/env.sh"
+TB="${DLM_TOOLS:-$DLM/build/tools}"
+
+KERN= EXP= DEPS= OUT=./build
+while [ $# -gt 1 ]; do
+	case "$1" in
+	-k) KERN=$2; shift 2 ;;
+	-e) EXP=$2; shift 2 ;;
+	-d) DEPS="$DEPS -d $2"; shift 2 ;;
+	-o) OUT=$2; shift 2 ;;
+	*) break ;;
+	esac
+done
+[ $# -eq 1 ] || { echo "usage: mkmod [-k kernel.elf | -e exports] [-d dep]... [-o outdir] dir" >&2; exit 2; }
+D=$1
+[ -f "$D/Driver.o" ] && [ -f "$D/Master" ] || { echo "mkmod: $D needs Driver.o and Master" >&2; exit 1; }
+
+# Master: $-lines, then the definition line
+line=$(grep -v '^[#$]' "$D/Master" | grep -v '^[ 	]*$' | tail -1)
+set -- $line
+NAME=$1 PREFIX=$2
+[ -n "$NAME" ] && [ -n "$PREFIX" ] || { echo "mkmod: no definition line in Master" >&2; exit 1; }
+DEPEND=$(sed -n 's/^\$depend[ 	]*//p' "$D/Master" | tr '\n' ' ')
+TYPE=$(sed -n 's/^\$modtype[ 	]*//p' "$D/Master" | tail -1)
+case ${TYPE:=misc} in misc|fs) ;; *) echo "mkmod: \$modtype $TYPE not supported yet" >&2; exit 1 ;; esac
+PU=$(echo "$PREFIX" | tr a-z A-Z)
+DELAY=
+[ -f "$D/Mtune" ] && DELAY=$(awk -v k="${PU}_UNLOAD_DELAY" '$1==k{print $2}' "$D/Mtune")
+
+mkdir -p "$OUT/mod.d" "$OUT/mod_register.d" "$OUT/loadmods.d"
+W="$OUT/work.$NAME"
+rm -rf "$W"; mkdir -p "$W"
+CC="env AMIX_SYSROOT=$W/none m68k-cbm-sysv4-gcc -O -traditional -fno-builtin -Dinline=__inline__"
+CC="$CC -m68020 -D_KERNEL -DSVR40 -DSVR4 -I$DLM/../include -I$DLM/include"
+OBJS="$D/Driver.o"
+
+if [ -n "$DELAY" ]; then
+	cat > "$W/conf.c" <<EOF
+#include "sys/moddefs.h"
+struct mod_conf_data ${PREFIX}_conf_data = { $DELAY };
+EOF
+	$CC -c "$W/conf.c" -o "$W/conf.o"
+	OBJS="$OBJS $W/conf.o"
+fi
+if [ -f "$D/Space.c" ]; then
+	$CC -I"$D" -c "$D/Space.c" -o "$W/Space.o"
+	OBJS="$OBJS $W/Space.o"
+fi
+{
+	echo '	.section .moddata,"aw",@progbits'
+	echo '	.balign	4'
+	echo "	.long	${PREFIX}_wrapper"
+	[ -z "$DEPEND" ] || echo "	.ascii	\"$(echo $DEPEND)\""
+	echo '	.byte	0'
+} > "$W/moddep.s"
+m68k-cbm-sysv4-as -o "$W/moddep.o" "$W/moddep.s"
+
+m68k-cbm-sysv4-ld -r -o "$W/$NAME" $OBJS "$W/moddep.o"
+
+for d in $DEPEND; do	# dependencies built earlier into the same outdir
+	case " $DEPS " in *"/$d "*) ;; *) [ -f "$OUT/mod.d/$d" ] && DEPS="$DEPS -d $OUT/mod.d/$d" ;; esac
+done
+if [ -n "$KERN" ]; then
+	"$TB/mkksym" -x "$KERN" > "$W/exports"
+	EXP="$W/exports"
+fi
+"$TB/modfix" ${EXP:+-e "$EXP"} $DEPS -p "$PREFIX" -m "$NAME" "$W/$NAME"
+mv "$W/$NAME" "$OUT/mod.d/$NAME"
+echo "$TYPE	$NAME" > "$OUT/mod_register.d/$NAME"
+rm -f "$OUT/loadmods.d/$NAME"
+if [ -f "$D/System" ] && awk -v n="$NAME" '$1==n && $2=="Y"{f=1} END{exit !f}' "$D/System"; then
+	echo "$NAME" > "$OUT/loadmods.d/$NAME"
+fi
+rm -rf "$W"
+echo "mkmod: $OUT/mod.d/$NAME"

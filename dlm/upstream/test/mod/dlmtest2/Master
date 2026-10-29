@@ -1,0 +1,4 @@
+# dlmtest2: dlmtest built with -O2 -m68040
+$depend dlmdep
+$modtype misc
+dlmtest2	dlmtest	m	0	0	0

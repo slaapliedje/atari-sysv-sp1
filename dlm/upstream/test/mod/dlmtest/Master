@@ -1,0 +1,4 @@
+# dlmtest: MISC test module
+$depend dlmdep
+$modtype misc
+dlmtest	dlmtest	m	0	0	0
