@@ -1,0 +1,347 @@
+diff -ru a/dlmconf.c b/dlmconf.c
+--- a/dlmconf.c	2026-10-29 09:57:59.651588094 -0600
++++ b/dlmconf.c	2026-10-29 09:58:53.506292951 -0600
+@@ -20,7 +20,7 @@
+ 	0
+ };
+ 
+-#ifndef DLM_HOST
++#if !defined(DLM_HOST) && !defined(DLM_ASV)	/* ASV: dlminit() in asv/dlm_asv.c */
+ extern void plat_dmainit();
+ 
+ /* startup() calls this before the first process exists */
+diff -ru a/dlm_core.c b/dlm_core.c
+--- a/dlm_core.c	2026-10-29 09:57:59.650928208 -0600
++++ b/dlm_core.c	2026-10-29 09:58:53.506018438 -0600
+@@ -1117,7 +1117,7 @@
+ };
+ #define	NCALLS	(sizeof dlm_calls / sizeof dlm_calls[0])
+ 
+-#ifndef DLM_HOST
++#if !defined(DLM_HOST) && !defined(DLM_ASV)
+ /* sysinfo(SI_ARCHITECTURE): the stock "m68k" made "m68030", "m68040" or "m68060" */
+ char architecture[8] = "m68030";
+ __asm__(".weak cputype");
+@@ -1129,7 +1129,7 @@
+ {
+ 	int i;
+ 
+-#ifndef DLM_HOST
++#if !defined(DLM_HOST) && !defined(DLM_ASV)
+ 	{
+ 		long *__volatile__ cpu = &dlm_cputype;
+ 
+@@ -1147,7 +1147,11 @@
+ 		printf("dlm: no kernel symbol table, modules disabled\n");
+ 		return;
+ 	}
++#ifdef DLM_ASV
++	if (sysentsize < SYS_getksym + 1) {	/* Atari System V: 151 */
++#else
+ 	if (sysentsize != 142) {
++#endif
+ 		printf("dlm: sysent has %d entries, modules disabled\n", sysentsize);
+ 		return;
+ 	}
+@@ -1166,8 +1170,10 @@
+ 	strcpy(dlm_path, dlm_defpath);
+ 	dlm_inited = 1;
+ #ifndef DLM_HOST
++#ifndef DLM_ASV
+ 	if (dlm_creg("cpmguest", 59) != 0)
+ 		printf("dlm: cpmguest registration failed\n");
++#endif
+ 	{
+ 		extern void ds_modinit();
+ 		void (*__volatile__ init)() = ds_modinit;
+diff -ru a/dlm_slot.c b/dlm_slot.c
+--- a/dlm_slot.c	2026-10-29 09:57:59.651335377 -0600
++++ b/dlm_slot.c	2026-10-29 09:58:53.506801645 -0600
+@@ -38,10 +38,13 @@
+ #define	EXDSZ		12		/* struct mod_exec_data */
+ #define	HKDSZ		8		/* struct mod_hook_data */
+ 
++#ifndef DLM_ASV	/* Atari System V: no exec-format linkage yet (the stock execsw stays) */
+ struct execsw	execsw[NEXECSW] = { { 0 } };	/* in .data, as the stock table */
+ extern struct execsw __amix_execsw[];
++#endif
+ extern struct hooksw hooksw[];
+ 
++#ifndef DLM_ASV
+ struct dlm_xslot {
+ 	char		xs_name[MODMAXNAMELEN];
+ 	short		xs_magic;	/* the row's exec_magic points here */
+@@ -88,6 +91,12 @@
+ 	for (i = 0; i < nexectype; i++)
+ 		execsw[i] = __amix_execsw[i];
+ }
++#else
++void
++dlm_slot_init()
++{
++}
++#endif	/* DLM_ASV */
+ 
+ static int
+ inimg(m, a, n)
+@@ -97,6 +106,7 @@
+ 	return a >= m->m_run && n <= m->m_size && a - m->m_run <= m->m_size - n;
+ }
+ 
++#ifndef DLM_ASV
+ static int
+ ismagic(i, mg)
+ 	int i, mg;
+@@ -293,6 +303,28 @@
+ }
+ 
+ struct mod_operations mod_execops = { exec_install, exec_remove, exec_info };
++#else
++int
++dlm_xreg(name, er)
++	char *name;
++	char *er;
++{
++	return EINVAL;
++}
++
++static int
++noexec()
++{
++	return EINVAL;
++}
++
++static void
++noexecinfo()
++{
++}
++
++struct mod_operations mod_execops = { noexec, noexec, noexecinfo };
++#endif	/* DLM_ASV */
+ 
+ /* ---- hook linkage ---- */
+ 
+@@ -380,15 +412,33 @@
+ 
+ #define	CDEV_NOPEN	32
+ #define	SDEV_MAX	4		/* majors of one STREAMS driver */
++#ifdef DLM_ASV
++/* Atari System V's cdevsw has d_driver and d_devmap after d_xhalt */
++#define	DRVSZ		108		/* struct mod_drv_data */
++#define	DRV_BCOUNT	36
++#define	DRV_CDEVSW	40
++#define	DRV_CMAJOR	100
++#define	DRV_CCOUNT	104
++#define	CD_NFN		12		/* d_open .. d_devmap */
++#define	CD_NRT		10		/* d_open .. d_xhalt: nodev when unset */
++#define	CD_TTYS		48
++#define	CD_STR		52
++#define	CD_FLAG		56
++extern int	nulldev();
++extern int	dlm_asv_row(), dlm_asv_ext();
++extern void	dlm_asv_unrow();
++#else
+ #define	DRVSZ		100		/* struct mod_drv_data */
+ #define	DRV_BCOUNT	36
+ #define	DRV_CDEVSW	40
+ #define	DRV_CMAJOR	92
+ #define	DRV_CCOUNT	96
+ #define	CD_NFN		10		/* d_open .. d_xhalt */
++#define	CD_NRT		CD_NFN
+ #define	CD_TTYS		40
+ #define	CD_STR		44
+ #define	CD_FLAG		48
++#endif
+ 
+ struct dlm_cslot {
+ 	struct dlm_cslot *cs_next;
+@@ -451,7 +501,14 @@
+ 	int k;
+ 
+ 	for (k = 0; k < CD_NFN; k++)
++#ifdef DLM_ASV
++		/* cunix's row for a driver without entries: open and close
++		 * nulldev, the routines nodev, d_driver and d_devmap 0 */
++		if (k < CD_NRT ? cfn(cp)[k] != nodev &&
++		    !(k < 2 && cfn(cp)[k] == nulldev) : cfn(cp)[k] != 0)
++#else
+ 		if (cfn(cp)[k] != nodev)
++#endif
+ 			return 0;
+ 	return cp->d_ttys == 0 && cp->d_str == 0 && (cp->d_flag == 0 || *cp->d_flag == 0);
+ }
+@@ -475,7 +532,7 @@
+ 	int k;
+ 
+ 	for (k = 0; k < CD_NFN; k++)
+-		cfn(cp)[k] = nodev;
++		cfn(cp)[k] = k < CD_NRT ? nodev : 0;
+ 	cp->d_open = dlm_cdev_open;
+ 	cp->d_close = dlm_cdev_close;
+ 	cp->d_ttys = 0;
+@@ -492,6 +549,11 @@
+ 	struct dlm_cslot *cs, *fr;
+ 	int s, error;
+ 
++#ifdef DLM_ASV
++	/* the external major onto a spare row (asv/dlm_asv.c) */
++	if ((mj = dlm_asv_row(mj, 1)) < 0)
++		return -mj;
++#endif
+ 	if (mj < 0 || mj >= cdevcnt)
+ 		return ECONFIG;
+ 	if ((cs = cslot(mj)) != 0)
+@@ -520,6 +582,10 @@
+ 	}
+ 	dlm_splx(s);
+ 	dlm_free((char *)fr, (long)sizeof *fr);
++#ifdef DLM_ASV
++	if (error != 0 && cslot(mj) == 0)
++		dlm_asv_unrow(mj);
++#endif
+ 	return error;
+ }
+ 
+@@ -669,6 +735,11 @@
+ 	c = d + DRV_CDEVSW;
+ 	mj = (int)S32(G32(r + DRV_CMAJOR));
+ 	n = (int)S32(G32(r + DRV_CCOUNT));
++#ifdef DLM_ASV
++	/* one external major, through MAJOR[] to its registered row */
++	if (n != 1 || (mj = dlm_asv_row(mj, 0)) < 0)
++		return EINVAL;
++#endif
+ 	if (G32(r + DRV_BCOUNT) != 0 || mj < 0 || mj >= cdevcnt ||
+ 	    n < 1 || n > cdevcnt - mj)
+ 		return EINVAL;
+@@ -704,7 +775,7 @@
+ 		s = dlm_splhi();
+ 		for (k = 2; k < CD_NFN; k++) {
+ 			f = G32(DLM_RP(m, c) + 4 * k);
+-			cfn(cp)[k] = f ? (int (*)())f : nodev;
++			cfn(cp)[k] = f ? (int (*)())f : k < CD_NRT ? nodev : 0;
+ 		}
+ 		cp->d_flag = fl ? (int *)DLM_RP(m, fl) : dlm_cflag;
+ 		cs->cs_open = G32(DLM_RP(m, c));
+@@ -759,6 +830,10 @@
+ #ifndef DLM_HOST
+ 	dlm_sdev_info(m, &st->mss_p1[0], &st->mss_p1[1]);
+ #endif
++#ifdef DLM_ASV
++	if (st->mss_p1[0] >= 0)
++		st->mss_p1[0] = dlm_asv_ext(st->mss_p1[0]);
++#endif
+ }
+ 
+ struct mod_operations mod_drvops = { drv_install, drv_remove, drv_info };
+diff -ru a/dlm_str.c b/dlm_str.c
+--- a/dlm_str.c	2026-10-29 09:57:59.651452735 -0600
++++ b/dlm_str.c	2026-10-29 09:58:53.507109553 -0600
+@@ -40,8 +40,10 @@
+ #define	QI_MINFO	20
+ #define	QI_MSTAT	24
+ 
++#ifndef DLM_ASV	/* Atari System V: no STREAMS-module linkage yet (the stock fmodsw stays) */
+ struct fmodsw	fmodsw[NFMODSW] = { { { 0 } } };	/* in .data, as the stock table */
+ extern struct fmodsw __amix_fmodsw[];
++#endif
+ extern int	fmodcnt;
+ extern int	strncmp();
+ 
+@@ -52,14 +54,22 @@
+ } while (0)
+ #define	SPLX(s)	__asm__ __volatile__("movew %0,%%sr" : : "d" (s) : "memory")
+ 
++#ifndef DLM_ASV
+ static int		fstatic;		/* stock rows */
+ static struct dlm_mod	*fown[FMOD_RESERVE];	/* per loadable row */
+ static struct streamtab	ftab[FMOD_RESERVE];
+ static struct qinit	frq[FMOD_RESERVE], fwq[FMOD_RESERVE];
+ static int		(*fopen[FMOD_RESERVE])(), (*fclose[FMOD_RESERVE])();
++#endif
+ static int		zeroflag;
+ static struct module_info ph_info = { 0, "dlm", 0, INFPSZ, 1, 0 };
+ 
++#ifdef DLM_ASV
++void
++dlm_str_init()
++{
++}
++#else
+ int	dlm_str_open(), dlm_str_close();
+ 
+ void
+@@ -73,6 +83,7 @@
+ 		fmodsw[i] = __amix_fmodsw[i];
+ 	fstatic = fmodcnt;
+ }
++#endif	/* DLM_ASV */
+ 
+ static int
+ inimg(m, a, n)
+@@ -111,6 +122,7 @@
+ 	    okptr(m, G32(q + QI_MSTAT), 4L);
+ }
+ 
++#ifndef DLM_ASV
+ /* loadable row j of queue q, or -1 */
+ static int
+ qrow(q)
+@@ -281,6 +293,20 @@
+ }
+ 
+ struct mod_operations mod_strops = { str_install, str_remove, str_info };
++#else
++static int
++nostr()
++{
++	return EINVAL;
++}
++
++static void
++nostrinfo()
++{
++}
++
++struct mod_operations mod_strops = { nostr, nostr, nostrinfo };
++#endif	/* DLM_ASV */
+ 
+ /* ---- STREAMS drivers ---- */
+ 
+@@ -297,6 +323,10 @@
+ 
+ extern int dlm_cempty();
+ extern void setq();
++#ifdef DLM_ASV
++extern int dlm_asv_row();
++extern void dlm_asv_unrow();
++#endif
+ int	dlm_sdev_open(), dlm_sdev_close();
+ 
+ /* a write before the driver is loaded */
+@@ -347,6 +377,11 @@
+ 	struct cdevsw *cp;
+ 	int k, s;
+ 
++#ifdef DLM_ASV
++	/* the external major onto a spare row (asv/dlm_asv.c) */
++	if ((mj = dlm_asv_row(mj, 1)) < 0)
++		return -mj;
++#endif
+ 	if (mj < 0 || mj >= cdevcnt)
+ 		return ECONFIG;
+ 	if ((sd = sdmajor(mj)) != 0)
+@@ -356,8 +391,12 @@
+ 	for (k = 0; k < SDEV_SLOTS && fr == 0; k++)
+ 		if (sds[k].sd_name[0] == 0)
+ 			fr = &sds[k];
+-	if (fr == 0)
++	if (fr == 0) {
++#ifdef DLM_ASV
++		dlm_asv_unrow(mj);
++#endif
+ 		return ECONFIG;
++	}
+ 	bzero((caddr_t)fr, sizeof *fr);
+ 	strcpy(fr->sd_name, name);
+ 	fr->sd_major = mj;
