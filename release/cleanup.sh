@@ -29,5 +29,8 @@ for f in /var/adm/log/*; do
 done
 rm -f /var/adm/sa/* /var/spool/rwho/whod.* 2>/dev/null
 rm -f /usr/x11r6/lib/X11/xdm/xdm-init.out /var/mail/root 2>/dev/null
+# root's X cookies from the stock image (noname:0 and its static address,
+# a dead cookie that refused root's X sessions whenever DHCP gave no address)
+rm -f /.Xauthority
 echo "CLEANUP DONE"
 sync; sync; sync

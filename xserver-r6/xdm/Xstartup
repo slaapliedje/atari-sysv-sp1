@@ -8,9 +8,18 @@ rm -f $f
 #   local interface addresses it cannot list on this system), so hand over
 #   the server's own entry from XAUTHORITY: a wildcard-address cookie, which
 #   also covers the TCP connection clients make to noname:0
+# - the user's old entries for this display go first: Xlib takes an entry
+#   for the exact host or address before the wildcard one, so a stale
+#   cookie there gets every client of the session refused ("Invalid
+#   MIT-MAGIC-COOKIE-1 key"; the stock image's /.Xauthority has one for
+#   noname:0 and its static address, which root logins hit whenever DHCP
+#   gave no address)
 if test -n "$XAUTHORITY" -a -n "$HOME" -a -n "$USER"; then
-	/usr/x11r6/bin/xauth -f "$XAUTHORITY" nlist |
-		/usr/x11r6/bin/xauth -f "$HOME/.Xauthority" nmerge -
+	x=/usr/x11r6/bin/xauth
+	d=`echo "$DISPLAY" | sed 's/^[^:]*:\([0-9]*\).*$/\1/'`
+	$x -f "$HOME/.Xauthority" remove "$DISPLAY" 2>/dev/null
+	$x -f "$HOME/.Xauthority" remove "`uname -n`/unix:$d" 2>/dev/null
+	$x -f "$XAUTHORITY" nlist | $x -f "$HOME/.Xauthority" nmerge -
 	chown "$USER" "$HOME/.Xauthority"
 fi
 exit 0

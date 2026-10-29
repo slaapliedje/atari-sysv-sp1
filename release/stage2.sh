@@ -47,6 +47,8 @@ cp /rel/files/S99ttntp /etc/rc2.d/S99ttntp && chmod 744 /etc/rc2.d/S99ttntp || d
 echo "== X11R6.3 and XView for the ATW800/2 (used when the card is there)"
 (cd /usr && cpio -icdum < /rel/files/xtrees.cpio) || die "X trees"
 ls /usr/x11r6/bin/Xatw /usr/x11r6/bin/xdm /usr/openwin/bin/olwm || die "X trees incomplete"
+# sp1's Xstartup over the one in the trees (it clears stale cookies)
+cp /rel/files/Xstartup /usr/x11r6/lib/X11/xdm/Xstartup && chmod 775 /usr/x11r6/lib/X11/xdm/Xstartup || die Xstartup
 echo "== the hardware detection at boot (sp1hw), swap to match the memory"
 cp /rel/files/sp1hw /etc/init.d/sp1hw && chmod 744 /etc/init.d/sp1hw || die sp1hw
 rm -f /etc/rc2.d/S06sp1hw; ln /etc/init.d/sp1hw /etc/rc2.d/S06sp1hw
