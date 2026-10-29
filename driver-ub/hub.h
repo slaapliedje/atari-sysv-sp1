@@ -63,6 +63,7 @@ struct usb_hub_device
 {
 	struct usb_device *pusb_dev;
 	struct usb_hub_descriptor desc;
+	unsigned char tries[USB_MAXCHILDREN];	/* ASV: tries at a port's device */
 };
 
 
@@ -80,7 +81,7 @@ long 		usb_hub_port_connect_change	(struct usb_device *dev, long port, unsigned 
 struct usb_hub_device *	usb_hub_configure	(struct usb_device *dev);
 long 		usb_hub_probe		(struct usb_device *dev, long ifnum);
 void 		usb_hub_reset		(void);
-long 		hub_port_reset		(struct usb_device *dev, long port);
+long 		hub_port_reset		(struct usb_device *dev, long port, unsigned short *portstat);
 void		usb_rh_wakeup		(struct ucdif *);
 void		usb_hub_init		(struct usb_device *);
 void		usb_hub_thread		(void *);

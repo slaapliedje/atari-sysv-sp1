@@ -173,3 +173,39 @@ probed with ioprobe (an empty VME slot bus-errors), the NetUSBee by its
 chip ID; the kernel's own choice when both answer is the Lightning,
 /etc/default/ub (`BUS=netusbee`) makes the rc script start the other one
 first.  install.sh puts the file in only when there is none.
+
+2026-10-29: hotplug.  On the TT with the NetUSBee, a hub (keyboard
+behind it) was unplugged, a mouse and the hub plugged back in, and
+nothing came up again: `ubtool devs` showed the root hub alone, while
+the kernel's message buffer showed the nu driver finding the Ethernet
+chip without its setup twice after the unplug.  Most likely a device
+plugged into the card pulls its supply down far enough to reset the
+chips on it; the ISP1160 is then back in USBReset with its ports
+unpowered, and the hub polls see nothing (the new message below says
+so when it happens).  `ubtool stop; ubtool start netusbee` found everything.
+Now the daemon reads HcControl before each hub poll (ub_check_hcd, two
+reads that agree): out of the operational state, the stack goes down
+(every device gone for its class driver) and starts again, and keeps
+trying each second if the chip does not answer.  Three more weak spots
+of the U-Boot hub code, mended on the way:
+- no debounce: the port was reset the moment the connection showed,
+  while the plug bounces.  hub_port_debounce (after Linux's) waits for
+  100 ms of steady connection first.
+- one try per plug: the change bit is cleared before the reset, so a
+  device that failed to enumerate was never tried again.  A port that
+  shows a connection and has no device is tried on the next polls,
+  three times in all (hub->tries), then a message.
+- devgone: a disconnect on a root port marked whatever device the
+  transfer in hand was for as pulled, on either port, and for good;
+  device slots are reused, so the next device in that slot failed
+  every transfer, and a gone keyboard or mouse fails the HID poll of
+  both.  Now only a device on the port that lost its device is marked,
+  and the mark goes with the device's slot (usb_disconnect,
+  usb_free_device) and at controller init.
+The speed of a new device is the one its port shows after the reset.
+Kernel messages print %ld as cmn_err knows it (%d): "New USB device
+(d)" was the l modifier cmn_err does not have.  Not mended: a low-speed
+mouse behind the Genesys USB 2.0 hub (05e3:0610).  The hub disables the
+port right after its reset, and a garbled reply to the second reset
+leaves the ATL buffer full, so every later transfer to the hub fails
+("FIFO not empty").  The mouse works on the card's own port.

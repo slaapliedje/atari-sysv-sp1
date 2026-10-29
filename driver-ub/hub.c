@@ -192,6 +192,7 @@ void usb_hub_disconnect(struct usb_device *dev)
 }
 
 #define MAX_TRIES 5
+#define HUB_PORT_TRIES 3	/* ASV: connects tried at a device */
 
 static inline char *portspeed(long portstatus)
 {
@@ -215,7 +216,7 @@ static inline char *portspeed(long portstatus)
 	return speed_str;
 }
 
-long hub_port_reset(struct usb_device *dev, long port)
+long hub_port_reset(struct usb_device *dev, long port, unsigned short *portstat)
 {
 	long tries;
 	struct usb_port_status portsts;
@@ -260,8 +261,52 @@ long hub_port_reset(struct usb_device *dev, long port)
 	}
 
 	usb_clear_port_feature(dev, port + 1, USB_PORT_FEAT_C_RESET);
+	if (portstat)
+		*portstat = portstatus;
 
 	return 0;
+}
+
+/*
+ * ASV, after Linux's hub_port_debounce: the connection must hold for
+ * 100 ms on end (USB 2.0 7.1.7.3) before the port is reset.  A plug
+ * going in bounces; a reset taken then fails, and with the change bit
+ * gone nothing would try the device again.  *portstat: the last status.
+ */
+#define HUB_DEBOUNCE_STEP	25
+#define HUB_DEBOUNCE_STABLE	100
+#define HUB_DEBOUNCE_TIMEOUT	1500
+
+static long
+hub_port_debounce(struct usb_device *dev, long port, unsigned short *portstat)
+{
+	struct usb_port_status portsts;
+	unsigned short portstatus, portchange, connection = 0xffff;
+	long total, stable = 0;
+
+	for (total = 0; ; total += HUB_DEBOUNCE_STEP) {
+		if (usb_get_port_status(dev, port + 1, &portsts) < 0)
+			return -1;
+		portstatus = le2cpu16(portsts.wPortStatus);
+		portchange = le2cpu16(portsts.wPortChange);
+		if (!(portchange & USB_PORT_STAT_C_CONNECTION) &&
+		    (portstatus & USB_PORT_STAT_CONNECTION) == connection) {
+			stable += HUB_DEBOUNCE_STEP;
+			if (stable >= HUB_DEBOUNCE_STABLE)
+				break;
+		} else {
+			stable = 0;
+			connection = portstatus & USB_PORT_STAT_CONNECTION;
+		}
+		if (portchange & USB_PORT_STAT_C_CONNECTION)
+			usb_clear_port_feature(dev, port + 1, USB_PORT_FEAT_C_CONNECTION);
+		if (total >= HUB_DEBOUNCE_TIMEOUT)
+			break;
+		mdelay(HUB_DEBOUNCE_STEP);
+	}
+	DEBUG(("port %ld debounced: status %x after %ld ms", port + 1, portstatus, total));
+	*portstat = portstatus;
+	return stable >= HUB_DEBOUNCE_STABLE ? 0 : -1;
 }
 
 
@@ -283,8 +328,15 @@ long usb_hub_port_connect_change(struct usb_device *dev, long port, unsigned sho
 		}
 	}
 
-	/* Reset the port */
-	if (hub_port_reset(dev, port) < 0) {
+	/* the plug settled, still in */
+	if (hub_port_debounce(dev, port, &portstatus) < 0 ||
+	    !(portstatus & USB_PORT_STAT_CONNECTION)) {
+		DEBUG(("port %li: no steady connection", port + 1));
+		return -1;
+	}
+
+	/* Reset the port; the speed is the one it shows after */
+	if (hub_port_reset(dev, port, &portstatus) < 0) {
 		DEBUG(("cannot reset port %li!?", port + 1));
 		return -1;
 	}
@@ -341,6 +393,7 @@ usb_hub_configure(struct usb_device *dev)
 	hub = usb_hub_allocate();
 	if (hub == NULL)
 		return NULL;
+	memset(hub->tries, 0, sizeof hub->tries);
 
 	if (usb_get_hub_descriptor(dev, buffer, 4) < 0) {
 		DEBUG(("usb_hub_configure: failed to get hub " \
@@ -490,6 +543,7 @@ usb_hub_events(struct usb_hub_device *hub)
 		{
 			changed |= USB_PORT_STAT_C_CONNECTION;
 			DEBUG(("port %ld connection change", i + 1));
+			hub->tries[i] = 1;
 
 			/* If something disconnected, return now, as it
 			 * could have been our hub.
@@ -498,6 +552,24 @@ usb_hub_events(struct usb_hub_device *hub)
 			{
 				return changed;
 			}
+			/* ASV: the port's other change bits on the next
+			 * poll, with a status from after the connect */
+			continue;
+		}
+
+		/* ASV: a device that did not come up is tried again on
+		 * the next polls (its change bit went with the first try) */
+		if ((portstatus & USB_PORT_STAT_CONNECTION) && !dev->children[i] &&
+		    hub->tries[i] < HUB_PORT_TRIES)
+		{
+			hub->tries[i]++;
+			DEBUG(("port %ld: try %d", i + 1, hub->tries[i]));
+			if (usb_hub_port_connect_change(dev, i, portstatus) == 0)
+				return changed;
+			if (!dev->children[i] && hub->tries[i] == HUB_PORT_TRIES)
+				ALERT(("ub0: USB device %ld port %ld: the device plugged in there does not answer",
+					dev->devnum, i + 1));
+			continue;
 		}
 
 		if (portchange & USB_PORT_STAT_C_ENABLE)

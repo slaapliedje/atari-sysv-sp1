@@ -49,6 +49,9 @@ struct usb_device usb_dev[USB_MAX_DEVICE];
 unsigned char usb_cfgbuf[USB_CONFIG_BUFFER_SIZE];
 #endif
 static long asynch_allowed;
+/* ASV: the host controller driver's pulled device (isp116x.c), let go
+ * of when its slot is: the slot's next device is another one */
+extern struct usb_device *devgone;
 
 /***************************************************************************
  * Init USB Device
@@ -799,6 +802,8 @@ usb_disconnect(struct usb_device *dev)
 			usb_hub_disconnect(dev);
 		}
 
+		if (devgone == dev)
+			devgone = NULL;
 		memset(dev, 0, sizeof(struct usb_device));
 		dev->devnum = -1;
 	}	
@@ -856,6 +861,8 @@ void usb_free_device(long dev_index)
 {
 	DEBUG(("Freeing device node: %ld\n", dev_index));
 	dev_index--;
+	if (devgone == &usb_dev[dev_index])
+		devgone = NULL;
 	memset(&usb_dev[dev_index], 0, sizeof(struct usb_device));
 	usb_dev[dev_index].devnum = -1;
 }
@@ -935,7 +942,7 @@ long usb_new_device(struct usb_device *dev)
 		}
 
 		/* reset the port for the second time */
-		err = hub_port_reset(dev->parent, port);
+		err = hub_port_reset(dev->parent, port, NULL);
 		if (err < 0) {
 			DEBUG(("Couldn't reset port %li", port));
 			dev->devnum = addr;

@@ -480,6 +480,19 @@ rh_check_port_status(struct isp116x *isp116x)
 	return res;
 }
 
+/* ASV: whether dev is, or hangs from, the device on root port port */
+static long
+on_root_port(struct usb_device *dev, long port)
+{
+	struct usb_device *d = dev;
+
+	if (root_hub_dev == NULL || port < 0 || port >= USB_MAXCHILDREN)
+		return 0;
+	while (d && d->parent && d->parent != root_hub_dev)
+		d = d->parent;
+	return d && d->parent == root_hub_dev && root_hub_dev->children[port] == d;
+}
+
 /* --- HC management functions --------------------------------------------- */
 
 /* locking functions */
@@ -1081,15 +1094,11 @@ retry_same:
 		timeout = rh_check_port_status(isp116x);
 		MINT_INT_ON;
 
-		if (timeout >= 0)
-		{
-			/*
-			 * FIXME! NOTE! AAAARGH!
-			 * This is potentially dangerous because it assumes
-			 * that only one device is ever plugged in!
-			 */
+		/* ASV: only when dev hangs from the root port that
+		 * lost its device (upstream marked whatever device the
+		 * transfer was for, on either port, and for good) */
+		if (timeout >= 0 && on_root_port(dev, timeout))
 			devgone = dev;
-		}
 	}
 
 	/* Ok, now we can read transfer status */
@@ -2099,6 +2108,7 @@ usb_lowlevel_init(void *dummy)
 	struct isp116x *isp116x = &isp116x_dev;
 
 	got_rhsc = rh_devnum = 0;
+	devgone = NULL;
 
 	/* Init device registers addr */
 	isp116x->addr_reg = NULL;	/* Not use in the NetUSBee driver */
@@ -2165,6 +2175,33 @@ ub_hcd_stop(void)
 {
 	ucd_unregister(&netusbee_uif);
 	root_hub_dev = NULL;
+}
+
+/*
+ * ASV: whether the controller has left the state isp116x_start put it
+ * in.  A device plugged into the NetUSBee can pull the card's supply
+ * down far enough to reset its chips (the nu driver then finds the
+ * Ethernet chip without its setup); the ISP1160 is back in USBReset
+ * with its ports unpowered, and the hub polls see nothing come or go.
+ * *ctl: the HcControl read.
+ */
+long
+ub_hcd_lost(unsigned long *ctl)
+{
+	struct isp116x *isp116x = &isp116x_dev;
+	unsigned long again;
+
+	*ctl = 0;
+	if (isp116x->disabled)
+		return 0;
+	/* two reads that agree: one access gone wrong on the cartridge
+	 * port must not cost every device a new enumeration */
+	MINT_INT_OFF;
+	*ctl = isp116x_read_reg32(isp116x, HCCONTROL);
+	again = isp116x_read_reg32(isp116x, HCCONTROL);
+	MINT_INT_ON;
+	return (*ctl & HCCONTROL_HCFS) != HCCONTROL_USB_OPER &&
+	       (again & HCCONTROL_HCFS) != HCCONTROL_USB_OPER;
 }
 
 /* the root hub's device, for the poll */

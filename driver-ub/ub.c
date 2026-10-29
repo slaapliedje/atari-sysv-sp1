@@ -118,12 +118,33 @@ ub_unlock()
 
 /* ---- the kernel side of ub.h ---------------------------------------- */
 
+/* ASV's cmn_err knows no l modifier ("%ld" came out as "d") nor %i:
+ * the stack's formats go without them, a long being an int here */
 void
 ub_kprintf(fmt, a, b, c, d, e, f, g, h)
 char *fmt;
 long a, b, c, d, e, f, g, h;
 {
-	cmn_err(CE_CONT, fmt, a, b, c, d, e, f, g, h);
+	static char buf[200];
+	char *p = buf;
+
+	while (*fmt && p < buf + sizeof buf - 8) {
+		if ((*p++ = *fmt++) != '%')
+			continue;
+		while (*fmt == '-' || (*fmt >= '0' && *fmt <= '9'))
+			if (p < buf + sizeof buf - 8)
+				*p++ = *fmt++;
+			else
+				fmt++;
+		while (*fmt == 'l')
+			fmt++;
+		if (*fmt == 'i') {
+			*p++ = 'd';
+			fmt++;
+		}
+	}
+	*p = 0;
+	cmn_err(CE_CONT, buf, a, b, c, d, e, f, g, h);
 }
 
 void
@@ -845,6 +866,31 @@ struct buf *bp;
 #define UB_HID_IDLE	(hertz / 10)
 #define UB_HUB_EVERY	25
 
+/*
+ * Before each hub poll: the controller as the stack left it?  When it
+ * has lost its setup (ub_hcd_lost: a power dip on the NetUSBee as a
+ * device is plugged in), the stack goes down, every device gone for its
+ * class driver, and the next UBIOC_WORK starts it again, which finds
+ * whatever is plugged in now.  Until it comes back, each second.
+ */
+static int ub_lost;		/* losses of the controller in a row */
+static int ub_refail;		/* restarts that failed since */
+
+static int
+ub_check_hcd()
+{
+	unsigned long ctl;
+
+	if (!ub_hcd_lost(&ctl)) {
+		ub_lost = 0;
+		return 0;
+	}
+	if (ub_lost++ < 3)
+		cmn_err(CE_NOTE, "ub0: the USB host controller lost its setup (HcControl %x); starting it again", ctl);
+	ub_stop();
+	return 1;
+}
+
 static int
 ub_work()
 {
@@ -858,11 +904,29 @@ ub_work()
 	}
 	if (ub_state != UB_RUNNING)
 		r = ub_start();
+	if (r && ub_lost) {
+		if (ub_refail++ == 0)
+			cmn_err(CE_NOTE, "ub0: the USB host controller does not come back; trying each second");
+		ub_unlock();
+		delay(hertz);
+		return 0;
+	}
+	if (r == 0 && ub_refail) {
+		cmn_err(CE_NOTE, "ub0: the USB host controller is back");
+		ub_refail = 0;
+	}
 	if (r == 0) {
 		hid = ub_hid_present();
 		if (!hid || ++since_hubs >= UB_HUB_EVERY) {
-			ub_poll_hubs();
 			since_hubs = 0;
+			if (ub_check_hcd()) {
+				ub_unlock();
+				/* lost again and again: not at full speed */
+				if (ub_lost > 3)
+					delay(5 * hertz);
+				return 0;
+			}
+			ub_poll_hubs();
 		}
 		if (hid) {
 			if (ub_hid_poll() > 0)
