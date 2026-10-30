@@ -29,8 +29,11 @@ On a FAT32 card for a ZuluSCSI or BlueSCSI:
   zuluscsi.ini   or bluescsi.ini: put your WiFi name and password in
                  (2.4 GHz networks only)
 
-Set the TT's NVRAM boot preference to "Atari System V" if the machine
-has one from before (the loader prints "Boot:" and waits otherwise).
+The TT's NVRAM boot preference must be "Atari System V" or none.  With
+TOS (or another system) preferred, the root-sector loader passes over the
+Unix partition and the TT comes up on the TOS desktop with no hard disk.
+Set it from TOS with BOOTCONF.APP (its "TT SVR4" button) or Atari's
+SETBOOT.PRG (System V floppy disk 11), then switch the TT off and on.
 
 PiSCSI (RaSCSI), untested so far: attach HD0.bin as a hard disk at
 SCSI ID 0 (by type, or rename it HD0.hds), and its DaynaPORT emulation
@@ -59,7 +62,12 @@ the console and the details in /etc/sp1):
     the card yourself, or `static` to keep your own network setup
   - an ATW800/2: X11R6.3's Xatw server takes over from the stock X11R4
     one, the T425 is wiped at boot, and tprobe's census of the
-    transputers is in /etc/sp1/transputers.  Without the card the
+    transputers is in /etc/sp1/transputers.  Its screen is 1024x768 in
+    256 colours, which every card can show.  For 24-bit colour, with
+    the card's full 4 MB (jumpers A0 and A1 closed), add "-depth 32" to
+    the Xatw line in /usr/x11r6/lib/X11/xdm/Xservers; on a card set up
+    for 2 MB, "-mode 800x600 -depth 32" fits.  `/usr/x11r6/bin/Xatw
+    -listmodes` lists the modes.  Without the card the
     loader's Riebl probe is put back at its real address from the next
     boot on (the image ships it moved, as the ATW800/2's video memory
     answers there).

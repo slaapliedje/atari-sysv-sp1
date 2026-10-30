@@ -98,8 +98,8 @@ goes from off to on (measured with `tools/atw/atwstart`; writing it alone
 does nothing), so each switch blanks the screen for a moment.
 
 ```sh
-# xdm's Xservers: the desktop as F1
-noname:0 local /usr/x11r6/bin/Xatw :0 -mode 1024x768 -depth 32 -vt 1
+# xdm's Xservers: the desktop as F1 (add -depth 32 on a 4 MB card)
+noname:0 local /usr/x11r6/bin/Xatw :0 -mode 1024x768 -vt 1
 # a game full screen at 640x480 as F2, the server gone when it exits
 xatwrun -mode 640x480 /work/openua/openua
 ```

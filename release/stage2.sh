@@ -49,6 +49,9 @@ echo "== X11R6.3 and XView for the ATW800/2 (used when the card is there)"
 ls /usr/x11r6/bin/Xatw /usr/x11r6/bin/xdm /usr/openwin/bin/olwm || die "X trees incomplete"
 # sp1's Xstartup over the one in the trees (it clears stale cookies)
 cp /rel/files/Xstartup /usr/x11r6/lib/X11/xdm/Xstartup && chmod 775 /usr/x11r6/lib/X11/xdm/Xstartup || die Xstartup
+# ... and sp1's Xservers: 1024x768 in 256 colours, which a card set up for
+# 2 MB can show too (the TT's own runs -depth 32, which needs 4 MB)
+cp /rel/files/Xservers /usr/x11r6/lib/X11/xdm/Xservers && chmod 644 /usr/x11r6/lib/X11/xdm/Xservers || die Xservers
 echo "== the hardware detection at boot (sp1hw), swap to match the memory"
 cp /rel/files/sp1hw /etc/init.d/sp1hw && chmod 744 /etc/init.d/sp1hw || die sp1hw
 rm -f /etc/rc2.d/S06sp1hw; ln /etc/init.d/sp1hw /etc/rc2.d/S06sp1hw
