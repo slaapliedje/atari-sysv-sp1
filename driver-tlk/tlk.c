@@ -13,7 +13,16 @@
  * GfA demo uses, and what resets the transputer.)
  *
  *   minor 0  C011 link  0xFEFFFAC0  a physical transputer in TRAM slot 1
- *   minor 1  FPGA link  0xFEDFFAC0  the T425 inside the FPGA
+ *   minor 1  FPGA link  0xFEDFFAC0  the T425 inside the FPGA, or 0xFEBFFAC0
+ *
+ * The FPGA link sits 0x540 below the top of the card's window, which the
+ * A0/A1 jumpers put at 0xFEC00000 (2 MB, the default) or 0xFEA00000 (2 MB,
+ * or 4 MB with both closed). A 4 MB card starts in a 2 MB layout whose
+ * upper half mirrors the lower, so the top at 0xFEE00000 serves it in
+ * either layout; only a 2 MB card at 0xFEA00000 has the link at
+ * 0xFEBFFAC0. The driver takes the window whose id block (" cpm" at
+ * 0xE00 - 24 below the top, where Xatw looks for it) answers, when the
+ * link is opened and when prtconf asks.
  *
  * User space cannot reach the C011: /dev/mem vets a page by reading its
  * first long, and 0xFEFFF000 bus-errors although the link registers do not.
@@ -246,6 +255,23 @@ tlk_reset(t, analyse)
 	return 0;
 }
 
+/* minor 1 at the top of the window whose id block answers; unchanged
+ * when neither does (the link then bus-errors and is refused) */
+static void
+tlk_fpga()
+{
+	static unsigned long top[2] = { 0xFEE00000, 0xFEC00000 };
+	int i, id;
+
+	for (i = 0; i < 2; i++)
+		if (ioprobe(IOP_READ | IOP_LONG, (caddr_t)(top[i] - 0xE00 + 24), &id) == 0 &&
+		    id == 0x2063706D) {		/* " cpm" */
+			tlk[1].r = (caddr_t)(top[i] - 0x540);
+			tlk[1].v = (volatile unsigned char *)tlk[1].r;
+			return;
+		}
+}
+
 int
 tlkinit()
 {
@@ -287,6 +313,8 @@ tlkdriverinfo(dev, cmd, buf, len)
 
 	if (cmd != 76)
 		return EINVAL;
+	if (!tlk[1].open)
+		tlk_fpga();
 	for (n = 0, i = 0; i < NLINK; i++) {
 		have[i] = rd(&tlk[i], R_ISTAT) >= 0 && rd(&tlk[i], R_OSTAT) >= 0;
 		n += have[i];
@@ -325,6 +353,8 @@ tlkopen(devp, flag, otyp, crp)
 	if (m < 0 || m >= NLINK || otyp != OTYP_CHR)
 		return ENXIO;
 	t = &tlk[m];
+	if (m == 1 && !t->open)
+		tlk_fpga();
 	/* every register must answer; the input data only when it holds
 	 * nothing, since reading it takes a byte */
 	if ((is = rd(t, R_ISTAT)) < 0 || rd(t, R_OSTAT) < 0 || rd(t, R_OUT) < 0 ||

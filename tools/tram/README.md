@@ -5,8 +5,15 @@ byte registers, Programmer's Manual "Programming the Transputer"):
 
 | link | TT address | what is behind it |
 |---|---|---|
-| FPGA link | 0xFEDFFAC0 | the T425 inside the FPGA |
+| FPGA link | 0xFEDFFAC0, or 0xFEBFFAC0 | the T425 inside the FPGA |
 | C011 link | 0xFEFFFAC0 | a physical transputer in TRAM slot 1 ("+T" cards) |
+
+The FPGA link sits 0x540 below the top of the card's window. The A0/A1
+jumpers put the window at 0xFEC00000 (2 MB, the default) or 0xFEA00000
+(2 MB, or 4 MB with both closed); a 4 MB card's 2 MB layout mirrors its
+upper half, so only a 2 MB card at 0xFEA00000 has the link at
+0xFEBFFAC0. `tprobe` and the tlk driver take the window whose id block
+(" cpm" at 0xE00 - 24 below the top, as Xatw looks for it) answers.
 
 It resets the transputer, POKEs a word and PEEKs it back, then boots the
 manual's 23-byte type probe (1 answer byte = C004, 2 = 16-bit, 4 = 32-bit).

@@ -128,7 +128,9 @@ if [ $atw = yes ]; then
 	fi
 	if [ -x /usr/local/bin/tprobe ]; then
 		/usr/local/bin/tprobe > /etc/sp1/transputers 2>&1
-		trams=`egrep -ci 'transputer|T4|T8|C004' /etc/sp1/transputers`
+		# the type probe's answers only: tprobe's failure lines name
+		# "no transputer" too
+		trams=`egrep -c 'answered.*(C004|16-bit|32-bit)' /etc/sp1/transputers`
 	fi
 else
 	if [ -f /stand/edt_data.la ]; then

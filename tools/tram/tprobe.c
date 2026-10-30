@@ -15,7 +15,15 @@
  * GfA demo uses, and what resets the transputer.)
  *
  *   C011 link  0xFEFFFAC0  the physical transputer in TRAM slot 1 ("+T" cards)
- *   FPGA link  0xFEDFFAC0  the T425 inside the FPGA
+ *   FPGA link  0xFEDFFAC0  the T425 inside the FPGA, or 0xFEBFFAC0 (below)
+ *
+ * The FPGA link sits 0x540 below the top of the card's window, which the
+ * A0/A1 jumpers put at 0xFEC00000 (2 MB, the default) or 0xFEA00000 (2 MB,
+ * or 4 MB with both closed). A 4 MB card starts in a 2 MB layout whose
+ * upper half mirrors the lower, so the top at 0xFEE00000 serves it in
+ * either layout; only a 2 MB card at 0xFEA00000 has the link at
+ * 0xFEBFFAC0. tprobe takes the window whose id block (" cpm" at 0xE00 - 24
+ * below the top, where Xatw looks for it) answers.
  *
  * After a reset a transputer that boots from link takes one control byte:
  * 0 = POKE (address, word), 1 = PEEK (address; answers a word), and 2..255
@@ -121,6 +129,33 @@ static void status(const char *name)
 	    lk[R_ISTAT] & 1, lk[R_OSTAT] & 1, lk[R_RESET] & 1);
 }
 
+/* the FPGA link at the top of the window whose id block answers, or 0 */
+static unsigned long fpga_link(void)
+{
+	static const unsigned long top[] = { 0xFEE00000UL, 0xFEC00000UL };
+	volatile unsigned char *p;
+	unsigned long id;
+	int fd, i;
+
+	fd = open("/dev/mem", O_RDONLY);
+	if (fd < 0)
+		return 0;
+	for (i = 0; i < 2; i++) {
+		p = (volatile unsigned char *)mmap(0, 0x1000, PROT_READ, MAP_SHARED,
+		    fd, (off_t)(top[i] - 0x1000));
+		if (p == (volatile unsigned char *)-1)
+			continue;		/* that window bus-errors */
+		id = *(volatile unsigned long *)(p + 0x1000 - 0xE00 + 24);
+		munmap((caddr_t)p, 0x1000);
+		if (id == 0x2063706DUL) {	/* " cpm" */
+			close(fd);
+			return top[i] - 0x540;
+		}
+	}
+	close(fd);
+	return 0;
+}
+
 static void probe(const char *name, unsigned long pa, int statonly)
 {
 	int fd, i, n, b[8];
@@ -198,6 +233,13 @@ int main(int argc, char **argv)
 	}
 	setvbuf(stdout, 0, _IONBF, 0);
 	if (c011) probe("C011 link", 0xFEFFFAC0UL, statonly);
-	if (fpga) probe("FPGA link", 0xFEDFFAC0UL, statonly);
+	if (fpga) {
+		unsigned long pa = fpga_link();
+		if (pa) {
+			printf("FPGA link @%08lx\n", pa);
+			probe("FPGA link", pa, statonly);
+		} else
+			printf("FPGA link: no ATW800/2 id block at 0xFEDFF200 or 0xFEBFF200\n");
+	}
 	return 0;
 }
