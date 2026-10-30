@@ -1,0 +1,6 @@
+menu=tos,magic,mint
+default=tos
+timeout=5
+mint=C:\MINT\MINT030.PRG
+; Lines like this one are not settings and are left alone.  The names
+; for menu= are tos magic mint sysv netbsd linux; see README.TXT.

@@ -189,15 +189,29 @@ it from TOS.  The AUTO order stays MAGXNVM, HNETDEV, the XVDI set.
 console after HDDriver:
 
 ```
-Boot:  1 TOS   2 MagiC   3 FreeMiNT   4 Unix
+Boot:  1 TOS   2 MagiC   3 FreeMiNT   4 System V
        (MagiC in 5 s)
 ```
 
-`\AUTO\OSMENU.INF` holds the default and the countdown (`default=tos|
-magic|mint|unix`, `timeout=SECONDS`, 0 for no menu) and the FreeMiNT
-kernel's path (`mint=`).  A MagiC preference in the NVRAM still makes
-MagiC the default, so BOOTCONF.APP and `setboot magic` keep working.
-What each choice does:
+`\AUTO\OSMENU.INF` lists the entries and holds the default, the
+countdown and the paths: `menu=tos,magic,mint,sysv` (also `netbsd`,
+`linux`; `unix` is `sysv`), `default=`, `timeout=SECONDS` (0 for no
+menu), `mint=` (the FreeMiNT kernel) and `magic=` (MagiC's booter, when
+not `\MAGXBOOT.PRG`).  This disk's file:
+
+```
+menu=tos,magic,mint,sysv
+default=magic
+timeout=8
+mint=C:\MINT\MTLOAD.PRG
+```
+
+Without `menu=` the entries are TOS, MagiC when its booter is there and
+FreeMiNT when its kernel and `MINTBOOT.PRG` are: an NVRAM entry has to be
+listed.  They are left out on a machine without NVRAM (an ST, where
+NVMaccess answers with its opcode).  A MagiC preference in the NVRAM
+still makes MagiC the default, so BOOTCONF.APP and `setboot magic` keep
+working.  What each choice does:
 
 - **TOS**: the program returns and the AUTO folder goes on.
 - **MagiC**: `\MAGXBOOT.PRG` is run.  MagiC then runs the AUTO folder
@@ -206,23 +220,31 @@ What each choice does:
   `MINTBOOT.PRG`, last in AUTO, runs the kernel after the rest of the
   folder (the VDI must be in before MiNT, as with NVDI) and deletes
   the file.
-- **Unix**: the NVRAM preference is set to Atari System V, and the
-  program says that the TT must be switched off and on, waits for a
-  key and goes on with TOS.  No reset does it: HDDriver's root-sector
-  loader is handed the preference at power-up only; after a warm or a
-  cold reset (memvalid cleared, a jump through `_sysbase`, the memory
-  test and all) TOS comes up again, seen on the TT.  From then on the
-  TT boots Unix at every power-up; `setboot tos` or `setboot magic`
-  on the Unix side (and BOOTCONF.APP on the TOS side) switch back.
+- **System V** (and NetBSD, Linux): the NVRAM preference is set to 0x40
+  (0x20, 0x10), and the program says that the machine must be switched
+  off and on, waits for a key and goes on with TOS.  No reset does it:
+  HDDriver's root-sector loader is handed the preference at power-up
+  only; after a warm or a cold reset (memvalid cleared, a jump through
+  `_sysbase`, the memory test and all) TOS comes up again, seen on the
+  TT.  From then on the TT boots Unix at every power-up; `setboot tos`
+  or `setboot magic` on the Unix side (and BOOTCONF.APP on the TOS
+  side) switch back.
 
 So the menu is for the TOS-side systems, which it starts in place; Unix
 is reached through the NVRAM preference and the power switch, in both
 directions.  (An earlier one-shot, an rc script putting TOS back at
 every Unix boot, is gone with the reset that it needed.)
 Both programs are assembled by `build.sh` with the SVR4 GNU as of the
-ASV cross toolchain, position-free (no relocation table), about 2 KB
-together.  Tested in Hatari: countdown to MagiC, each key, the NVRAM
-write, the OUT file written and removed.
+ASV cross toolchain, position-free (no relocation table).  Each sets
+up a stack inside the memory it keeps before `Mshrink`: the one TOS
+hands over is at the top of the TPA, which `Mshrink` gives back, and a
+program started next is loaded over it (the real MAGXBOOT and MiNT never
+come back, so only a failed start showed it).  `test-hatari.py` boots
+both from a GEMDOS-emulated C: on a TT, a Falcon030, an STE and an ST,
+with stand-ins for MagiC's booter and the kernel, and checks every entry,
+the countdown, Return, the NVRAM writes and the entries left out without
+NVRAM.  `mkzip.py` makes the package to hand out (the programs,
+`README.TXT`, a sample `OSMENU.INF`, the source, the GPL).
 
 ## FreeMiNT on C: too
 

@@ -8,7 +8,10 @@ start:
 	move.l	12(%a5),%d0
 	add.l	20(%a5),%d0
 	add.l	28(%a5),%d0
-	add.l	&0x100,%d0
+	add.l	&0x100+1024+1,%d0	# the basepage, and a stack of its own: the
+	and.w	&-2,%d0			# one TOS gave is at the TPA's top, which
+	move.l	%a5,%sp			# Mshrink hands back (a program started
+	add.l	%d0,%sp			# next would be loaded over it)
 	move.l	%d0,-(%sp)
 	move.l	%a5,-(%sp)
 	clr.w	-(%sp)
