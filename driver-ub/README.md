@@ -178,11 +178,16 @@ first.  install.sh puts the file in only when there is none.
 behind it) was unplugged, a mouse and the hub plugged back in, and
 nothing came up again: `ubtool devs` showed the root hub alone, while
 the kernel's message buffer showed the nu driver finding the Ethernet
-chip without its setup twice after the unplug.  Most likely a device
-plugged into the card pulls its supply down far enough to reset the
-chips on it; the ISP1160 is then back in USBReset with its ports
-unpowered, and the hub polls see nothing (the new message below says
-so when it happens).  `ubtool stop; ubtool start netusbee` found everything.
+chip without its setup twice after the unplug.  The card had moved in
+the cartridge slot as the plug was pulled: it sits loosely there and is
+easily bumped, and the cartridge port is not made to be hot plugged.  A
+card that loses contact and comes back has its chips reset; the ISP1160
+is then in USBReset with its ports unpowered, and the hub polls see
+nothing (the new message below says so when it happens).  `ubtool stop;
+ubtool start netusbee` found everything.  Plug and unplug USB devices
+through a hub, not at the card's own ports: the card is not touched, and
+the hub's ports are what the hotplug below is for.  A card that comes
+out of the slot altogether is beyond any driver.
 Now the daemon reads HcControl before each hub poll (ub_check_hcd, two
 reads that agree): out of the operational state, the stack goes down
 (every device gone for its class driver) and starts again, and keeps
@@ -204,8 +209,11 @@ of the U-Boot hub code, mended on the way:
   usb_free_device) and at controller init.
 The speed of a new device is the one its port shows after the reset.
 Kernel messages print %ld as cmn_err knows it (%d): "New USB device
-(d)" was the l modifier cmn_err does not have.  Not mended: a low-speed
-mouse behind the Genesys USB 2.0 hub (05e3:0610).  The hub disables the
-port right after its reset, and a garbled reply to the second reset
-leaves the ATL buffer full, so every later transfer to the hub fails
-("FIFO not empty").  The mouse works on the card's own port.
+(d)" was the l modifier cmn_err does not have.
+On the real TT (2026-10-29, the NetUSBee): the low-speed mouse behind
+the Genesys USB 2.0 hub (05e3:0610), which before this never enumerated
+(the hub disabled the port right after its reset, and a garbled reply
+to the second reset left the ATL buffer full: "FIFO not empty" on every
+later transfer to the hub), now comes up at boot and comes back within a
+second when unplugged from the hub and plugged in again.  Which of the
+changes above did it was not traced.
