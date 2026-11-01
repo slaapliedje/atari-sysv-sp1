@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""mkfloppy.py OUT.ST: a 720 KB floppy for a TT that comes up on the TOS
+"""mkfloppy.py OUT.ST [INF]: a 720 KB floppy for a TT that comes up on the TOS
 desktop when it should boot Atari System V. \\AUTO\\OSMENU.PRG (build.sh
 first) with an OSMENU.INF offering TOS and System V, and a README.TXT.
 Choosing System V sets the NVRAM boot preference; the TT then boots Unix
-from the next power-up on.
+from the next power-up on.  Under EmuTOS (A on its welcome screen boots
+from the floppy) choosing System V starts it at once.
 
 The image is FAT12 with a PC-style boot sector (720 KB, 2 sectors a
 cluster, 112 root entries), which TOS reads and PCs and Gotek drives
@@ -15,10 +16,11 @@ here = os.path.dirname(os.path.abspath(__file__))
 INF = """menu=tos,sysv
 default=tos
 timeout=15
-; Press 2 for Atari System V: the TT's NVRAM boot preference is set to it,
-; and the TT boots Unix from its next power-up on (switch it off and on;
-; a reset is not enough).  setboot tos on the Unix side, or BOOTCONF.APP
-; on TOS, switches back.
+; Press 2 for Atari System V.  Under Atari's TOS the TT's NVRAM boot
+; preference is set to it, and the TT boots Unix from its next power-up
+; on (switch it off and on; a reset is not enough); setboot tos on the
+; Unix side, or BOOTCONF.APP on TOS, switches back.  Under EmuTOS, which
+; does not use the preference, System V starts at once.
 """
 
 README = """OSMENU boot floppy for the Atari TT030
@@ -34,14 +36,24 @@ the disk's boot loader passes over the Unix partition.
 4. Switch the TT off and on (a reset is not enough).  It boots Unix,
    with or without the floppy in the drive.
 
-This needs Atari's TOS in the TT's ROM (TOS 3.06).  EmuTOS gives the
-Unix partition a drive letter and then does not run the disk's boot
-loader at all, whatever the boot preference says: under EmuTOS neither
-this floppy nor BOOTCONF.APP can start System V.
-
 To go back to TOS: `setboot tos` as root on the Unix side, or
 BOOTCONF.APP on TOS.  If you do not press a key, the menu goes on to
 TOS after 15 seconds and changes nothing.
+
+With EmuTOS instead of Atari's TOS
+----------------------------------
+EmuTOS never starts System V from the disk by itself (it gives the
+Unix partition a drive letter, then skips the disk's boot loader), and
+it boots from C:, so it does not look at this floppy either:
+
+1. Put this floppy in drive A: and switch the TT on.
+2. On EmuTOS's welcome screen ("Press key 'X' to boot from X:"), press
+   A.  EmuTOS runs \\AUTO\\OSMENU.PRG from the floppy.
+3. Press 2.  Under EmuTOS, OSMENU starts System V at once.
+
+Do this at every power-up, and after Unix restarts the TT (on a new
+machine, its first boot restarts once by itself).  With default=sysv in
+\\AUTO\\OSMENU.INF, step 3 is the countdown running out.
 
 \\AUTO\\OSMENU.INF holds the menu.  OSMENU.ZIP, next to this floppy on
 the release page, has the full boot menu for a TOS partition (TOS,
@@ -76,6 +88,8 @@ def entry(name, ext, attr, clus, size):
     return struct.pack('<8s3sB10sHHHI', name.ljust(8).encode(), ext.ljust(3).encode(),
                        attr, bytes(10), TIME, DATE, clus, size)
 
+if len(sys.argv) > 2:                       # an OSMENU.INF of one's own
+    INF = open(sys.argv[2]).read()
 prg = open(os.path.join(here, 'OSMENU.PRG'), 'rb').read()
 auto = len(fat); fat.append(0xFFF)          # AUTO's one cluster, filled below
 c_prg = alloc(prg)

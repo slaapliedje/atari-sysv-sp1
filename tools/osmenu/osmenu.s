@@ -20,10 +20,18 @@
 #             goes on with TOS.  The machine then boots that system at
 #             every power-up until the preference is set back to TOS
 #             (setboot under System V, bootpref under NetBSD).
+#   sysvnow   System V at once, no power cycle: the root sector of the
+#             disk with a System V partition is run here, the way TOS
+#             runs it at power-up with the preference System V.  Under
+#             EmuTOS, sysv does this too: EmuTOS gives the UNX partition
+#             a drive letter, so it never runs that root sector, and it
+#             hands a root sector no preference.  (EmuTOS boots from C:,
+#             which is the UNX partition: press A on its welcome screen
+#             for this program on a floppy to run.)
 #
 # \AUTO\OSMENU.INF, plain text, one setting a line:
-#   menu=tos,magic,mint,sysv     the entries, in this order (also netbsd,
-#                                linux; unix = sysv, freemint = mint)
+#   menu=tos,magic,mint,sysv     the entries, in this order (also sysvnow,
+#                                netbsd, linux; unix = sysv, freemint = mint)
 #   default=magic                taken on Return or when the time is up
 #   timeout=5                    seconds (at most 99); 0: the default at once
 #   mint=C:\MINT\MINT030.PRG     the FreeMiNT kernel, or a loader for it
@@ -52,6 +60,11 @@
 	.set	o_magxpath,98
 	.set	o_linebuf,178
 	.set	o_infbuf,306
+	.set	o_secbuf,820		# 1 KB past the program: a root sector, and
+					# the boot sector it reads after itself
+	.set	o_oldssp,824
+	.set	o_drvbits,828
+	.set	o_bootdev,832
 
 	.text
 start:
@@ -59,17 +72,19 @@ start:
 	move.l	12(%a5),%d0
 	add.l	20(%a5),%d0
 	add.l	28(%a5),%d0
-	add.l	&0x100+2048+1,%d0	# the basepage, and a stack of its own: the
-	and.w	&-2,%d0			# one TOS gave is at the TPA's top, which
-	move.l	%a5,%sp			# Mshrink hands back (a program started
-	add.l	%d0,%sp			# next would be loaded over it)
+	add.l	&0x100+1024+4096+1,%d0	# the basepage, a sector buffer and a stack
+	and.w	&-2,%d0			# of its own: the one TOS gave is at the
+	move.l	%a5,%sp			# TPA's top, which Mshrink hands back (a
+	add.l	%d0,%sp			# program started next would be loaded
+	lea	vars(%pc),%a4		# over it)
+	lea	-4096-1024(%sp),%a0
+	move.l	%a0,o_secbuf(%a4)
 	move.l	%d0,-(%sp)
 	move.l	%a5,-(%sp)
 	clr.w	-(%sp)
 	move.w	&0x4a,-(%sp)		# Mshrink
 	trap	&1
 	lea	12(%sp),%sp
-	lea	vars(%pc),%a4
 
 	pea	cookie_magx(%pc)	# already under MagiC (its second AUTO pass)?
 	move.w	&38,-(%sp)		# Supexec
@@ -201,6 +216,16 @@ choose:
 	beq.s	magic
 	cmp.b	&2,%d3
 	beq	mint
+	cmp.b	&6,%d3
+	beq	sysvnow
+	cmp.b	&3,%d3
+	bne	nvpref
+	pea	is_emutos(%pc)		# sysv under EmuTOS: no preference, at once
+	move.w	&38,-(%sp)		# Supexec
+	trap	&14
+	addq.l	&6,%sp
+	tst.l	%d0
+	bne	sysvnow
 	bra	nvpref
 quit:
 	clr.w	-(%sp)
@@ -299,6 +324,94 @@ nvpref:					# d3: sysv, netbsd, linux
 	move.w	&9,-(%sp)
 	trap	&1
 	addq.l	&6,%sp
+	bra	quit
+
+# sysvnow: the first disk (DMAread devices 0-17: ACSI, SCSI, IDE) whose
+# root sector TOS would run (its words add up to 0x1234) and whose
+# partition table has a System V partition (flag 0x40, bit 0 set); its
+# root sector is run with d3 'DMAr', d4 the device and d5 0x40.  It picks
+# the System V partition and runs its boot sector, which loads the System
+# V loader at 0x1C0000 with DMAread and starts it.  Back here only when
+# that failed (the root sector has then cleared C: from _drvbits and set
+# _bootdev to A:, which are put back).  The sector buffer and the stack
+# (the boot sector's own buffer is on it) must be clear of the loader's
+# 44 KB: in the AUTO folder this program is far below it.
+sysvnow:
+	move.l	o_secbuf(%a4),%a0
+	cmp.l	&0x1cb000,%a0
+	bcc.s	1f
+	lea	1024+4096(%a0),%a0
+	cmp.l	&0x1c0000,%a0
+	bls.s	1f
+	pea	s_sysvmem(%pc)
+	move.w	&9,-(%sp)		# Cconws
+	trap	&1
+	addq.l	&6,%sp
+	bra	8f
+1:	clr.l	-(%sp)
+	move.w	&0x20,-(%sp)		# Super
+	trap	&1
+	addq.l	&6,%sp
+	move.l	%d0,o_oldssp(%a4)
+	move.l	o_secbuf(%a4),%a3
+	moveq	&0,%d4
+2:	move.w	%d4,-(%sp)
+	move.l	%a3,-(%sp)
+	move.w	&1,-(%sp)
+	clr.l	-(%sp)
+	move.w	&42,-(%sp)		# DMAread sector 0
+	trap	&14
+	lea	14(%sp),%sp
+	tst.l	%d0
+	bne.s	4f
+	move.l	%a3,%a0
+	move.w	&255,%d1
+	moveq	&0,%d0
+9:	add.w	(%a0)+,%d0
+	dbf	%d1,9b
+	cmp.w	&0x1234,%d0
+	bne.s	4f
+	lea	0x1c6(%a3),%a0
+	moveq	&3,%d1
+3:	move.b	(%a0),%d0
+	and.b	&0xf9,%d0
+	cmp.b	&0x41,%d0
+	beq.s	5f
+	lea	12(%a0),%a0
+	dbf	%d1,3b
+4:	addq.w	&1,%d4
+	cmp.w	&18,%d4
+	bcs.s	2b
+	lea	s_nosysv(%pc),%a0
+	bra.s	7f
+5:	pea	s_sysvnow(%pc)
+	move.w	&9,-(%sp)		# Cconws
+	trap	&1
+	addq.l	&6,%sp
+	move.l	0x4c2,o_drvbits(%a4)
+	move.w	0x446,o_bootdev(%a4)
+	move.l	%a4,-(%sp)
+	move.l	&0x444d4172,%d3		# 'DMAr'
+	moveq	&0x40,%d5
+	move.w	%d4,%d7			# an ACSI root sector's form of the device
+	and.w	&7,%d7
+	lsl.w	&5,%d7
+	jsr	(%a3)
+	move.l	(%sp)+,%a4
+	move.l	o_drvbits(%a4),0x4c2
+	move.w	o_bootdev(%a4),0x446
+	lea	s_sysvfail(%pc),%a0
+7:	move.l	%a0,-(%sp)
+	move.w	&9,-(%sp)		# Cconws
+	trap	&1
+	addq.l	&6,%sp
+	move.l	o_oldssp(%a4),-(%sp)
+	move.w	&0x20,-(%sp)		# Super: back to user mode
+	trap	&1
+	addq.l	&6,%sp
+8:	move.w	&8,-(%sp)		# Cnecin: a key, then TOS
+	trap	&1
+	addq.l	&2,%sp
 	bra	quit
 
 # the menu's second line: "(NAME in N s)"
@@ -425,8 +538,10 @@ dropnv:	tst.b	o_hasnv(%a4)
 	bra.s	2f
 1:	move.b	(%a0)+,%d0
 	cmp.b	&3,%d0
-	bcc.s	2f
-	move.b	%d0,(%a1)+
+	bcs.s	4f
+	cmp.b	&5,%d0
+	bls.s	2f
+4:	move.b	%d0,(%a1)+
 	addq.b	&1,%d2
 2:	dbf	%d1,1b
 	move.b	%d2,o_nmenu(%a4)
@@ -605,6 +720,14 @@ c_no:	moveq	&0,%d0
 	rts
 c_yes:	moveq	&1,%d0
 	rts
+is_emutos:				# 'ETOS' in the ROM's header
+	move.l	0x4f2,%a0
+	move.l	8(%a0),%a0
+	moveq	&0,%d0
+	cmp.l	&0x45544f53,0x2c(%a0)
+	bne.s	1f
+	moveq	&1,%d0
+1:	rts
 
 # the kinds: the names OSMENU.INF uses, then the names on the screen
 words:	.asciz	"tos"
@@ -623,6 +746,8 @@ words:	.asciz	"tos"
 	.byte	4
 	.asciz	"linux"
 	.byte	5
+	.asciz	"sysvnow"
+	.byte	6
 	.byte	0
 labels:	.ascii	"TOS"			# 16 bytes each
 	.space	13
@@ -636,7 +761,9 @@ labels:	.ascii	"TOS"			# 16 bytes each
 	.space	10
 	.ascii	"Linux"
 	.space	11
-nvvals:	.byte	0,0,0,0x40,0x20,0x10	# the NVRAM preference of each kind
+	.ascii	"System V now"
+	.space	4
+nvvals:	.byte	0,0,0,0x40,0x20,0x10,0	# the NVRAM preference of each kind
 
 s_boot:	.byte	13,10
 	.ascii	"Boot:"
@@ -666,6 +793,17 @@ s_pref2: .ascii	" is now the boot preference.  Switch the"
 	.byte	13,10
 	.ascii	"Any key goes on with TOS for now."
 	.byte	13,10,0
+s_sysvnow: .ascii "OSMENU: starting System V"
+	.byte	13,10,0
+s_nosysv: .ascii "OSMENU: no disk with a System V partition answered"
+	.byte	13,10,0
+s_sysvmem: .ascii "OSMENU: this program is in the memory System V's loader"
+	.byte	13,10
+	.ascii	"needs (0x1C0000): start it from the AUTO folder"
+	.byte	13,10,0
+s_sysvfail: .byte 13,10
+	.ascii	"OSMENU: System V did not start"
+	.byte	13,10,0
 s_nonvw: .ascii	"OSMENU: the NVRAM could not be written; going on with TOS"
 	.byte	13,10,0
 infname: .asciz	"\\AUTO\\OSMENU.INF"
@@ -691,3 +829,7 @@ vars:	.space	6			# menu
 	.space	66
 	.space	128			# linebuf
 	.space	514			# infbuf
+	.long	0			# secbuf
+	.long	0			# oldssp
+	.long	0			# drvbits
+	.short	0			# bootdev

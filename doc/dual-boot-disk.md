@@ -249,20 +249,38 @@ NVRAM.  `mkzip.py` makes the package to hand out (the programs,
 `mkfloppy.py OSMENU-FLOPPY.ST` makes a 720 KB floppy for a TT that comes
 up on the TOS desktop with a Unix-only disk such as the release card
 image (its preference says TOS): `\AUTO\OSMENU.PRG` with
-`menu=tos,sysv`, TOS the default after 15 s, and a README.  Tested in
+`menu=tos,sysv`, TOS the default after 15 s, and a README (a second
+argument puts an `OSMENU.INF` of one's own on it instead).  Tested in
 Hatari with TOS 3.06 and the release image: the time-out leaves the
 preference alone, 2 sets 0x40, and the next power-up (the floppy still
 in) boots Unix.
 
-**EmuTOS** cannot start System V this way, whatever the preference:
-it gives partitions with the ids it lists in `OK_id()` - `UNX` among
-them - drive letters, and runs a disk's root sector only when the disk
-has no drive letter (`disk_try_dmaboot()` in `bios/disk.c`, EmuTOS
-1.4).  The release image under EmuTOS 1.4 in Hatari comes up on the
-desktop with a C: and no root-sector code run (traced), for the
-preferences 0x40, 0 and 0x80 alike.  Its `dmaboot()` would not pass the
+**EmuTOS** never starts System V from the disk, whatever the
+preference: it gives partitions with the ids it lists in `OK_id()` -
+`UNX` among them - drive letters, and runs a disk's root sector only
+when the disk has no drive letter (`disk_try_dmaboot()` in
+`bios/disk.c`, EmuTOS 1.4).  Its `dmaboot()` would not pass the
 preference in `d5` either (it sets `d3` = 'DMAr', `d4`, `d7`), where
-the AHDI root-sector code reads it.
+the AHDI root-sector code reads it.  Booting from C:, the UNX
+partition, it does not run that partition's boot sector (a copy of the
+release image whose sector 1 loops forever still reaches the desktop),
+nor a floppy's AUTO folder.
+
+OSMENU's `sysvnow` entry, and its `sysv` entry under EmuTOS ('ETOS' in
+the ROM's header), starts System V the way TOS would: the first
+DMAread device (0-17) whose root sector has the word sum 0x1234 and a
+partition with flag 0x41 has that root sector run with `d3` = 'DMAr',
+`d4` the device and `d5` 0x40.  The System V boot sector it picks
+loads the loader to 0x1C0000 with DMAread, at IPL 7, and starts it;
+OSMENU's sector buffer and stack (from the AUTO folder, far below)
+must be clear of those 44 KB, which it checks.  Under EmuTOS: A on its
+welcome screen boots from the floppy, then 2.  In Hatari with the
+build-21 image on SCSI, EmuTOS 1.4 reaches the Unix login this way,
+and TOS 3.06 with `sysvnow`; after `init 6` EmuTOS comes up cold on
+C: again, so the A is needed at every start.  EmuTOS's SCSI driver
+works at IPL 7 (it only times out); its ACSI driver waits for the
+200 Hz clock between commands, so a disk on the ACSI port would likely
+hang there (untested).
 
 ## FreeMiNT on C: too
 

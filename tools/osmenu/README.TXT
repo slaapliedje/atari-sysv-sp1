@@ -40,6 +40,12 @@ Linux      (HDDriver's does this, and Atari System V's) uses it at
            without its hard disk at the next power-up, until SETBOOT
            or BOOTCONF from a floppy sets it back.
 
+System V   Atari System V at once, with no power cycle, the NVRAM left
+now        as it is.  OSMENU finds the disk with a System V partition
+           (ACSI, SCSI or IDE) and runs its root sector the way TOS
+           runs it at power-up with the preference System V.  Under
+           EmuTOS the System V entry does this too (see EmuTOS below).
+
 OSMENU.INF
 ----------
 In the AUTO folder, plain text, one setting a line (only the first 512
@@ -47,7 +53,8 @@ bytes are read; lines that are not settings are ignored):
 
     menu=tos,magic,mint,sysv     the entries, in this order.  The names:
                                  tos, magic, mint (or freemint),
-                                 sysv (or unix), netbsd, linux
+                                 sysv (or unix), sysvnow, netbsd,
+                                 linux
     default=magic                taken on Return or when the time is up;
                                  without it, the first entry
     timeout=5                    seconds, at most 99.  0: no menu, the
@@ -73,6 +80,30 @@ Installing
    mint=, and MINTBOOT.PRG copied into C:\AUTO last.
 4. OSMENU.INF into C:\AUTO, edited to suit.
 
+EmuTOS
+------
+EmuTOS never starts Atari System V from the hard disk: it gives the UNX
+partition a drive letter, and then does not run the disk's boot loader,
+whatever the NVRAM preference says.  It boots from C:, which is that
+partition, so it does not run a floppy's AUTO folder either.  To start
+System V under EmuTOS:
+
+1. OSMENU.PRG, and an OSMENU.INF with sysv in its menu= line, in the
+   AUTO folder of a floppy.
+2. At power-up, press A on EmuTOS's welcome screen (the one that says
+   "Press key 'X' to boot from X:").  EmuTOS boots from the floppy and
+   runs OSMENU.
+3. Press the digit for System V: OSMENU starts it at once.
+
+This is needed at every power-up, and after every restart from Unix:
+EmuTOS comes up on C: again.  With default=sysv in OSMENU.INF, step 3
+is the countdown running out.
+
+Tested in Hatari on a TT with EmuTOS 1.4 and the Atari System V release
+image on SCSI.  A disk on the ACSI port is untested: EmuTOS's ACSI
+driver times its commands with the 200 Hz clock, which System V's boot
+sector stops.
+
 Source
 ------
 SRC holds the source and build.sh (GNU as for m68k in its SVR4
@@ -82,7 +113,8 @@ table.  OSMENU comes from https://github.com/slaapliedje/atari-sysv-sp1
 
 Tested in Hatari on a TT (TOS 3.06), a Falcon030 (TOS 4.04), an STE
 (TOS 2.06) and an ST (TOS 1.04): every entry, the countdown, Return, the
-NVRAM writes, and the entries left out without NVRAM.
+NVRAM writes, and the entries left out without NVRAM.  System V now: on
+a TT with TOS 3.06 and with EmuTOS 1.4, from a floppy, to the Unix login.
 
 Copyright 2026 Slaapliedje.  GNU General Public License version 2: see
 COPYING.
