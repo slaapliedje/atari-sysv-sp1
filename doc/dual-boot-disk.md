@@ -246,6 +246,24 @@ the countdown, Return, the NVRAM writes and the entries left out without
 NVRAM.  `mkzip.py` makes the package to hand out (the programs,
 `README.TXT`, a sample `OSMENU.INF`, the source, the GPL).
 
+`mkfloppy.py OSMENU-FLOPPY.ST` makes a 720 KB floppy for a TT that comes
+up on the TOS desktop with a Unix-only disk such as the release card
+image (its preference says TOS): `\AUTO\OSMENU.PRG` with
+`menu=tos,sysv`, TOS the default after 15 s, and a README.  Tested in
+Hatari with TOS 3.06 and the release image: the time-out leaves the
+preference alone, 2 sets 0x40, and the next power-up (the floppy still
+in) boots Unix.
+
+**EmuTOS** cannot start System V this way, whatever the preference:
+it gives partitions with the ids it lists in `OK_id()` - `UNX` among
+them - drive letters, and runs a disk's root sector only when the disk
+has no drive letter (`disk_try_dmaboot()` in `bios/disk.c`, EmuTOS
+1.4).  The release image under EmuTOS 1.4 in Hatari comes up on the
+desktop with a C: and no root-sector code run (traced), for the
+preferences 0x40, 0 and 0x80 alike.  Its `dmaboot()` would not pass the
+preference in `d5` either (it sets `d3` = 'DMAr', `d4`, `d7`), where
+the AHDI root-sector code reads it.
+
 ## FreeMiNT on C: too
 
 `tools/mint-install.sh` takes the FreeMiNT OS Distro's card image
