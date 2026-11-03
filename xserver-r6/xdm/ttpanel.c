@@ -13,6 +13,12 @@
  * (Atari's wish - not Tcl's: its desktop with wx2/wxd),
  * an editor, a calculator, the manuals, a load meter and OpenUA.
  *
+ * A tab at the panel's left end moves it: drag its grip to put the panel
+ * anywhere on the screen (it snaps to the edges), click the grip to fold
+ * the panel down to the tab and back, and click the padlock above the
+ * grip to lock the panel where it is (a locked panel still folds). Where
+ * it is, locked or not and folded or not are kept in ~/.ttpanel-place.
+ *
  * With olvwm (as patched for Atari System V) the panel also has a
  * workspace switcher - a button per screen of the virtual desktop, read
  * from the root's _OLVWM_DESKTOP and chosen with an _OLVWM_GOTO message -
@@ -25,7 +31,7 @@
  * icon to pick - and every change is written to ~/.ttpanelrc (comments
  * in a hand-written file do not survive that) and shown at once.
  *
- * Options: -top (at the top of the screen instead), -fn FONT.
+ * Options: -top (at the top of the screen, until it is moved), -fn FONT.
  *
  * Plain Xlib, so it runs on the R6.3 libraries and draws in a handful of
  * colours; the icons are drawn, not bitmaps.
@@ -48,6 +54,9 @@
 #define BTN_H	58
 #define PAD	5
 #define MAXBTN	24
+#define TAB_W	18		/* the tab: padlock and grip */
+#define LOCK_H	22
+#define SNAP	12		/* a dragged panel snaps to an edge this near */
 
 typedef struct {
 	char	label[32];
@@ -70,6 +79,10 @@ static int	ws_x, ws_cols, ws_rows, ws_cur;	/* the switcher; ws_cols 0 = none */
 static int	exit_x;
 static Atom	a_desktop, a_goto, a_exit;
 static int	sw, sh, top;			/* the screen, and -top */
+static int	panel_x, panel_y;		/* where the panel is */
+static int	locked, folded;			/* the tab's padlock, and folded to the tab */
+static int	placed;				/* by hand (or ~/.ttpanel-place): it stays put */
+static int	drag_on, drag_moved, drag_dx, drag_dy, drag_x0, drag_y0;
 static Window	draw_on;			/* rect, line, icon draw here */
 
 /* the Indigo Magic / CDE greys and blues, and the icons' colours */
@@ -88,6 +101,7 @@ static const char *defaults =
 	"Calc     : calc  : xcalc\n"
 	"Manuals  : book  : xman\n"
 	"Load     : load  : xload\n"
+	"Screen   : screen : atwconf\n"
 	"OpenUA   : game  : uagame\n";
 
 static void trim(char *s)
@@ -170,7 +184,7 @@ static void save_config(void)
 	if ((f = fopen(path, "w")) == NULL)
 		return;
 	fprintf(f, "# ttpanel's buttons, one per line:  Label : icon : command\n"
-		   "# icons: term files edit calc book load game mail paint tool clock exit\n"
+		   "# icons: term files edit calc book load game mail paint tool clock exit screen\n"
 		   "# (written by the panel's right-button menu)\n");
 	for (i = 0; i < nbtn; i++)
 		fprintf(f, "%s : %s : %s\n", btn[i].label, btn[i].icon, btn[i].cmd);
@@ -289,6 +303,20 @@ static void icon(const char *name, int x, int y)
 		rect(C_BLUE, x + 14, y + 10, 5, 4);
 		rect(C_GREEN, x + 21, y + 10, 5, 4);
 		rect(C_YELLOW, x + 7, y + 17, 5, 4);
+	} else if (!strcmp(name, "screen")) {
+		/* a monitor, and the corners of the picture on it */
+		rect(C_DARK, x + 2, y + 3, 28, 21);
+		rect(C_BLUE, x + 4, y + 5, 24, 17);
+		line(C_WHITE, x + 7, y + 8, x + 11, y + 8);
+		line(C_WHITE, x + 7, y + 8, x + 7, y + 11);
+		line(C_WHITE, x + 24, y + 8, x + 20, y + 8);
+		line(C_WHITE, x + 24, y + 8, x + 24, y + 11);
+		line(C_WHITE, x + 7, y + 19, x + 11, y + 19);
+		line(C_WHITE, x + 7, y + 19, x + 7, y + 16);
+		line(C_WHITE, x + 24, y + 19, x + 20, y + 19);
+		line(C_WHITE, x + 24, y + 19, x + 24, y + 16);
+		rect(C_SHADOW, x + 12, y + 24, 8, 3);
+		rect(C_DARK, x + 7, y + 27, 18, 3);
 	} else if (!strcmp(name, "clock")) {
 		fg(C_DARK); XFillArc(dpy, draw_on, gc, x + 3, y + 3, 26, 26, 0, 360 * 64);
 		fg(C_WHITE); XFillArc(dpy, draw_on, gc, x + 5, y + 5, 22, 22, 0, 360 * 64);
@@ -401,12 +429,44 @@ static void draw_exit(int sunk)
 		    PAD + BTN_H - 6 + sunk, l, (int)strlen(l));
 }
 
+/* the tab at the left end: the padlock (sunk and shut: locked) and the
+ * grip's ridges */
+static void draw_tab(void)
+{
+	int y, t = PAD + 3;
+
+	rect(C_FACE, 0, 0, TAB_W, panel_h);
+	bevel(0, 0, TAB_W, panel_h, 0);
+	rect(C_FACE, 2, PAD, TAB_W - 4, LOCK_H);
+	bevel(2, PAD, TAB_W - 4, LOCK_H, locked);
+	if (locked) {
+		line(C_DARK, 6, t + 2, 6, t + 8);
+		line(C_DARK, 11, t + 2, 11, t + 8);
+		line(C_DARK, 7, t + 1, 10, t + 1);
+	} else {			/* the shackle up, one leg out */
+		line(C_DARK, 6, t, 6, t + 8);
+		line(C_DARK, 11, t, 11, t + 4);
+		line(C_DARK, 7, t - 1, 10, t - 1);
+	}
+	rect(C_DARK, 4, t + 8, 10, 8);
+	rect(C_YELLOW, 5, t + 9, 8, 6);
+	for (y = PAD + LOCK_H + 5; y + 2 < panel_h - PAD; y += 4) {
+		line(C_LIGHT, 5, y, TAB_W - 6, y);
+		line(C_SHADOW, 5, y + 1, TAB_W - 6, y + 1);
+	}
+}
+
 static void draw_all(void)
 {
 	int i;
 
+	if (folded) {
+		draw_tab();
+		return;
+	}
 	rect(C_FACE, 0, 0, panel_w, panel_h);
 	bevel(0, 0, panel_w, panel_h, 0);
+	draw_tab();
 	for (i = 0; i < nbtn; i++)
 		draw_button(i);
 	draw_switcher();
@@ -442,7 +502,7 @@ static void read_desktop(void)
 /* positions, and the panel's width, from what it holds */
 static void layout(int sw)
 {
-	int i, x = PAD;
+	int i, x = TAB_W + PAD;
 
 	for (i = 0; i < nbtn; i++) {
 		btn[i].x = x;
@@ -476,11 +536,15 @@ static void send_root(Atom what, long arg)
 }
 
 /* what is at (x, y): a launcher's index, 100 + n for switcher screen n,
- * 200 for Log out, -1 for nothing */
+ * 200 for Log out, 300 the padlock, 301 the grip, -1 for nothing */
 static int hit(int x, int y)
 {
 	int i, cx, cy, cw, ch;
 
+	if (x < TAB_W)
+		return y >= PAD && y < PAD + LOCK_H ? 300 : 301;
+	if (folded)
+		return -1;
 	if (y < PAD || y >= PAD + BTN_H)
 		return -1;
 	for (i = 0; i < nbtn; i++)
@@ -499,9 +563,9 @@ static int hit(int x, int y)
 /* --- the configurator: a menu on the right button, and a dialog ---------- */
 
 static const char *icon_names[] = { "term", "files", "edit", "calc", "book",
-	"load", "game", "mail", "paint", "tool", "clock", "exit" };
-#define NICON		12
-#define ICON_COLS	6
+	"load", "game", "mail", "paint", "tool", "clock", "exit", "screen" };
+#define NICON		13
+#define ICON_COLS	7
 #define CELL		44
 
 enum { M_EDIT, M_ADD, M_REMOVE, M_LEFT, M_RIGHT, M_RELOAD };
@@ -533,11 +597,94 @@ static int	prev_revert;
 #define OK_X		(DLG_W - 2 * DBTN_W - 24)
 #define CANCEL_X	(DLG_W - DBTN_W - 12)
 
+/* the window where panel_x, panel_y say, all of it on the screen */
+static void place(void)
+{
+	int w = folded ? TAB_W : panel_w;
+
+	if (panel_x + w > sw)
+		panel_x = sw - w;
+	if (panel_y + panel_h > sh)
+		panel_y = sh - panel_h;
+	if (panel_x < 0)
+		panel_x = 0;
+	if (panel_y < 0)
+		panel_y = 0;
+	XMoveResizeWindow(dpy, win, panel_x, panel_y, w, panel_h);
+}
+
+static void place_path(char *path)
+{
+	const char *home = getenv("HOME");
+
+	sprintf(path, "%s/.ttpanel-place", home ? home : "");
+}
+
+/* ~/.ttpanel-place: x y locked folded; without it, centred at the bottom
+ * (or the top) */
+static void load_place(void)
+{
+	char path[512];
+	FILE *f;
+	int x, y, l, fo;
+
+	panel_x = (sw - panel_w) / 2;
+	panel_y = top ? 0 : sh - panel_h;
+	place_path(path);
+	if ((f = fopen(path, "r")) == NULL)
+		return;
+	if (fscanf(f, "%d %d %d %d", &x, &y, &l, &fo) == 4) {
+		placed = 1;
+		panel_x = x;
+		panel_y = y;
+		locked = l != 0;
+		folded = fo != 0;
+	}
+	fclose(f);
+}
+
+static void save_place(void)
+{
+	char path[512];
+	FILE *f;
+
+	placed = 1;
+	place_path(path);
+	if ((f = fopen(path, "w")) == NULL)
+		return;
+	fprintf(f, "%d %d %d %d\n", panel_x, panel_y, locked, folded);
+	fclose(f);
+}
+
+/* the grip dragged to (xr, yr) on the root: the panel follows, snapping
+ * to the screen's edges */
+static void drag_to(int xr, int yr)
+{
+	int w = folded ? TAB_W : panel_w, x = xr - drag_dx, y = yr - drag_dy;
+
+	if (x < SNAP)
+		x = 0;
+	if (x + w > sw - SNAP)
+		x = sw - w;
+	if (y < SNAP)
+		y = 0;
+	if (y + panel_h > sh - SNAP)
+		y = sh - panel_h;
+	panel_x = x;
+	panel_y = y;
+	place();
+}
+
 static void relayout(void)
 {
 	layout(sw);
-	XMoveResizeWindow(dpy, win, (sw - panel_w) / 2, top ? 0 : sh - panel_h,
-			  panel_w, panel_h);
+	if (!placed) {
+		/* where it starts until it is placed by hand: centred as the
+		 * width changes (the switcher comes when olvwm is up) */
+		panel_x = (sw - panel_w) / 2;
+		panel_y = top ? 0 : sh - panel_h;
+	}
+	place();
 	draw_on = win;
 	draw_all();
 }
@@ -617,7 +764,8 @@ static void open_menu(int target, int xroot)
 		x = sw - menu_w;
 	if (x < 0)
 		x = 0;
-	y = top ? panel_h + 2 : sh - panel_h - h - 2;
+	/* towards the middle of the screen from where the panel is */
+	y = panel_y + panel_h / 2 < sh / 2 ? panel_y + panel_h + 2 : panel_y - h - 2;
 	menu_sel = -1;
 	menu_clicked = 0;
 	wa.override_redirect = True;
@@ -1053,21 +1201,23 @@ int main(int argc, char **argv)
 	read_desktop();
 	panel_h = BTN_H + 2 * PAD;
 	layout(sw);
+	load_place();
 
 	/* no frame: the window manager leaves an override-redirect window
 	 * alone, and the panel keeps itself on top when covered */
 	wa.override_redirect = True;
 	wa.background_pixel = col[C_FACE];
 	wa.event_mask = ExposureMask | ButtonPressMask | ButtonReleaseMask |
-			VisibilityChangeMask;
-	win = XCreateWindow(dpy, RootWindow(dpy, scr), (sw - panel_w) / 2,
-			    top ? 0 : sh - panel_h, panel_w, panel_h, 0,
+			ButtonMotionMask | VisibilityChangeMask;
+	win = XCreateWindow(dpy, RootWindow(dpy, scr), panel_x, panel_y,
+			    folded ? TAB_W : panel_w, panel_h, 0,
 			    CopyFromParent, InputOutput, CopyFromParent,
 			    CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
 	XStoreName(dpy, win, "ttpanel");
 	draw_on = win;
 	gc = XCreateGC(dpy, win, 0, NULL);
 	XSetFont(dpy, gc, font->fid);
+	place();
 	XMapRaised(dpy, win);
 
 	for (;;) {
@@ -1125,13 +1275,56 @@ int main(int argc, char **argv)
 				open_menu(h >= 0 && h < MAXBTN ? h : -1, ev.xbutton.x_root);
 				break;
 			}
+			if (ev.xbutton.button != Button1)
+				break;
+			if (hit(ev.xbutton.x, ev.xbutton.y) == 301) {
+				/* the grip: a drag moves the panel, a click folds it */
+				drag_on = 1;
+				drag_moved = 0;
+				drag_x0 = ev.xbutton.x_root;
+				drag_y0 = ev.xbutton.y_root;
+				drag_dx = ev.xbutton.x_root - panel_x;
+				drag_dy = ev.xbutton.y_root - panel_y;
+				break;
+			}
 			pressed = hit(ev.xbutton.x, ev.xbutton.y);
 			if (pressed >= 0 && pressed < MAXBTN)
 				draw_button(pressed);
 			else if (pressed == 200)
 				draw_exit(1);
 			break;
+		case MotionNotify:
+			if (!drag_on)
+				break;
+			/* only the latest position: the TT draws slowly */
+			while (XCheckTypedWindowEvent(dpy, win, MotionNotify, &ev))
+				;
+			if (abs(ev.xmotion.x_root - drag_x0) > 3 || abs(ev.xmotion.y_root - drag_y0) > 3)
+				drag_moved = 1;
+			/* locked: a drag moves nothing (and is no click either) */
+			if (drag_moved && !locked)
+				drag_to(ev.xmotion.x_root, ev.xmotion.y_root);
+			break;
 		case ButtonRelease:
+			if (drag_on && ev.xbutton.button == Button1) {
+				drag_on = 0;
+				if (!drag_moved) {
+					folded = !folded;
+					place();
+					draw_all();
+				}
+				save_place();
+				break;
+			}
+			if (pressed == 300) {
+				pressed = -1;
+				if (hit(ev.xbutton.x, ev.xbutton.y) == 300) {
+					locked = !locked;
+					draw_tab();
+					save_place();
+				}
+				break;
+			}
 			if (pressed >= 0) {
 				int was = pressed;
 

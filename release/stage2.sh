@@ -55,6 +55,9 @@ cp /rel/files/Xservers /usr/x11r6/lib/X11/xdm/Xservers && chmod 644 /usr/x11r6/l
 # atwconf, the screen mode in a dialog, and sp1's Xsetup_0, whose Keep
 # prompt after a change brings the mode before back by itself
 cp /rel/files/atwconf /usr/x11r6/bin/atwconf && chmod 755 /usr/x11r6/bin/atwconf || die atwconf
+# ... and ttpanel newer than the trees' (its Screen button; the tab that
+# moves, folds and locks it)
+cp /rel/files/ttpanel /usr/x11r6/bin/ttpanel && chmod 755 /usr/x11r6/bin/ttpanel || die ttpanel
 cp /rel/files/Xsetup_0 /usr/x11r6/lib/X11/xdm/Xsetup_0 && chmod 775 /usr/x11r6/lib/X11/xdm/Xsetup_0 || die Xsetup_0
 echo "== the hardware detection at boot (sp1hw), swap to match the memory"
 cp /rel/files/sp1hw /etc/init.d/sp1hw && chmod 744 /etc/init.d/sp1hw || die sp1hw

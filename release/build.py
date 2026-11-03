@@ -40,7 +40,8 @@ def run(cmd, **kw):
 class Hatari:
     """One emulated TT, headless, in its own session (killed as a group)."""
 
-    def __init__(self, args, work, disks, telnet=None, extra=(), display=110, net=True, rtc_back=0):
+    def __init__(self, args, work, disks, telnet=None, extra=(), display=110, net=True, rtc_back=0,
+                 screen='1024x768x24'):
         self.work = work; self.display = ':%d' % display
         os.makedirs(os.path.join(work, 'home'), exist_ok=True)
         self.log = open(os.path.join(work, 'hatari.log'), 'w')
@@ -49,7 +50,7 @@ class Hatari:
             if telnet:
                 net += ',hostfwd=tcp:127.0.0.1:%d-:23' % telnet
         self.xauth = os.path.join(work, 'xauth'); open(self.xauth, 'w').close()
-        cmd = ['xvfb-run', '-n', str(display), '-f', self.xauth, '-s', '-screen 0 1024x768x24', args.hatari,
+        cmd = ['xvfb-run', '-n', str(display), '-f', self.xauth, '-s', '-screen 0 ' + screen, args.hatari,
                '--machine', 'tt', '--tos', args.tos, '--addr24', 'off', '--mmu', 'on',
                '--fpu', '68882', '--memsize', '4', '--ttram', '16',
                # ASV reads the TT's clock chip two years ahead of what Hatari
