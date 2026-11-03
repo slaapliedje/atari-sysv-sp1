@@ -1,5 +1,12 @@
 #!/bin/sh
 # login screen: a TT-blue root and the Fuji from the TOS boot screen
 /usr/x11r6/bin/xsetroot -solid '#2e4a73'
+# just after atwconf changed the screen mode: keep it, or the mode before
+# comes back by itself (atwconf.pending: there was a change)
+if [ -f /usr/x11r6/lib/X11/xdm/atwconf.pending ]; then
+	/usr/x11r6/bin/atwconf -confirm
+fi
 /usr/x11r6/lib/X11/xdm/xfuji -fg white &
 echo $! > /usr/x11r6/lib/X11/xdm/xfuji.pid
+# keys repeat in X: the server starts with every key's repeat off
+/usr/x11r6/bin/xset r on

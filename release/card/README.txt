@@ -63,11 +63,14 @@ the console and the details in /etc/sp1):
   - an ATW800/2: X11R6.3's Xatw server takes over from the stock X11R4
     one, the T425 is wiped at boot, and tprobe's census of the
     transputers is in /etc/sp1/transputers.  Its screen is 1024x768 in
-    256 colours, which every card can show.  For 24-bit colour, with
-    the card's full 4 MB (jumpers A0 and A1 closed), add "-depth 32" to
-    the Xatw line in /usr/x11r6/lib/X11/xdm/Xservers; on a card set up
-    for 2 MB, "-mode 800x600 -depth 32" fits.  `/usr/x11r6/bin/Xatw
-    -listmodes` lists the modes.  Without the card the
+    256 colours, which every card can show.  `atwconf` (as root)
+    changes the mode: a dialog under X, or `atwconf -l` and, say,
+    `atwconf -m 800x600 -d 32` from a shell.  Modes the card cannot
+    show are greyed out: 24-bit colour at 1024x768 needs its full 4 MB
+    (jumpers A0 and A1 closed).  X restarts in the new mode and asks
+    whether to keep it; without an answer the mode before comes back
+    after 20 seconds (`atwconf -back` does that from a shell too).
+    Without the card the
     loader's Riebl probe is put back at its real address from the next
     boot on (the image ships it moved, as the ATW800/2's video memory
     answers there).

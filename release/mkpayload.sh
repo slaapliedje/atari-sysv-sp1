@@ -69,6 +69,8 @@ python3 -I "$here/bfs.py" "$STOCK" 122880000 get unix "$p/edt/unix.stock" >/dev/
 cp "$here/sp1hw" "$here/swapfile.init" "$here/xdm.sh" "$p/files/"
 cp "$sp1/xserver-r6/xdm/Xstartup" "$p/files/Xstartup"
 cp "$sp1/xserver-r6/xdm/Xservers" "$p/files/Xservers"
+cp "$sp1/xserver-r6/xdm/Xsetup_0" "$p/files/Xsetup_0"
+need "$REL/atwconf"; cp "$REL/atwconf" "$p/files/atwconf"
 need "$REL/tprobe"; cp "$REL/tprobe" "$p/files/tprobe"
 need "$REL/xtrees.cpio"; cp "$REL/xtrees.cpio" "$p/files/xtrees.cpio"
 cp "$sp1/tools/ttntp/S99ttntp" "$p/files/S99ttntp"

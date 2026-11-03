@@ -4,5 +4,6 @@
 # 1024x768 in 256 colours fits every card.  24-bit colour (add -depth 32)
 # needs the card's full 4 MB, jumpers A0 and A1 closed: on a card set up
 # for 2 MB the server stops ("needs more than the card's 2 MB") and xdm
-# with it.  Xatw -listmodes lists the modes.
+# with it.  Xatw -listmodes lists the modes; atwconf (as root) changes
+# -mode and -depth here and restarts X.
 noname:0 local /usr/x11r6/bin/Xatw :0 -mode 1024x768 -vt 1

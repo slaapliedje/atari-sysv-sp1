@@ -52,6 +52,10 @@ cp /rel/files/Xstartup /usr/x11r6/lib/X11/xdm/Xstartup && chmod 775 /usr/x11r6/l
 # ... and sp1's Xservers: 1024x768 in 256 colours, which a card set up for
 # 2 MB can show too (the TT's own runs -depth 32, which needs 4 MB)
 cp /rel/files/Xservers /usr/x11r6/lib/X11/xdm/Xservers && chmod 644 /usr/x11r6/lib/X11/xdm/Xservers || die Xservers
+# atwconf, the screen mode in a dialog, and sp1's Xsetup_0, whose Keep
+# prompt after a change brings the mode before back by itself
+cp /rel/files/atwconf /usr/x11r6/bin/atwconf && chmod 755 /usr/x11r6/bin/atwconf || die atwconf
+cp /rel/files/Xsetup_0 /usr/x11r6/lib/X11/xdm/Xsetup_0 && chmod 775 /usr/x11r6/lib/X11/xdm/Xsetup_0 || die Xsetup_0
 echo "== the hardware detection at boot (sp1hw), swap to match the memory"
 cp /rel/files/sp1hw /etc/init.d/sp1hw && chmod 744 /etc/init.d/sp1hw || die sp1hw
 rm -f /etc/rc2.d/S06sp1hw; ln /etc/init.d/sp1hw /etc/rc2.d/S06sp1hw

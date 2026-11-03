@@ -104,6 +104,18 @@ noname:0 local /usr/x11r6/bin/Xatw :0 -mode 1024x768 -vt 1
 xatwrun -mode 640x480 /work/openua/openua
 ```
 
+`atwconf` (`xdm/atwconf.c`, in `/usr/x11r6/bin`) changes the desktop's
+mode for you: a dialog in the panel's style lists what `Xatw -listmodes`
+offers, greys out the modes the card's memory cannot hold (from the
+running server's `_ATW_FRAMEBUFFER`, or its last start in `xdm-errors`)
+with how to set the jumpers for 4 MB, and Apply rewrites `-mode` and
+`-depth` on the Xatw line and stops xdm, which init starts again. The
+next server start runs `atwconf -confirm` from `Xsetup_0`: click Keep (a
+click: xdm holds the keyboard while Xsetup runs), or the mode before comes
+back by itself after 20 seconds (a monitor that shows nothing in the new
+mode). From a shell: `atwconf -l`, `atwconf -m WxH
+[-d 8|32] [-y]`, `atwconf -back`.
+
 `xatwrun.sh` starts the second server in video memory just past the
 desktop's screen and its 2D-engine fill source, which follows each screen
 (it reads where that is from the desktop's `_ATW_FRAMEBUFFER`): 832 KB in

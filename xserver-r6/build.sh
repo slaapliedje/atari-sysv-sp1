@@ -150,6 +150,14 @@ $CC -o programs/ttpanel programs/ttpanel.o -Lexports/lib -lX11 \
 	config/asv/asviob.o -rpath=/usr/x11r6/lib -rpath-link=exports/lib
 python3 "$HERE/../xserver/fixneeded.py" programs/ttpanel > /dev/null
 
+# atwconf: the ATW800/2's screen mode in a dialog (the release takes it
+# from $REL/atwconf: copy programs/atwconf there)
+$CC -O -Iexports/include -c "$HERE/xdm/atwconf.c" -o programs/atwconf.o
+$CC -o programs/atwconf programs/atwconf.o -Lexports/lib -lX11 \
+	-lsocket -lsockhost -lnsl config/asv/libcextra.o config/asv/asvcompat.o \
+	config/asv/asviob.o -rpath=/usr/x11r6/lib -rpath-link=exports/lib
+python3 "$HERE/../xserver/fixneeded.py" programs/atwconf > /dev/null
+
 # 7. an install tree: copy dist/usr/x11r6 to /usr/x11r6 on the machine
 D=$WORK/dist/usr/x11r6
 rm -rf "$WORK/dist"; mkdir -p $D/bin $D/lib
@@ -164,7 +172,7 @@ cp programs/xtermxf/XTerm.ad $A/XTerm
 cp programs/xtermxf/XTerm-col.ad $A/XTerm-color
 mkdir -p $D/lib/terminfo
 cp programs/xtermxf/xterm-xf86.ti $D/lib/terminfo/
-cp programs/ttpanel $D/bin/
+cp programs/ttpanel programs/atwconf $D/bin/
 for l in lib/*/lib*.so.[0-9]*; do cp $l $D/lib/; done
 
 # xdm: the ASV configuration, xfuji, and the Fuji itself - taken from your
