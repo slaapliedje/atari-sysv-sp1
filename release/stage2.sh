@@ -2,6 +2,9 @@
 # telnet on the new disk's first boot (release/build.py): the userland.
 # /rel came over from the stock copy with the root file system.
 PATH=/sbin:/usr/sbin:/usr/bin:/usr/ccs/bin:/etc:/usr/local/bin; export PATH
+# init starts the rc scripts with umask 0: without this every file made
+# here would be writable by any user
+umask 022
 ulimit -f 4194303		# root's 16 MB file limit would stop the X trees
 die() { echo "STAGE2 FAILED: $*"; sync; sync; exit 1; }
 echo "== stage 2 `date`"
@@ -94,6 +97,12 @@ grep "ulimit -v" /etc/profile > /dev/null || echo 'ulimit -d 131072 2>/dev/null;
 echo "== NetUSBee helper"
 [ -d /usr/local/lib/netusbee ] || mkdir -p /usr/local/lib/netusbee
 cp /rel/sp1/driver-nu/nuup.sh /rel/sp1/driver-nu/strcf.nu /usr/local/lib/netusbee/ || die nuup
+echo "== modes: nothing root runs or reads writable by any user"
+# the X trees' archive has two files any user could write
+find /usr/x11r6 /usr/openwin -type f -perm -0002 -exec chmod o-w {} \;
+# and the stock image leaves the X11R4 clients' directory (a root X
+# session runs them) and bootpref open to every user
+chmod o-w /usr/sbin/bootpref /usr/bin/X11/ || die "stock modes"
 echo "== a first look"
 /usr/bin/manx -v 2>&1 | head -2
 /usr/local/bin/vim --version 2>&1 | head -1

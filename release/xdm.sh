@@ -9,6 +9,9 @@
 # The memory limits, 16 MB of data and of address space by default, soft
 # and hard, raised for the sessions xdm starts: a user's program may
 # have up to 128 MB (/sbin/sh's ulimit sets both limits; it ignores -H).
+# init's umask is 0, and the log below is made before xdm sets its own
+umask 022
+chmod o-w /usr/x11r6/lib/X11/xdm/xdm-init.out /usr/lib/X11/xdm/xdm-init.out 2>/dev/null
 ulimit -d 131072
 ulimit -v 131072
 if [ "`cat /etc/sp1/atw800 2>/dev/null`" = yes -a -x /usr/x11r6/bin/xdm ]; then

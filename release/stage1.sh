@@ -16,6 +16,9 @@
 #           buildsys links the drivers in): the new disk, and the system
 #           copied onto it.
 PATH=/sbin:/usr/sbin:/usr/bin:/usr/ccs/bin:/etc; export PATH
+# init starts the rc scripts with umask 0: without this every file made
+# here (the driver objects in /boot among them) would be writable by any user
+umask 022
 flush() { sync; cat /rel/log > /dev/dsk/c3d0sf; sync; }
 die() { echo "STAGE1 FAILED: $*"; flush; exit 1; }
 if [ ! -f /rel/phase1.done ]; then

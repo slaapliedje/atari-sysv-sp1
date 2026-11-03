@@ -9,6 +9,11 @@
 # /etc/inet/dhcpc.dev names the device (/dev/en0 the DaynaPORT, /dev/nu0
 # the NetUSBee); without it nothing happens and the static files stay.
 # The one script does both: the rc2.d name says which half.
+# init starts the rc scripts with umask 0: the files dhcpc writes are for
+# root alone to change (S71 runs dhcp.sh as root).  o-w mends what an
+# older version left.
+umask 022
+chmod o-w /etc/inet/hosts.net /etc/resolv.conf /etc/inet/dhcpc.dev 2>/dev/null
 case "$1" in
 'start')
 	[ -f /etc/inet/dhcpc.dev ] || exit 0

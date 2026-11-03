@@ -30,7 +30,12 @@
 #             the next boot.
 PATH=/sbin:/usr/sbin:/usr/bin:/etc; export PATH
 [ "$1" = start ] || exit 0
+# init starts the rc scripts with umask 0, so what this writes would be
+# writable by any user: strcf.new and rc.inet.new become /etc/strcf and
+# rc.inet, and xdm.sh believes atw800.  o-w mends what an older sp1hw left.
+umask 022
 [ -d /etc/sp1 ] || mkdir /etc/sp1
+chmod 755 /etc/sp1; chmod o-w /etc/sp1/* /etc/inet/dhcpc.dev 2>/dev/null
 say() { echo "sp1: $*" > /dev/console; echo "$*" >> /etc/sp1/boot; }
 : > /etc/sp1/boot
 
