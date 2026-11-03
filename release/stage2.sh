@@ -40,10 +40,17 @@ cp /rel/files/cacert.pem /usr/local/share/manx/cacert.pem || die cacert
 chmod 644 /usr/local/share/manx/cacert.pem
 cp /rel/manx-profile /etc/profile.manx || die "manx profile"
 grep "profile.manx" /etc/profile > /dev/null || echo '[ -r /etc/profile.manx ] && . /etc/profile.manx' >> /etc/profile
-echo "== rsync, ttntp (and the clock from the network at boot: S99ttntp)"
+echo "== rsync, ttntp (and the clock from the network at boot: S99ttntp), the US zones' dates"
 cp /rel/files/rsync /usr/local/bin/rsync && chmod 755 /usr/local/bin/rsync || die rsync
 cp /rel/files/ttntp /usr/local/bin/ttntp && chmod 755 /usr/local/bin/ttntp || die ttntp
 cp /rel/files/S99ttntp /etc/rc2.d/S99ttntp && chmod 744 /etc/rc2.d/S99ttntp || die S99ttntp
+# the US zones with today's daylight-time dates (the 1991 files have the 1987
+# ones), and the stock zone, US Eastern, by the name that has libc read its
+# file: a plain TZ=EST5EDT gets libc's built-in 1987 dates
+/usr/sbin/zic -d /usr/lib/locale/TZ /rel/files/usa.zic || die zic
+sed 's/^TZ=EST5EDT$/TZ=:US\/Eastern/' /etc/TIMEZONE > /tmp/TIMEZONE.new
+grep '^TZ=:US/Eastern$' /tmp/TIMEZONE.new > /dev/null && cp /tmp/TIMEZONE.new /etc/TIMEZONE || die TIMEZONE
+rm -f /tmp/TIMEZONE.new
 echo "== X11R6.3 and XView for the ATW800/2 (used when the card is there)"
 (cd /usr && cpio -icdum < /rel/files/xtrees.cpio) || die "X trees"
 ls /usr/x11r6/bin/Xatw /usr/x11r6/bin/xdm /usr/openwin/bin/olwm || die "X trees incomplete"

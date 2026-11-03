@@ -86,15 +86,21 @@ Time
 The clock is read as TOS sets it (the stock driver was two years
 ahead), and at every boot with a network the time is set from
 pool.ntp.org (/etc/rc2.d/S99ttntp).  The time zone that comes with the
-stock system is US Eastern, so SET YOUR ZONE in /etc/TIMEZONE first -
-with the wrong zone the clock shows the right moment in the wrong
-place, hours off your wall clock.  Change the file's TZ= line, as in
+system is US Eastern, so SET YOUR ZONE in /etc/TIMEZONE first - with
+the wrong zone the clock shows the right moment in the wrong place,
+hours off your wall clock.  Change the file's TZ= line, as in
 
-    TZ=MST7MDT
+    TZ=:US/Mountain
 
-(standard-zone name, hours west of Greenwich, daylight name: PST8PDT,
-CST6CDT, GMT0BST, MET-1DST...).  It counts from the next boot or login;
-`date` shows the result.  Without a network ttntp is skipped and the
+The four US zones, :US/Eastern, :US/Central, :US/Mountain and
+:US/Pacific, have today's daylight-time dates (the second Sunday in
+March to the first Sunday in November).  Elsewhere give the
+standard-zone name, hours west of Greenwich and the daylight name
+(GMT0BST, MET-1DST...); ASV's libc then puts daylight time on the 1987
+US dates, the first Sunday in April to the last in October.  It counts
+from the next boot or login; `date` shows the result, and `ttntp -z`
+(with a network) sets the TT's clock chip to the new local time, which
+is what TOS shows.  Without a network ttntp is skipped and the
 clock stays as TOS set it.
 
 Network: /etc/inet/hosts.net gets the address from DHCP at every boot;

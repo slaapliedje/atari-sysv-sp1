@@ -75,6 +75,7 @@ need "$REL/ttpanel"; cp "$REL/ttpanel" "$p/files/ttpanel"
 need "$REL/tprobe"; cp "$REL/tprobe" "$p/files/tprobe"
 need "$REL/xtrees.cpio"; cp "$REL/xtrees.cpio" "$p/files/xtrees.cpio"
 cp "$sp1/tools/ttntp/S99ttntp" "$p/files/S99ttntp"
+cp "$sp1/tools/ttntp/usa.zic" "$p/files/usa.zic"
 # the test and diagnostic programs, setboot, xatwrun
 sh "$here/mktests.sh" "$p/files/tests" >/dev/null || exit 1
 cp "$sp1/xserver-r6/xatwrun.sh" "$p/files/xatwrun"
