@@ -14,7 +14,12 @@ reading the row's IO_ADDR bus-errors).  So:
             the DaynaPORT): found only with a DaynaPORT on the bus
   EDTP.nu   from EDTP.cen at 0xfa0000: the cartridge port never
             bus-errors, so always found (the driver probes the chip itself)
-  EDTP.tlk  from EDTP.cen at 0xfedffac0: found only with the ATW800/2
+  EDTP.tlk  from EDTP.cen at 0xfefffad8, the ATW800/2's CPLD version
+            register: in its A16 block, which the A0/A1 jumpers do not
+            move, so found with the card at 2 MB or 4 MB and at
+            0xFEA00000 or 0xFEC00000 (0xfedffac0, its FPGA link at the
+            top of a window ending at 0xFEE00000, missed a 2 MB card at
+            0xFEA00000 on a real TT)
 
   python3 mkedtp.py DIR     DIR holds EDTP.hd, EDTP.cen and edt_data
                             copied from the TT's /stand; writes EDTP.dp,
@@ -50,7 +55,7 @@ def main(d):
         open(os.path.join(d, 'EDTP.' + lo.rstrip(b'\0').decode()), 'wb').write(b)
     ed = open(os.path.join(d, 'edt_data')).read()
     rows = ''
-    for name, addr in (('NU', '0x00fa0000'), ('DP', '0'), ('TLK', '0xfedffac0')):
+    for name, addr in (('NU', '0x00fa0000'), ('DP', '0'), ('TLK', '0xfefffad8')):
         if not any(l.split()[:1] == [name] for l in ed.splitlines()):
             rows += "%-9s -     0       %-15s -       -       -       -       -       6       3       - - - -\n" % (name, addr)
     open(os.path.join(d, 'edt_data.new'), 'w').write(ed + rows)

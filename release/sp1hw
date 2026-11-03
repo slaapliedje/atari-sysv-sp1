@@ -17,8 +17,8 @@
 #             /etc/inet/rc.inet are pointed at it and dhcpc's boot run
 #             uses it.  /etc/inet/sp1net: "auto" (the default), "static"
 #             to keep your hand-made files, or nu, dp or la for that card.
-#   ATW800/2  the loader's EDTP.tlk probe found the card's link (a TLK
-#             row): then /etc/sp1/atw800 says yes, which makes the xd
+#   ATW800/2  the loader's EDTP.tlk probe found the card's CPLD register
+#             (a TLK row): then /etc/sp1/atw800 says yes, which makes the xd
 #             line's /usr/local/lib/sp1/xdm start X11R6.3's xdm on the
 #             card's Xatw server, the T425 is wiped at boot (S04t425wipe)
 #             and tprobe's census of the transputers goes to
@@ -115,8 +115,8 @@ static) netname="network as set up by hand";; *) netname="no network card";;
 esac
 
 # ---- the ATW800/2 ----
-# the loader's probe (EDTP.tlk) found the card's link: the table has a
-# TLK row and the kernel the tlk driver.  /etc/sp1/atw800 is read by
+# the loader's probe (EDTP.tlk) found the card's CPLD register: the
+# table has a TLK row and the kernel the tlk driver.  /etc/sp1/atw800 is read by
 # the xd line's /usr/local/lib/sp1/xdm when init starts the display
 # manager (after rc2)
 atw=no

@@ -34,6 +34,7 @@ sed 's/0x0080fff0/0xfec0fff0/; s/0x00810000/0xfec10000/' "$REL/edt/edt_data.new"
 grep -q 0xfec0fff0 "$p/edt/edt_data.la" || { echo "edt_data.la: no LA row" >&2; exit 1; }
 grep -q 0x0080fff0 "$p/edt/edt_data.atw" || { echo "edt_data.atw: LA row not moved" >&2; exit 1; }
 grep -q '^TLK' "$p/edt/edt_data.atw" || { echo "edt_data: no TLK row" >&2; exit 1; }
+grep -q '^TLK .*0xfefffad8' "$p/edt/edt_data.atw" || { echo "edt_data: TLK row not at the CPLD register" >&2; exit 1; }
 cp "$here/stage1.sh" "$here/stage2.sh" "$here/cleanup.sh" "$here/vtoc-2g.dat" "$here/manx-profile" "$p/"
 # what the stock image had, to put back
 python3 -I "$sp1/tools/ufs.py" "$STOCK" 102400 get /etc/rc2.d/S75rpc "$p/S75rpc.stock"
