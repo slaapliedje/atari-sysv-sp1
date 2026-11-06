@@ -51,6 +51,11 @@ it boots from C:, so it does not look at this floppy either:
    A.  EmuTOS runs \\AUTO\\OSMENU.PRG from the floppy.
 3. Press 2.  Under EmuTOS, OSMENU starts System V at once.
 
+If EmuTOS will not boot from the floppy (the welcome screen goes by, or
+A does nothing), let it come up on its desktop, open this floppy's AUTO
+folder and double-click OSMENU.PRG: the same menu, and 2 starts System
+V the same way.
+
 Do this at every power-up, and after Unix restarts the TT (on a new
 machine, its first boot restarts once by itself).  With default=sysv in
 \\AUTO\\OSMENU.INF, step 3 is the countdown running out.
