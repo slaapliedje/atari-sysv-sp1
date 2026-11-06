@@ -95,6 +95,11 @@ System V under EmuTOS:
    runs OSMENU.
 3. Press the digit for System V: OSMENU starts it at once.
 
+If EmuTOS will not boot from the floppy (the welcome screen goes by, or
+A does nothing), let it come up on its desktop, open the floppy's AUTO
+folder and double-click OSMENU.PRG: the same menu, and System V starts
+the same way.  A tester's TT with EmuTOS reached System V like this.
+
 This is needed at every power-up, and after every restart from Unix:
 EmuTOS comes up on C: again.  With default=sysv in OSMENU.INF, step 3
 is the countdown running out.
