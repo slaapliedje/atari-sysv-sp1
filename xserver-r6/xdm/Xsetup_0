@@ -8,5 +8,9 @@ if [ -f /usr/x11r6/lib/X11/xdm/atwconf.pending ]; then
 fi
 /usr/x11r6/lib/X11/xdm/xfuji -fg white &
 echo $! > /usr/x11r6/lib/X11/xdm/xfuji.pid
+# the window manager chooser under the greeter (/etc/X11/wms); it clears
+# the last login's pick, and the session finds the new one in wmpick.0
+/usr/x11r6/lib/X11/xdm/wmchooser -o /usr/x11r6/lib/X11/xdm/wmpick.0 &
+echo $! > /usr/x11r6/lib/X11/xdm/wmchooser.pid
 # keys repeat in X: the server starts with every key's repeat off
 /usr/x11r6/bin/xset r on

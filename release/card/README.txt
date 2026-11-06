@@ -81,6 +81,22 @@ The system comes up in X (the stock X11R4 server on the TT's screen);
 `init 2` from a console login gives a plain text system, and editing
 /etc/inittab (is:4: -> is:2:) makes that the default.
 
+X, the console and the window manager
+-------------------------------------
+With the ATW800/2, X runs on the card and the TT's own screen keeps a
+console login.  There is one keyboard: Ctrl+Alt+F10 on the card's X
+screen lends it, and the mouse, to the console.  Logging out of the
+console, or `atwkbd`, gives it back to X, and so does a minute without
+a login.  Without the card, X has the TT's screen as on a stock system.
+
+The window manager is OpenLook (olvwm) unless you pick another: the
+buttons under the login box list the ones installed (OpenLook, twm),
+and your pick is kept for your next login in ~/.wm.  From a shell,
+`setwm` lists them and shows yours, `setwm twm` sets yours, `setwm -u`
+forgets it, and root's `setwm -d twm` changes everyone's default
+(/etc/X11/wm).  twm's menu is on the left mouse button over the
+desktop.  A ~/.xsession of your own replaces all of this.
+
 Time
 ----
 The clock is read as TOS sets it (the stock driver was two years

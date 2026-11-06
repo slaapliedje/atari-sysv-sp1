@@ -37,6 +37,9 @@ static unsigned char atwEaten[128];	/* a switch key: eat its release too */
 #define SC_ALT		0x38
 #define SC_F1		0x3B
 #define SC_F9		0x43
+#define SC_F10		0x44
+
+static int	atwCtrl, atwAlt;	/* held now, as far as we have seen */
 
 static void atwFlushMotion();
 
@@ -189,6 +192,7 @@ atwInputOn()
     }
     if (atwKeyboard && atwKeyboard->on)
 	AddEnabledDevice(atwIkbdFd);
+    atwCtrl = atwAlt = 0;	/* their releases went to whoever had the keyboard */
 }
 
 /* ... and now the next server's. */
@@ -241,18 +245,24 @@ static void
 atwKey(code)
     int code;
 {
-    static int ctrl, alt;
     int sc = code & 0x7f, up = code & 0x80;
     xEvent xE;
 
+    if (getenv("ATW_DEBUG"))
+	ErrorF("atw: key %02x\n", code);
     if (sc == SC_CTRL)
-	ctrl = !up;
+	atwCtrl = !up;
     else if (sc == SC_ALT)
-	alt = !up;
-    if (atwScreen.vt && sc >= SC_F1 && sc <= SC_F9) {
-	if (!up && ctrl && alt) {
+	atwAlt = !up;
+    if (atwScreen.vt && sc >= SC_F1 && sc <= SC_F10) {
+	if (!up && atwCtrl && atwAlt) {
+	    if (getenv("ATW_DEBUG"))
+		ErrorF("atw: Ctrl+Alt+F%d\n", sc - SC_F1 + 1);
 	    atwEaten[sc] = 1;
-	    atwVtSwitch(sc - SC_F1 + 1);
+	    if (sc == SC_F10)
+		atwVtConsole();
+	    else
+		atwVtSwitch(sc - SC_F1 + 1);
 	    return;
 	}
 	if (up && atwEaten[sc]) {

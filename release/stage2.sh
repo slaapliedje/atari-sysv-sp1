@@ -69,6 +69,28 @@ cp /rel/files/atwconf /usr/x11r6/bin/atwconf && chmod 755 /usr/x11r6/bin/atwconf
 # moves, folds and locks it)
 cp /rel/files/ttpanel /usr/x11r6/bin/ttpanel && chmod 755 /usr/x11r6/bin/ttpanel || die ttpanel
 cp /rel/files/Xsetup_0 /usr/x11r6/lib/X11/xdm/Xsetup_0 && chmod 775 /usr/x11r6/lib/X11/xdm/Xsetup_0 || die Xsetup_0
+# Xatw with Ctrl+Alt+F10: the keyboard lent to the console on the TT's own
+# screen (its login: init's cx line below); atwkbd gives it back
+cp /rel/files/Xatw /usr/x11r6/bin/Xatw && chmod 755 /usr/x11r6/bin/Xatw || die Xatw
+cp /rel/files/atwkbd.sh /usr/bin/atwkbd && chmod 755 /usr/bin/atwkbd || die atwkbd
+# the window manager: Xsession starts the one picked on the login screen
+# (wmchooser), else ~/.wm, else /etc/X11/wm (setwm sets both), from the
+# list in /etc/X11/wms; twm gets a menu
+cp /rel/files/Xsession /usr/x11r6/lib/X11/xdm/Xsession && chmod 775 /usr/x11r6/lib/X11/xdm/Xsession || die Xsession
+cp /rel/files/wmchooser /usr/x11r6/lib/X11/xdm/wmchooser && chmod 755 /usr/x11r6/lib/X11/xdm/wmchooser || die wmchooser
+[ -d /etc/X11 ] || mkdir /etc/X11
+cp /rel/files/wms /etc/X11/wms && chmod 644 /etc/X11/wms || die wms
+echo olvwm > /etc/X11/wm && chmod 644 /etc/X11/wm || die "default wm"
+cp /rel/files/setwm.sh /usr/bin/setwm && chmod 755 /usr/bin/setwm || die setwm
+[ -d /usr/x11r6/lib/X11/twm ] || mkdir /usr/x11r6/lib/X11/twm
+cp /rel/files/system.twmrc /usr/x11r6/lib/X11/twm/system.twmrc && chmod 644 /usr/x11r6/lib/X11/twm/system.twmrc || die twmrc
+# earlier builds and copies the trees brought along from the TT they were
+# taken from
+for f in x11r6/bin/Xatw.acc x11r6/bin/Xatw.new x11r6/bin/Xatw.pre-bib x11r6/bin/Xatw.pre-vt \
+	 x11r6/bin/Xatw.vt1 x11r6/bin/ttpanel.old x11r6/bin/ttpanel.old2 x11r6/bin/xterm.dupecho \
+	 openwin/bin/olvwm.pre-panel openwin/lib/openwin-menu.pre-panel; do
+	rm -f /usr/$f
+done
 echo "== the hardware detection at boot (sp1hw), swap to match the memory"
 cp /rel/files/sp1hw /etc/init.d/sp1hw && chmod 744 /etc/init.d/sp1hw || die sp1hw
 rm -f /etc/rc2.d/S06sp1hw; ln /etc/init.d/sp1hw /etc/rc2.d/S06sp1hw
@@ -82,6 +104,12 @@ cp /rel/files/tprobe /usr/local/bin/tprobe && chmod 755 /usr/local/bin/tprobe ||
 cp /rel/files/xdm.sh /usr/local/lib/sp1/xdm && chmod 755 /usr/local/lib/sp1/xdm || die "sp1 xdm"
 sed 's|^xd:4:respawn:.*|xd:4:respawn:/usr/local/lib/sp1/xdm|' /etc/inittab > /tmp/inittab && cp /tmp/inittab /etc/inittab || die inittab
 grep "^xd:4:respawn:/usr/local/lib/sp1/xdm$" /etc/inittab > /dev/null || die "inittab xd line"
+# the TT's own screen keeps a console login in run level 4 when X is on
+# the card (the stock co line is for 1-3 only)
+cp /rel/files/console.sh /usr/local/lib/sp1/console && chmod 755 /usr/local/lib/sp1/console || die "sp1 console"
+grep -v '^cx:' /etc/inittab > /tmp/inittab && echo 'cx:4:respawn:/usr/local/lib/sp1/console' >> /tmp/inittab && cp /tmp/inittab /etc/inittab || die "inittab cx"
+grep "^cx:4:respawn:/usr/local/lib/sp1/console$" /etc/inittab > /dev/null || die "inittab cx line"
+rm -f /tmp/inittab
 echo "== xatwrun, setboot, the test programs (/usr/local/lib/sp1/tests)"
 cp /rel/files/xatwrun /usr/local/bin/xatwrun && chmod 755 /usr/local/bin/xatwrun || die xatwrun
 cp /rel/files/tests/setboot /usr/local/bin/setboot && chmod 755 /usr/local/bin/setboot || die setboot

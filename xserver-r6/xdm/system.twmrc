@@ -1,0 +1,68 @@
+# twm for the sp1 release (/usr/x11r6/lib/X11/twm/system.twmrc; a ~/.twmrc
+# of your own replaces it). The left button on the desktop: the menu.
+NoGrabServer
+RestartPreviousState
+DecorateTransients
+RandomPlacement
+BorderWidth 2
+TitleFont "-adobe-helvetica-bold-r-normal--*-120-*-*-*-*-*-*"
+ResizeFont "-adobe-helvetica-bold-r-normal--*-120-*-*-*-*-*-*"
+MenuFont "-adobe-helvetica-bold-r-normal--*-120-*-*-*-*-*-*"
+IconFont "-adobe-helvetica-bold-r-normal--*-100-*-*-*-*-*-*"
+IconManagerFont "-adobe-helvetica-bold-r-normal--*-100-*-*-*-*-*-*"
+Color
+{
+	BorderColor "#3c4450"
+	DefaultBackground "#a8b4c4"
+	DefaultForeground "#101418"
+	TitleBackground "#3c5c8c"
+	TitleForeground "#ffffff"
+	MenuBackground "#a8b4c4"
+	MenuForeground "#101418"
+	MenuTitleBackground "#3c5c8c"
+	MenuTitleForeground "#ffffff"
+	IconBackground "#a8b4c4"
+	IconForeground "#101418"
+	IconBorderColor "#3c4450"
+	IconManagerBackground "#a8b4c4"
+	IconManagerForeground "#101418"
+}
+NoTitle
+{
+	"ttpanel"
+	"xclock"
+}
+
+Button1 = : root : f.menu "main"
+Button2 = : root : f.menu "TwmWindows"
+Button3 = : root : f.menu "main"
+Button1 = m : window|icon : f.move
+Button1 = : title : f.function "move-or-raise"
+Button2 = : title : f.raiselower
+Button3 = : title : f.iconify
+Button1 = : icon : f.function "move-or-iconify"
+Button1 = : iconmgr : f.iconify
+
+Function "move-or-raise" { f.move f.deltastop f.raise }
+Function "move-or-iconify" { f.move f.deltastop f.iconify }
+
+menu "main"
+{
+	"System V"		f.title
+	"XTerm"			f.exec "exec xterm &"
+	"Panel"			f.exec "exec ttpanel &"
+	"Screen mode"		f.exec "exec atwconf &"
+	"Clock"			f.exec "exec xclock &"
+	""			f.nop
+	"Windows"		f.menu "TwmWindows"
+	"Window manager"	f.menu "wm"
+	"Restart twm"		f.restart
+	"Log out"		f.quit
+}
+
+menu "wm"
+{
+	"From the next login"	f.title
+	"OpenLook"		f.exec "exec setwm olvwm &"
+	"twm"			f.exec "exec setwm twm &"
+}

@@ -23,7 +23,9 @@
  * workspace switcher - a button per screen of the virtual desktop, read
  * from the root's _OLVWM_DESKTOP and chosen with an _OLVWM_GOTO message -
  * and a Log out button, which sends _OLVWM_EXIT: olvwm then asks to
- * confirm, as its Workspace menu's Exit does.
+ * confirm, as its Workspace menu's Exit does. Under another window
+ * manager Log out ends it at once, as twm's own Log out does: Xsession
+ * puts its pid in TTPANEL_WM_PID before it starts it.
  *
  * The right button opens a menu on the panel: on a launcher, Edit...,
  * Add after..., Remove, Move left and Move right; elsewhere, Add... and
@@ -497,6 +499,27 @@ static void read_desktop(void)
 	}
 	if (p != NULL)
 		XFree((char *)p);
+}
+
+static void send_root(Atom what, long arg);
+
+/* olvwm asks and ends the session; any other window manager Xsession
+ * started (its pid in TTPANEL_WM_PID) is told to quit */
+static void log_out(void)
+{
+	Atom type;
+	int fmt;
+	unsigned long n, after;
+	unsigned char *p = NULL;
+	const char *s = getenv("TTPANEL_WM_PID");
+	long pid = s ? atol(s) : 0;
+
+	if (XGetWindowProperty(dpy, RootWindow(dpy, scr), a_desktop, 0, 3, False,
+			       XA_INTEGER, &type, &fmt, &n, &after, &p) == Success && p != NULL) {
+		XFree((char *)p);
+		send_root(a_exit, 0L);		/* olvwm is up */
+	} else if (pid > 1)
+		kill((pid_t)pid, SIGTERM);
 }
 
 /* positions, and the panel's width, from what it holds */
@@ -1341,7 +1364,7 @@ int main(int argc, char **argv)
 				else if (was > 100 && was <= 110)
 					send_root(a_goto, (long)(was - 100));
 				else if (was == 200)
-					send_root(a_exit, 0L);
+					log_out();
 			}
 			break;
 		}

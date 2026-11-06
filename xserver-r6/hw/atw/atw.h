@@ -94,7 +94,7 @@ extern int  atwNoAccel;
 extern void atwAccelInit(), atwAccelOn();
 
 /* atwVt.c: switching the card between servers (Ctrl+Alt+F1..F9) */
-extern void atwVtInit(), atwVtPoll(), atwVtSwitch(), atwVtExit();
+extern void atwVtInit(), atwVtPoll(), atwVtSwitch(), atwVtConsole(), atwVtExit();
 extern void atwActivate(), atwDeactivate();	/* atwInit.c */
 extern void atwInputOn(), atwInputOff();	/* atwIo.c */
 extern int  atwKeysReleaseAll();

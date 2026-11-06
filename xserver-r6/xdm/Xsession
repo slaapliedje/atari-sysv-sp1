@@ -1,6 +1,6 @@
 #!/bin/sh
-# an OpenLook session; it ends when the window manager exits (Workspace
-# menu: Exit)
+# the X session (xdm runs it as the user); it ends when the window manager
+# exits (OpenLook: Workspace menu, Exit; twm: Log out)
 OPENWINHOME=/usr/openwin; export OPENWINHOME
 # XView's Help key: its built-in default is /usr/lib/help, the system's
 HELPPATH=$OPENWINHOME/lib/help; export HELPPATH
@@ -15,12 +15,36 @@ if test -z "$SHELL"; then
 	export SHELL
 fi
 test -x $HOME/.xsession && exec $HOME/.xsession
+# the window manager: the one picked on the login screen (wmchooser leaves
+# its name in xdm's directory, and it is kept in ~/.wm for next time), else
+# ~/.wm, else everyone's default in /etc/X11/wm (setwm sets both); its
+# program from /etc/X11/wms
+d=`echo "$DISPLAY" | sed 's/^[^:]*:\([0-9]*\).*$/\1/'`
+pick=`sed -n 1p /usr/x11r6/lib/X11/xdm/wmpick.$d 2>/dev/null`
+test -n "$pick" && echo "$pick" > $HOME/.wm
+wm=`sed -n 1p $HOME/.wm 2>/dev/null`
+test -z "$wm" && wm=`sed -n 1p /etc/X11/wm 2>/dev/null`
+# (a redirected loop runs in a subshell in this sh: its output is the answer)
+prog=
+if test -n "$wm" -a -f /etc/X11/wms; then
+	prog=`while read n p rest; do
+		if test "$n" = "$wm"; then
+			echo "$p"
+			break
+		fi
+	done < /etc/X11/wms`
+fi
+if test -z "$prog" -o ! -x "$prog"; then
+	for prog in $OPENWINHOME/bin/olvwm $OPENWINHOME/bin/olwm /usr/x11r6/bin/twm; do
+		test -x $prog && break
+	done
+fi
 xsetroot -solid '#5f7f9f'
+# the window manager will have this shell's pid: ttpanel's Log out ends
+# the session through it when olvwm is not there to ask
+TTPANEL_WM_PID=$$; export TTPANEL_WM_PID
 # a terminal, and the front panel along the bottom (ttpanel: the buttons
 # come from ~/.ttpanelrc, see ttpanel.c)
 xterm -geometry 80x24+30+30 &
 ttpanel &
-# olvwm (olwm with a virtual desktop) if it is installed; a ~/.xsession
-# of your own can exec olwm instead
-test -x $OPENWINHOME/bin/olvwm && exec olvwm
-exec olwm
+exec $prog

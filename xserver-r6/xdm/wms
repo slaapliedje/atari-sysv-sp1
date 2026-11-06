@@ -1,0 +1,5 @@
+# /etc/X11/wms - the window managers an X session can start: a name (for
+# setwm and ~/.wm), the program, and the label on the login screen's
+# chooser (wmchooser). A line whose program is missing is left out.
+olvwm	/usr/openwin/bin/olvwm	OpenLook
+twm	/usr/x11r6/bin/twm	twm

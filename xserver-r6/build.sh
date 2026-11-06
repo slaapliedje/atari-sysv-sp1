@@ -158,6 +158,14 @@ $CC -o programs/atwconf programs/atwconf.o -Lexports/lib -lX11 \
 	config/asv/asviob.o -rpath=/usr/x11r6/lib -rpath-link=exports/lib
 python3 "$HERE/../xserver/fixneeded.py" programs/atwconf > /dev/null
 
+# wmchooser: the window manager, picked on xdm's login screen (the release
+# takes it from $REL/wmchooser; Xatw from $REL/Xatw)
+$CC -O -Iexports/include -c "$HERE/xdm/wmchooser.c" -o programs/wmchooser.o
+$CC -o programs/wmchooser programs/wmchooser.o -Lexports/lib -lX11 \
+	-lsocket -lsockhost -lnsl config/asv/libcextra.o config/asv/asvcompat.o \
+	config/asv/asviob.o -rpath=/usr/x11r6/lib -rpath-link=exports/lib
+python3 "$HERE/../xserver/fixneeded.py" programs/wmchooser > /dev/null
+
 # 7. an install tree: copy dist/usr/x11r6 to /usr/x11r6 on the machine
 D=$WORK/dist/usr/x11r6
 rm -rf "$WORK/dist"; mkdir -p $D/bin $D/lib
@@ -173,6 +181,9 @@ cp programs/xtermxf/XTerm-col.ad $A/XTerm-color
 mkdir -p $D/lib/terminfo
 cp programs/xtermxf/xterm-xf86.ti $D/lib/terminfo/
 cp programs/ttpanel programs/atwconf $D/bin/
+mkdir -p $D/lib/X11/xdm $D/lib/X11/twm
+cp programs/wmchooser $D/lib/X11/xdm/
+cp "$HERE/xdm/system.twmrc" $D/lib/X11/twm/
 for l in lib/*/lib*.so.[0-9]*; do cp $l $D/lib/; done
 
 # xdm: the ASV configuration, xfuji, and the Fuji itself - taken from your

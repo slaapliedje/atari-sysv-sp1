@@ -48,6 +48,14 @@ finds it by content. `xfuji` waits for the login box and draws the logo,
 doubled, in the space above it, shaped (SHAPE extension) so that only the
 logo covers the root.
 
+Under the login box `wmchooser` (`xdm/wmchooser.c`, started by `Xsetup_0`
+and ended by `Xstartup`) shows a button for each window manager installed
+- the list is `/etc/X11/wms`: name, program, label - and "Usual". A click
+leaves the name in `wmpick.0` in xdm's directory; `Xsession` starts that
+window manager and keeps the name in `~/.wm`, else takes `~/.wm`, else
+everyone's default in `/etc/X11/wm`. `setwm` (`xdm/setwm.sh`) shows and
+sets both from a shell. twm gets a menu (`xdm/system.twmrc`).
+
 The session (`xdm/Xsession`) opens an xterm and `ttpanel`, a front panel
 along the bottom of the screen in the manner of CDE's and IRIX's: a button
 per program (terminal, the file manager - Atari's `wish`, not Tcl's - an
@@ -96,6 +104,14 @@ servers find each other through `/tmp/.atwvt` (which is on show) and
 `/tmp/.atwvtN` (server N's pid), and pass the card on with SIGUSR2. A
 server that exits while on show hands the card back to the one it took it
 from.
+
+Ctrl+Alt+F10 lends the keyboard and mouse to the console on the TT's own
+screen, which keeps its login in run level 4 when X is on the card (init's
+`cx` line, `release/console.sh`). The server on show closes `/dev/ikbd`,
+says so on the console, and takes them back when the console user logs
+out, when nobody has logged in there after a minute, when `/tmp/.atwkbd`
+is newer than the loan (`atwkbd`, for any user: Xatw only looks at the
+file's time, it never opens or removes it) or with a switch to it.
 
 The display start is in bytes and is taken only as the timing generator
 goes from off to on (measured with `tools/atw/atwstart`; writing it alone
