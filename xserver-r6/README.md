@@ -54,7 +54,16 @@ and ended by `Xstartup`) shows a button for each window manager installed
 leaves the name in `wmpick.0` in xdm's directory; `Xsession` starts that
 window manager and keeps the name in `~/.wm`, else takes `~/.wm`, else
 everyone's default in `/etc/X11/wm`. `setwm` (`xdm/setwm.sh`) shows and
-sets both from a shell. twm gets a menu (`xdm/system.twmrc`).
+sets both from a shell. twm gets a menu (`xdm/system.twmrc`) with the
+programs below in Applications.
+
+JWM 2.4.6 (Joe's Window Manager, MIT licence; `jwm/build.sh`, after
+`build.sh`) is the third choice: a taskbar along the top with a menu
+button, the two desktops and the windows, and the same menu as twm's on the
+desktop (`jwm/system.jwmrc`; a `~/.jwmrc` replaces it). It is C99, so the
+mint GCC compiles it through Manx's `toolchain/sysv4-cc` against ASV's and
+R6.3's headers, and it links like the other clients; `jwm/regex.c` gives it
+POSIX regcomp on libgen's regcmp.
 
 The session (`xdm/Xsession`) opens an xterm and `ttpanel`, a front panel
 along the bottom of the screen in the manner of CDE's and IRIX's: a button
@@ -71,7 +80,8 @@ a launcher opens a menu with Edit..., Add after..., Remove, Move left and
 Move right (elsewhere on the panel, Add... and Reload), and Edit and Add
 open a dialog with the label, the command and the twelve icons to pick
 from. With olvwm the panel also has a workspace switcher and a Log out
-button. The OpenLook Workspace menu (right button on the
+button. There is one panel per screen: started again (twm's and JWM's
+menus have it), ttpanel brings the running one out, unfolded and on top. The OpenLook Workspace menu (right button on the
 background) has the terminal and the file manager too.
 
 Start it with `/usr/x11r6/bin/xdm -config /usr/x11r6/lib/X11/xdm/xdm-config`

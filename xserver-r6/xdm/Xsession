@@ -44,7 +44,12 @@ xsetroot -solid '#5f7f9f'
 # the session through it when olvwm is not there to ask
 TTPANEL_WM_PID=$$; export TTPANEL_WM_PID
 # a terminal, and the front panel along the bottom (ttpanel: the buttons
-# come from ~/.ttpanelrc, see ttpanel.c)
-xterm -geometry 80x24+30+30 &
+# come from ~/.ttpanelrc, see ttpanel.c). JWM starts the terminal itself
+# once it manages windows (its StartupCommand): an xterm still starting up
+# when JWM takes it over comes out at its smallest size
+case "$prog" in
+*/jwm)	;;
+*)	xterm -geometry 80x24+30+30 & ;;
+esac
 ttpanel &
 exec $prog

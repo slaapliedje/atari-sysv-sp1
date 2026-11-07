@@ -87,6 +87,10 @@ echo olvwm > /etc/X11/wm && chmod 644 /etc/X11/wm || die "default wm"
 cp /rel/files/setwm.sh /usr/bin/setwm && chmod 755 /usr/bin/setwm || die setwm
 [ -d /usr/x11r6/lib/X11/twm ] || mkdir /usr/x11r6/lib/X11/twm
 cp /rel/files/system.twmrc /usr/x11r6/lib/X11/twm/system.twmrc && chmod 644 /usr/x11r6/lib/X11/twm/system.twmrc || die twmrc
+# JWM (xserver-r6/jwm): a taskbar along the top, the same menu as twm
+cp /rel/files/jwm /usr/x11r6/bin/jwm && chmod 755 /usr/x11r6/bin/jwm || die jwm
+[ -d /usr/x11r6/lib/X11/jwm ] || mkdir /usr/x11r6/lib/X11/jwm
+cp /rel/files/system.jwmrc /usr/x11r6/lib/X11/jwm/system.jwmrc && chmod 644 /usr/x11r6/lib/X11/jwm/system.jwmrc || die jwmrc
 # earlier builds and copies the trees brought along from the TT they were
 # taken from
 for f in x11r6/bin/Xatw.acc x11r6/bin/Xatw.new x11r6/bin/Xatw.pre-bib x11r6/bin/Xatw.pre-vt \

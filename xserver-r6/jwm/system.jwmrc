@@ -1,0 +1,185 @@
+<?xml version="1.0"?>
+<!-- JWM for the sp1 release (/usr/x11r6/lib/X11/jwm/system.jwmrc; a
+     ~/.jwmrc of your own replaces it). The session's ttpanel keeps the
+     bottom of the screen, so JWM's taskbar is along the top. Core X fonts:
+     X11R6.3 has no Xft. -->
+<JWM>
+    <!-- the left or right button on the desktop, or the taskbar's button -->
+    <RootMenu onroot="13">
+        <Program label="Terminal">xterm</Program>
+        <!-- the same programs as twm's Applications menu (system.twmrc) -->
+        <Menu label="Applications">
+            <Program label="Terminal">xterm</Program>
+            <Program label="Web browser">xmanx</Program>
+            <Program label="Mail">xterm -T Mail -e sh -c 'manxmail || { echo; echo Return closes this window.; read x; }'</Program>
+            <Program label="Text editor">textedit</Program>
+            <Program label="Shell tool">cmdtool</Program>
+            <Program label="Vim">xterm -T Vim -e vim</Program>
+            <Program label="Nano">xterm -T Nano -e nano</Program>
+            <Program label="File manager">wish</Program>
+            <Program label="Calculator">xcalc</Program>
+            <Program label="Manual pages">xman</Program>
+            <Program label="Clock">xclock</Program>
+            <Program label="Load">xload</Program>
+            <Separator/>
+            <Menu label="More">
+                <Program label="Editor (xedit)">xedit</Program>
+                <Program label="Magnifier">xmag</Program>
+                <Program label="Fonts">xfontsel</Program>
+                <Program label="Round clock">oclock</Program>
+            </Menu>
+            <Menu label="Games">
+                <Program label="Puzzle">puzzle</Program>
+                <Program label="Maze">maze</Program>
+                <Program label="Ico">ico</Program>
+                <Program label="Eyes">xeyes</Program>
+            </Menu>
+        </Menu>
+        <Program label="Panel">ttpanel</Program>
+        <Program label="Screen mode">atwconf</Program>
+        <Separator/>
+        <Menu label="Window manager">
+            <Program label="OpenLook from the next login">setwm olvwm</Program>
+            <Program label="twm from the next login">setwm twm</Program>
+            <Program label="JWM from the next login">setwm jwm</Program>
+        </Menu>
+        <Restart label="Restart JWM"/>
+        <Exit label="Log out" confirm="true"/>
+    </RootMenu>
+
+    <!-- the session's terminal: started here, once JWM manages windows (Xsession
+         leaves it out for JWM) - an xterm still starting up when JWM takes it
+         over comes out at its smallest size -->
+    <StartupCommand>xterm -geometry 80x24+30+30</StartupCommand>
+
+    <Group>
+        <Name>xclock</Name>
+        <Option>notitle</Option>
+    </Group>
+    <Group>
+        <Name>oclock</Name>
+        <Option>notitle</Option>
+    </Group>
+
+    <Tray x="0" y="0" height="22" autohide="off">
+        <TrayButton label="System V">root:1</TrayButton>
+        <Spacer width="4"/>
+        <Pager labeled="true"/>
+        <Spacer width="4"/>
+        <TaskList maxwidth="200"/>
+    </Tray>
+
+    <WindowStyle>
+        <Font>-adobe-helvetica-bold-r-normal--*-120-*-*-*-*-*-*</Font>
+        <Width>4</Width>
+        <Height>20</Height>
+        <Corner>0</Corner>
+        <Foreground>#e0e4ea</Foreground>
+        <Background>#6c7888</Background>
+        <Outline>#3c4450</Outline>
+        <Active>
+            <Foreground>#ffffff</Foreground>
+            <Background>#3c5c8c</Background>
+            <Outline>#3c4450</Outline>
+        </Active>
+    </WindowStyle>
+    <TrayStyle>
+        <Font>-adobe-helvetica-medium-r-normal--*-120-*-*-*-*-*-*</Font>
+        <Background>#a8b4c4</Background>
+        <Foreground>#101418</Foreground>
+        <Outline>#3c4450</Outline>
+    </TrayStyle>
+    <TaskListStyle list="desktop" group="false">
+        <Font>-adobe-helvetica-medium-r-normal--*-120-*-*-*-*-*-*</Font>
+        <Foreground>#101418</Foreground>
+        <Background>#a8b4c4</Background>
+        <Active>
+            <Foreground>#ffffff</Foreground>
+            <Background>#3c5c8c</Background>
+        </Active>
+        <Minimized>
+            <Foreground>#3c4450</Foreground>
+            <Background>#c8d0dc</Background>
+        </Minimized>
+    </TaskListStyle>
+    <PagerStyle>
+        <Font>-adobe-helvetica-medium-r-normal--*-100-*-*-*-*-*-*</Font>
+        <Foreground>#6c7888</Foreground>
+        <Background>#a8b4c4</Background>
+        <Text>#101418</Text>
+        <Outline>#3c4450</Outline>
+        <Active>
+            <Foreground>#3c5c8c</Foreground>
+            <Background>#5f7f9f</Background>
+        </Active>
+    </PagerStyle>
+    <MenuStyle>
+        <Font>-adobe-helvetica-medium-r-normal--*-120-*-*-*-*-*-*</Font>
+        <Foreground>#101418</Foreground>
+        <Background>#a8b4c4</Background>
+        <Outline>#3c4450</Outline>
+        <Active>
+            <Foreground>#ffffff</Foreground>
+            <Background>#3c5c8c</Background>
+        </Active>
+    </MenuStyle>
+    <PopupStyle>
+        <Font>-adobe-helvetica-medium-r-normal--*-120-*-*-*-*-*-*</Font>
+        <Foreground>#101418</Foreground>
+        <Background>#e0e4ea</Background>
+    </PopupStyle>
+
+    <!-- the background through xsetroot, as Xsession sets it: in 256
+         colours JWM's own solid colour comes out a near one (purple) -->
+    <Desktops width="2" height="1">
+        <Background type="command">xsetroot -solid '#5f7f9f'</Background>
+    </Desktops>
+
+    <DoubleClickSpeed>400</DoubleClickSpeed>
+    <DoubleClickDelta>2</DoubleClickDelta>
+    <FocusModel>click</FocusModel>
+    <SnapMode distance="10">border</SnapMode>
+    <!-- outlines: the TT redraws a moved window slowly -->
+    <MoveMode>outline</MoveMode>
+    <ResizeMode>outline</ResizeMode>
+
+    <Key key="Up">up</Key>
+    <Key key="Down">down</Key>
+    <Key key="Right">right</Key>
+    <Key key="Left">left</Key>
+    <Key key="Return">select</Key>
+    <Key key="Escape">escape</Key>
+    <Key mask="A" key="Tab">nextstacked</Key>
+    <Key mask="A" key="F4">close</Key>
+    <Key mask="A" key="#">desktop#</Key>
+    <Key mask="A" key="F1">root:1</Key>
+    <Key mask="A" key="F2">window</Key>
+    <Key mask="A" key="F9">minimize</Key>
+    <Key mask="A" key="F10">maximize</Key>
+    <Key mask="A" key="Right">rdesktop</Key>
+    <Key mask="A" key="Left">ldesktop</Key>
+
+    <Mouse context="root" button="4">ldesktop</Mouse>
+    <Mouse context="root" button="5">rdesktop</Mouse>
+    <Mouse context="title" button="1">move</Mouse>
+    <Mouse context="title" button="2">move</Mouse>
+    <Mouse context="title" button="3">window</Mouse>
+    <Mouse context="title" button="4">shade</Mouse>
+    <Mouse context="title" button="5">shade</Mouse>
+    <Mouse context="title" button="11">maximize</Mouse>
+    <Mouse context="icon" button="1">window</Mouse>
+    <Mouse context="icon" button="2">move</Mouse>
+    <Mouse context="icon" button="3">window</Mouse>
+    <Mouse context="border" button="1">resize</Mouse>
+    <Mouse context="border" button="2">move</Mouse>
+    <Mouse context="border" button="3">window</Mouse>
+    <Mouse context="close" button="-1">close</Mouse>
+    <Mouse context="close" button="2">move</Mouse>
+    <Mouse context="close" button="-3">close</Mouse>
+    <Mouse context="maximize" button="-1">maximize</Mouse>
+    <Mouse context="maximize" button="-2">maxv</Mouse>
+    <Mouse context="maximize" button="-3">maxh</Mouse>
+    <Mouse context="minimize" button="-1">minimize</Mouse>
+    <Mouse context="minimize" button="2">move</Mouse>
+    <Mouse context="minimize" button="-3">shade</Mouse>
+</JWM>

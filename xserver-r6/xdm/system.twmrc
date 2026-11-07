@@ -50,14 +50,54 @@ menu "main"
 {
 	"System V"		f.title
 	"XTerm"			f.exec "exec xterm &"
+	"Applications"		f.menu "apps"
 	"Panel"			f.exec "exec ttpanel &"
 	"Screen mode"		f.exec "exec atwconf &"
-	"Clock"			f.exec "exec xclock &"
 	""			f.nop
 	"Windows"		f.menu "TwmWindows"
 	"Window manager"	f.menu "wm"
+	"Refresh"		f.refresh
 	"Restart twm"		f.restart
 	"Log out"		f.quit
+}
+
+# the same programs as JWM's Applications menu (jwm/system.jwmrc)
+menu "apps"
+{
+	"Applications"		f.title
+	"Terminal"		f.exec "exec xterm &"
+	"Web browser"		f.exec "exec xmanx &"
+	"Mail"			f.exec "exec xterm -T Mail -e sh -c 'manxmail || { echo; echo Return closes this window.; read x; }' &"
+	"Text editor"		f.exec "exec textedit &"
+	"Shell tool"		f.exec "exec cmdtool &"
+	"Vim"			f.exec "exec xterm -T Vim -e vim &"
+	"Nano"			f.exec "exec xterm -T Nano -e nano &"
+	"File manager"		f.exec "exec wish &"
+	"Calculator"		f.exec "exec xcalc &"
+	"Manual pages"		f.exec "exec xman &"
+	"Clock"			f.exec "exec xclock &"
+	"Load"			f.exec "exec xload &"
+	""			f.nop
+	"More"			f.menu "more"
+	"Games"			f.menu "games"
+}
+
+menu "more"
+{
+	"More"			f.title
+	"Editor (xedit)"	f.exec "exec xedit &"
+	"Magnifier"		f.exec "exec xmag &"
+	"Fonts"			f.exec "exec xfontsel &"
+	"Round clock"		f.exec "exec oclock &"
+}
+
+menu "games"
+{
+	"Games"			f.title
+	"Puzzle"		f.exec "exec puzzle &"
+	"Maze"			f.exec "exec maze &"
+	"Ico"			f.exec "exec ico &"
+	"Eyes"			f.exec "exec xeyes &"
 }
 
 menu "wm"
@@ -65,4 +105,5 @@ menu "wm"
 	"From the next login"	f.title
 	"OpenLook"		f.exec "exec setwm olvwm &"
 	"twm"			f.exec "exec setwm twm &"
+	"JWM"			f.exec "exec setwm jwm &"
 }
