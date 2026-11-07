@@ -7,9 +7,13 @@
 #
 # The kernel has read the chip's local time as GMT: ttntp -b moves the
 # clock by the zone's offset at once, and the boot's utmp/wtmp records
-# with it (else uptime counts the offset). Then the network: after a power-on
-# it can take a minute or more (a BlueSCSI's WiFi has to join first), so
-# keep trying, every 15 seconds for 10 minutes.
+# with it (else uptime counts the offset). Then the network: the first try
+# is made here, before rc2 ends and init starts xdm, so the clock's step
+# (hours, when the chip was set in another zone) doesn't land while the X
+# server is starting. One try takes a second, or 3 s per time server that
+# doesn't answer. After a power-on the network can take a minute or more
+# (a BlueSCSI's WiFi has to join first), so if it isn't there keep trying,
+# every 15 seconds for 10 minutes.
 case "$1" in
 start|'')
 	[ -f /etc/TIMEZONE ] && . /etc/TIMEZONE
@@ -19,13 +23,17 @@ start|'')
 		/usr/bin/netstat -rn | grep '^default' > /dev/null ||
 			/usr/sbin/route add default `cat /etc/defaultrouter` 1 > /dev/null 2>&1
 	fi
-	(
-		n=0
-		while [ $n -lt 40 ]; do
-			/usr/local/bin/ttntp -q -z > /dev/null 2>&1 && break
-			sleep 15
-			n=`expr $n + 1`
-		done
-	) &
+	if /usr/local/bin/ttntp -q -z > /dev/null 2>&1; then
+		:
+	else
+		(
+			n=1
+			while [ $n -lt 40 ]; do
+				sleep 15
+				/usr/local/bin/ttntp -q -z > /dev/null 2>&1 && break
+				n=`expr $n + 1`
+			done
+		) &
+	fi
 	;;
 esac
