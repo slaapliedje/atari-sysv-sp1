@@ -80,6 +80,9 @@ static int	clock_x;
 static int	ws_x, ws_cols, ws_rows, ws_cur;	/* the switcher; ws_cols 0 = none */
 static int	exit_x;
 static Atom	a_desktop, a_goto, a_exit;
+static Atom	a_panel, a_show;		/* one panel per screen (see main) */
+static time_t	raise_t0;			/* raises since then: not too many */
+static int	raises;
 static int	sw, sh, top;			/* the screen, and -top */
 static int	panel_x, panel_y;		/* where the panel is */
 static int	locked, folded;			/* the tab's padlock, and folded to the tab */
@@ -1215,6 +1218,31 @@ int main(int argc, char **argv)
 	    (dlgfont = XLoadQueryFont(dpy, "6x13")) == NULL)
 		dlgfont = font;
 
+	/* one panel per screen: a second one would cover the first, and each
+	 * raising itself when covered, the two would trade places without end.
+	 * The panel owns a selection; a second ttpanel brings the first one
+	 * out (unfolded, on top) and leaves */
+	{
+		char name[32];
+		Window other;
+
+		sprintf(name, "_TTPANEL_S%d", scr);
+		a_panel = XInternAtom(dpy, name, False);
+		a_show = XInternAtom(dpy, "_TTPANEL_SHOW", False);
+		if ((other = XGetSelectionOwner(dpy, a_panel)) != None) {
+			XEvent m;
+
+			memset(&m, 0, sizeof m);
+			m.xclient.type = ClientMessage;
+			m.xclient.window = other;
+			m.xclient.message_type = a_show;
+			m.xclient.format = 32;
+			XSendEvent(dpy, other, False, 0, &m);
+			XCloseDisplay(dpy);
+			fprintf(stderr, "ttpanel: a panel is already running on this screen\n");
+			return 0;
+		}
+	}
 	load_config();
 	a_desktop = XInternAtom(dpy, "_OLVWM_DESKTOP", False);
 	a_goto = XInternAtom(dpy, "_OLVWM_GOTO", False);
@@ -1237,6 +1265,11 @@ int main(int argc, char **argv)
 			    CopyFromParent, InputOutput, CopyFromParent,
 			    CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
 	XStoreName(dpy, win, "ttpanel");
+	XSetSelectionOwner(dpy, a_panel, win, CurrentTime);
+	if (XGetSelectionOwner(dpy, a_panel) != win) {
+		fprintf(stderr, "ttpanel: a panel is already running on this screen\n");
+		return 0;
+	}
 	draw_on = win;
 	gc = XCreateGC(dpy, win, 0, NULL);
 	XSetFont(dpy, gc, font->fid);
@@ -1277,8 +1310,29 @@ int main(int argc, char **argv)
 				draw_all();
 			break;
 		case VisibilityNotify:
-			if (ev.xvisibility.state != VisibilityUnobscured)
+			/* covered: back on top - but not in a fight with some other
+			 * window that keeps itself on top: 5 raises in 10 seconds */
+			if (ev.xvisibility.state != VisibilityUnobscured) {
+				time_t now = time(NULL);
+
+				if (now - raise_t0 >= 10) {
+					raise_t0 = now;
+					raises = 0;
+				}
+				if (raises++ < 5)
+					XRaiseWindow(dpy, win);
+			}
+			break;
+		case ClientMessage:
+			/* another ttpanel was started: come out */
+			if (ev.xclient.message_type == a_show) {
+				if (folded) {
+					folded = 0;
+					place();
+					draw_all();
+				}
 				XRaiseWindow(dpy, win);
+			}
 			break;
 		case PropertyNotify:
 			if (ev.xproperty.atom == a_desktop) {
