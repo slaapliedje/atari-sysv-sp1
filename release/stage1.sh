@@ -120,6 +120,9 @@ mount -F ufs /dev/dsk/c1d0s6 /mnt || die "mount home"
 umount /mnt || die "umount home"
 echo "-- copying /stand `date`"; flush
 mount -F bfs /dev/dsk/c1d0s3 /mnt || die "mount stand"
+# mkfs makes the BFS root 777, where any user could replace the kernel:
+# the stock /stand is 775 root sys
+chmod 775 /mnt && chgrp sys /mnt || die "stand mode"
 cp /stand/* /mnt || die "cp stand"
 # the stock kernel and objects, bootable from the loader if ever needed
 cp /rel/edt/unix.stock /mnt/unix.stock || die "unix.stock"

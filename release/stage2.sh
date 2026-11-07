@@ -16,6 +16,9 @@ echo "== the rest of the payload (SCSI 2)"
 ls -l /rel/files
 echo "== AMIX's shared libraries -> /usr/amx"
 (cd /usr && tar xf /rel/files/amx.tar) || die amx.tar
+# tar keeps the owner the archive was made by (a uid ASV doesn't have):
+# owned like the stock libraries in /usr/lib
+chown -R bin /usr/amx && chgrp -R bin /usr/amx && chmod 755 /usr/amx || die "amx owner"
 ls /usr/amx
 echo "== apkg"
 cd /rel/sp1/amix || die "cd amix"
@@ -41,7 +44,7 @@ echo "== Manx"
 [ -d /usr/local/share/manx ] || mkdir -p /usr/local/share/manx
 cp /rel/files/cacert.pem /usr/local/share/manx/cacert.pem || die cacert
 chmod 644 /usr/local/share/manx/cacert.pem
-cp /rel/manx-profile /etc/profile.manx || die "manx profile"
+cp /rel/manx-profile /etc/profile.manx && chmod 644 /etc/profile.manx || die "manx profile"
 grep "profile.manx" /etc/profile > /dev/null || echo '[ -r /etc/profile.manx ] && . /etc/profile.manx' >> /etc/profile
 echo "== rsync, ttntp (and the clock from the network at boot: S99ttntp), the US zones' dates"
 cp /rel/files/rsync /usr/local/bin/rsync && chmod 755 /usr/local/bin/rsync || die rsync
@@ -125,12 +128,17 @@ grep "ulimit -v" /etc/profile > /dev/null || echo 'ulimit -d 131072 2>/dev/null;
 echo "== NetUSBee helper"
 [ -d /usr/local/lib/netusbee ] || mkdir -p /usr/local/lib/netusbee
 cp /rel/sp1/driver-nu/nuup.sh /rel/sp1/driver-nu/strcf.nu /usr/local/lib/netusbee/ || die nuup
+chmod 755 /usr/local/lib/netusbee/nuup.sh && chmod 644 /usr/local/lib/netusbee/strcf.nu || die "nuup modes"
 echo "== modes: nothing root runs or reads writable by any user"
 # the X trees' archive has two files any user could write
 find /usr/x11r6 /usr/openwin -type f -perm -0002 -exec chmod o-w {} \;
 # and the stock image leaves the X11R4 clients' directory (a root X
-# session runs them) and bootpref open to every user
-chmod o-w /usr/sbin/bootpref /usr/bin/X11/ || die "stock modes"
+# session runs them) and bootpref open to every user (bootpref's group
+# is other, every new user's group)
+chmod go-w /usr/sbin/bootpref && chmod o-w /usr/bin/X11/ || die "stock modes"
+# the payload's archives bring /usr/local, its bin and share as 775 and
+# /usr in group root: back to the stock modes
+chmod 755 /usr/local /usr/local/bin /usr/local/share && chgrp sys /usr /usr/local/share || die "usr modes"
 echo "== a first look"
 /usr/bin/manx -v 2>&1 | head -2
 /usr/local/bin/vim --version 2>&1 | head -1

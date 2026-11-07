@@ -100,5 +100,5 @@ cp "$MANX/tools/install.sh" "$p/manx/install.sh"
 # names under 100 characters, as ustar wants; ASV extracts it into /, so
 # the top directory is rel
 (cd "$out" && find rel | awk 'length > 99 { print "long name: " $0; bad=1 } END { exit bad }')
-(cd "$out" && rm -f payload.tar && tar --format=ustar --owner=root --group=root -cf payload.tar rel && rm -rf rel)
+(cd "$out" && rm -f payload.tar && tar --format=ustar --owner=root --group=root --mode=go-w -cf payload.tar rel && rm -rf rel)
 ls -l "$out/payload.tar"

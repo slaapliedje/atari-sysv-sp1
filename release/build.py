@@ -304,6 +304,8 @@ def stage_halt(a, w):
 def stage_pack(a, w):
     out = os.path.join(a.rel, 'out'); os.makedirs(out, exist_ok=True)
     hd0 = os.path.join(out, 'HD0.bin')
+    # owners and modes against the stock image's: nothing any user could change
+    run([sys.executable, '-I', os.path.join(HERE, 'permscan.py'), a.stock, os.path.join(w, 'new.img')])
     sparse_copy(os.path.join(w, 'new.img'), hd0)
     open(os.path.join(out, 'NE4.img'), 'wb').close()
     for f in os.listdir(os.path.join(HERE, 'card')):
