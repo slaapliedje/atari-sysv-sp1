@@ -1174,6 +1174,63 @@ static int xerror(Display *d, XErrorEvent *e)
 	return 0;
 }
 
+/* a window that holds an application: WM_STATE on it or on a window in it
+ * (the window manager's frame around the application's own window) */
+static int has_client(Window w, int depth)
+{
+	Atom a_state = XInternAtom(dpy, "WM_STATE", False), type = None;
+	Window r, p, *kids = NULL;
+	unsigned int n, i;
+	int fmt, found = 0;
+	unsigned long nitems, after;
+	unsigned char *data = NULL;
+
+	if (XGetWindowProperty(dpy, w, a_state, 0, 0, False, AnyPropertyType, &type,
+			       &fmt, &nitems, &after, &data) == Success && data)
+		XFree((char *)data);
+	if (type != None)
+		return 1;
+	if (depth == 0 || !XQueryTree(dpy, w, &r, &p, &kids, &n))
+		return 0;
+	for (i = 0; i < n && !found; i++)
+		found = has_client(kids[i], depth - 1);
+	if (kids)
+		XFree((char *)kids);
+	return found;
+}
+
+/* a menu or popup open over the panel - the window manager's own menus
+ * (twm's are no override-redirect windows) or an application's: anything
+ * there that holds no application. It goes away by itself, and the panel
+ * raised over it would hide it */
+static int popup_over(void)
+{
+	Window r, p, *kids = NULL;
+	unsigned int n, i;
+	int above = 0, found = 0, w = folded ? TAB_W : panel_w;
+
+	if (!XQueryTree(dpy, RootWindow(dpy, scr), &r, &p, &kids, &n))
+		return 0;
+	for (i = 0; i < n && !found; i++) {
+		XWindowAttributes wa;
+
+		if (kids[i] == win) {
+			above = 1;
+			continue;
+		}
+		if (!above || !XGetWindowAttributes(dpy, kids[i], &wa))
+			continue;
+		if (wa.map_state == IsViewable &&
+		    wa.x < panel_x + w && wa.x + wa.width > panel_x &&
+		    wa.y < panel_y + panel_h && wa.y + wa.height > panel_y &&
+		    !has_client(kids[i], 3))
+			found = 1;
+	}
+	if (kids)
+		XFree((char *)kids);
+	return found;
+}
+
 int main(int argc, char **argv)
 {
 	XSetWindowAttributes wa;
@@ -1310,9 +1367,10 @@ int main(int argc, char **argv)
 				draw_all();
 			break;
 		case VisibilityNotify:
-			/* covered: back on top - but not in a fight with some other
-			 * window that keeps itself on top: 5 raises in 10 seconds */
-			if (ev.xvisibility.state != VisibilityUnobscured) {
+			/* covered: back on top - but not over a menu, and not in a
+			 * fight with some other window that keeps itself on top: 5
+			 * raises in 10 seconds */
+			if (ev.xvisibility.state != VisibilityUnobscured && !popup_over()) {
 				time_t now = time(NULL);
 
 				if (now - raise_t0 >= 10) {
