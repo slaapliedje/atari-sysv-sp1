@@ -11,7 +11,7 @@
 # GCC compiles it through the Manx repository's toolchain/sysv4-cc (MANX,
 # default ~/dev/unix-browser), against ASV's headers and R6.3's, and
 # gcc-cross-amix links it the way ../build.sh links the other clients:
-# R6.3's Xlib statically, ASV's libc shared. snprintf comes from Manx's
+# R6.3's shared Xlib and Xext from /usr/x11r6/lib, ASV's libc. snprintf comes from Manx's
 # os/sysv4; regex.c puts POSIX regcomp on libgen's regcmp; asvjwm.h
 # declares what ASV's headers keep from GCC (see each file).
 set -e

@@ -4,6 +4,8 @@ NoGrabServer
 RestartPreviousState
 DecorateTransients
 RandomPlacement
+# icons along the top, in two rows of 16: ttpanel has the bottom
+IconRegion "1024x128+0+0" North West 64 64
 BorderWidth 2
 TitleFont "-adobe-helvetica-bold-r-normal--*-120-*-*-*-*-*-*"
 ResizeFont "-adobe-helvetica-bold-r-normal--*-120-*-*-*-*-*-*"

@@ -8,16 +8,36 @@
 extern char *regcmp(const char *, ...);
 extern char *regex(const char *, const char *, ...);
 
-/* one alternative in regcmp's terms: "?" becomes {0,1} */
+/* the "]" that ends the bracket expression at p ("[...]"), or NULL: a "]"
+ * right after "[" or "[^" is one of its characters, and so is a "\\" */
+static const char *bracket_end(const char *p, const char *end)
+{
+	p++;
+	if (p < end && *p == '^')
+		p++;
+	if (p < end && *p == ']')
+		p++;
+	while (p < end && *p != ']')
+		p++;
+	return p < end ? p : NULL;
+}
+
+/* one alternative in regcmp's terms: "?" becomes {0,1}, but not in a
+ * bracket expression */
 static char *compile(const char *p, size_t len)
 {
 	char *s = malloc(len * 5 + 1), *o = s, *re;
+	const char *e;
 	size_t i;
 
 	if (s == NULL)
 		return NULL;
 	for (i = 0; i < len; i++) {
-		if (p[i] == '\\' && i + 1 < len) {
+		if (p[i] == '[' && (e = bracket_end(p + i, p + len)) != NULL) {
+			memcpy(o, p + i, e - (p + i) + 1);
+			o += e - (p + i) + 1;
+			i = e - p;
+		} else if (p[i] == '\\' && i + 1 < len) {
 			*o++ = p[i++];
 			*o++ = p[i];
 		} else if (p[i] == '?') {
@@ -34,8 +54,8 @@ static char *compile(const char *p, size_t len)
 
 int regcomp(regex_t *preg, const char *pattern, int cflags)
 {
-	const char *p, *start = pattern;
-	int depth = 0, bracket = 0, n = 1;
+	const char *p, *start = pattern, *end = pattern + strlen(pattern);
+	int depth = 0, n = 1;
 
 	(void)cflags;
 	for (p = pattern; *p; p++)
@@ -46,20 +66,16 @@ int regcomp(regex_t *preg, const char *pattern, int cflags)
 		return REG_ESPACE;
 	/* split at the "|"s outside groups and brackets */
 	for (p = pattern;; p++) {
+		if (*p == '[') {
+			if ((p = bracket_end(p, end)) == NULL)
+				break;
+			continue;
+		}
 		if (*p == '\\' && p[1]) {
 			p++;
 			continue;
 		}
-		if (bracket) {
-			if (*p == ']')
-				bracket = 0;
-			else if (*p == '\0')
-				break;
-			continue;
-		}
-		if (*p == '[')
-			bracket = 1;
-		else if (*p == '(')
+		if (*p == '(')
 			depth++;
 		else if (*p == ')')
 			depth--;

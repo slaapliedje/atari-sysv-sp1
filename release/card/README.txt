@@ -91,12 +91,14 @@ console, or `atwkbd`, gives it back to X, and so does a minute without
 a login.  Without the card, X has the TT's screen as on a stock system.
 
 The window manager is OpenLook (olvwm) unless you pick another: the
-buttons under the login box list the ones installed (OpenLook, twm),
-and your pick is kept for your next login in ~/.wm.  From a shell,
-`setwm` lists them and shows yours, `setwm twm` sets yours, `setwm -u`
-forgets it, and root's `setwm -d twm` changes everyone's default
-(/etc/X11/wm).  twm's menu is on the left mouse button over the
-desktop.  A ~/.xsession of your own replaces all of this.
+buttons under the login box list the ones installed (OpenLook, twm,
+JWM), and your pick is kept for your next login in ~/.wm.  From a
+shell, `setwm` lists them and shows yours, `setwm twm` sets yours,
+`setwm -u` forgets it, and root's `setwm -d twm` changes everyone's
+default (/etc/X11/wm).  twm's menu is on the left mouse button over the
+desktop, JWM's on the left or right one; JWM's taskbar runs along the
+top, and OpenLook and twm put their icons there, clear of the panel
+along the bottom.  A ~/.xsession of your own replaces all of this.
 
 Time
 ----

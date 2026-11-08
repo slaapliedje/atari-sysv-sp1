@@ -83,6 +83,8 @@ static Atom	a_desktop, a_goto, a_exit;
 static Atom	a_panel, a_show;		/* one panel per screen (see main) */
 static time_t	raise_t0;			/* raises since then: not too many */
 static int	raises;
+static int	covered;			/* by another window (VisibilityNotify) */
+static time_t	popup_t0;			/* a window with no application over us since */
 static int	sw, sh, top;			/* the screen, and -top */
 static int	panel_x, panel_y;		/* where the panel is */
 static int	locked, folded;			/* the tab's padlock, and folded to the tab */
@@ -1199,10 +1201,9 @@ static int has_client(Window w, int depth)
 	return found;
 }
 
-/* a menu or popup open over the panel - the window manager's own menus
- * (twm's are no override-redirect windows) or an application's: anything
- * there that holds no application. It goes away by itself, and the panel
- * raised over it would hide it */
+/* a window over the panel that holds no application: a menu open over it
+ * (the window manager's own - twm's are no override-redirect windows - or
+ * an application's), or a window manager's icon */
 static int popup_over(void)
 {
 	Window r, p, *kids = NULL;
@@ -1231,6 +1232,38 @@ static int popup_over(void)
 	return found;
 }
 
+/* covered: back on top, but not at once over a window that holds no
+ * application - a menu goes away by itself, and the panel raised over it
+ * would hide it; an icon doesn't, and gets 10 seconds - and not in a fight
+ * with some other window that keeps itself on top: 5 raises in 10
+ * seconds. Returns whether to look again (in a second): nothing else
+ * would tell the panel when the menu is gone or the 10 seconds are up */
+static int keep_on_top(void)
+{
+	time_t now = time(NULL);
+
+	if (!covered) {
+		popup_t0 = 0;
+		return 0;
+	}
+	if (popup_over()) {
+		if (!popup_t0)
+			popup_t0 = now;
+		if (now - popup_t0 < 10)
+			return 1;
+	} else
+		popup_t0 = 0;
+	if (now - raise_t0 >= 10) {
+		raise_t0 = now;
+		raises = 0;
+	}
+	if (raises < 5) {
+		raises++;
+		XRaiseWindow(dpy, win);
+	}
+	return 1;
+}
+
 int main(int argc, char **argv)
 {
 	XSetWindowAttributes wa;
@@ -1239,7 +1272,7 @@ int main(int argc, char **argv)
 	int i;
 	const char *fn = "-*-helvetica-bold-r-normal--10-*";
 	XEvent ev;
-	int last_min = -1;
+	int last_min = -1, again = 0;
 
 	for (i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-top"))
@@ -1334,7 +1367,8 @@ int main(int argc, char **argv)
 	XMapRaised(dpy, win);
 
 	for (;;) {
-		/* wake at least once a minute for the clock */
+		/* wake at least once a minute for the clock, and each second
+		 * while keep_on_top waits */
 		while (XPending(dpy) == 0) {
 			fd_set fds;
 			struct timeval tv;
@@ -1348,9 +1382,10 @@ int main(int argc, char **argv)
 			}
 			FD_ZERO(&fds);
 			FD_SET(ConnectionNumber(dpy), &fds);
-			tv.tv_sec = 60 - tm->tm_sec;
+			tv.tv_sec = again ? 1 : 60 - tm->tm_sec;
 			tv.tv_usec = 0;
-			select(ConnectionNumber(dpy) + 1, &fds, NULL, NULL, &tv);
+			if (select(ConnectionNumber(dpy) + 1, &fds, NULL, NULL, &tv) == 0 && again)
+				again = keep_on_top();
 		}
 		XNextEvent(dpy, &ev);
 		if (menu_win != None && ev.xany.window == menu_win) {
@@ -1367,19 +1402,14 @@ int main(int argc, char **argv)
 				draw_all();
 			break;
 		case VisibilityNotify:
-			/* covered: back on top - but not over a menu, and not in a
-			 * fight with some other window that keeps itself on top: 5
-			 * raises in 10 seconds */
-			if (ev.xvisibility.state != VisibilityUnobscured && !popup_over()) {
-				time_t now = time(NULL);
-
-				if (now - raise_t0 >= 10) {
-					raise_t0 = now;
-					raises = 0;
-				}
-				if (raises++ < 5)
-					XRaiseWindow(dpy, win);
-			}
+			covered = ev.xvisibility.state != VisibilityUnobscured;
+			again = keep_on_top();
+			break;
+		case SelectionClear:
+			/* another ttpanel, started at the same moment, passed the
+			 * check in main too and took the selection: it stays */
+			if (ev.xselectionclear.selection == a_panel)
+				return 0;
 			break;
 		case ClientMessage:
 			/* another ttpanel was started: come out */

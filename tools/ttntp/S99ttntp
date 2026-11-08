@@ -13,7 +13,9 @@
 # server is starting. One try takes a second, or 3 s per time server that
 # doesn't answer. After a power-on the network can take a minute or more
 # (a BlueSCSI's WiFi has to join first), so if it isn't there keep trying,
-# every 15 seconds for 10 minutes.
+# every 15 seconds for 10 minutes: by then -b has the clock right but for
+# the chip's drift, so the step that comes later is small - unless the
+# chip was set in another zone, when it can still come while X starts.
 case "$1" in
 start|'')
 	[ -f /etc/TIMEZONE ] && . /etc/TIMEZONE

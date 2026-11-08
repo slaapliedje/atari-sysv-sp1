@@ -40,6 +40,11 @@ if test -z "$prog" -o ! -x "$prog"; then
 	done
 fi
 xsetroot -solid '#5f7f9f'
+# OpenLook's icons along the top (olvwm's default is the bottom, where the
+# panel is: the panel would cover them)
+case "$prog" in
+*/olvwm|*/olwm)	echo 'OpenWindows.IconLocation: top' | xrdb -nocpp -merge ;;
+esac
 # the window manager will have this shell's pid: ttpanel's Log out ends
 # the session through it when olvwm is not there to ask
 TTPANEL_WM_PID=$$; export TTPANEL_WM_PID
