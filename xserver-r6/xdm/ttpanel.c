@@ -1273,6 +1273,7 @@ int main(int argc, char **argv)
 	const char *fn = "-*-helvetica-bold-r-normal--10-*";
 	XEvent ev;
 	int last_min = -1, again = 0;
+	time_t next_look = 0;
 
 	for (i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-top"))
@@ -1367,6 +1368,12 @@ int main(int argc, char **argv)
 	XMapRaised(dpy, win);
 
 	for (;;) {
+		/* while keep_on_top waits it looks again each second, events
+		 * or not (a stream of them would hold off the timeout below) */
+		if (again && time(NULL) >= next_look) {
+			again = keep_on_top();
+			next_look = time(NULL) + 1;
+		}
 		/* wake at least once a minute for the clock, and each second
 		 * while keep_on_top waits */
 		while (XPending(dpy) == 0) {
@@ -1384,8 +1391,10 @@ int main(int argc, char **argv)
 			FD_SET(ConnectionNumber(dpy), &fds);
 			tv.tv_sec = again ? 1 : 60 - tm->tm_sec;
 			tv.tv_usec = 0;
-			if (select(ConnectionNumber(dpy) + 1, &fds, NULL, NULL, &tv) == 0 && again)
+			if (select(ConnectionNumber(dpy) + 1, &fds, NULL, NULL, &tv) == 0 && again) {
 				again = keep_on_top();
+				next_look = time(NULL) + 1;
+			}
 		}
 		XNextEvent(dpy, &ev);
 		if (menu_win != None && ev.xany.window == menu_win) {
@@ -1404,6 +1413,7 @@ int main(int argc, char **argv)
 		case VisibilityNotify:
 			covered = ev.xvisibility.state != VisibilityUnobscured;
 			again = keep_on_top();
+			next_look = time(NULL) + 1;
 			break;
 		case SelectionClear:
 			/* another ttpanel, started at the same moment, passed the
