@@ -65,6 +65,10 @@ sed -i '/PROC_EXE_LINK/d' auto/config.h
 sed -i "s|^CFLAGS\([[:space:]]*\)= |CFLAGS\1= -include $here/amixfix.h |" auto/config.mk
 make -j"$(nproc)" > "$work/make.log" 2>&1 ||
 	{ grep -E ':[0-9]+: |Error|undefined' "$work/make.log" | grep -v warning | tail -30; exit 1; }
+# :version shows the compile and link commands: without the place of this
+# directory on the build machine (amix-cc, amixfix.h)
+sed -i "s|$here/||g" auto/pathdef.c
+make > "$work/make2.log" 2>&1 || { tail -20 "$work/make2.log"; exit 1; }
 cp vim "$work/vim"
 "$ASV_CROSS/bin/m68k-cbm-sysv4-strip" "$work/vim"
 

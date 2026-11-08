@@ -20,7 +20,7 @@ rm -f /etc/sp1/boot /etc/sp1/transputers
 rm -f /.sh_history /.history /core /var/apkg/cache/*.pkg
 # logs and accounting: of the build session, and of the stock image's
 # own history before it (the files stay, empty: the daemons expect them)
-for f in /var/adm/wtmp /var/adm/wtmpx /var/adm/utmp /var/adm/utmpx /var/adm/log/console.log /var/adm/sulog /var/cron/log /var/adm/pacct /var/adm/log/osm /var/adm/syslog.log /var/saf/_log /var/saf/ttymon1/log /var/saf/ttymon2/log /var/lp/logs/lpNet /var/lp/logs/lpsched /var/lp/logs/requests /var/spool/smtpq/LOG /var/mail/uucp; do
+for f in /var/adm/lastlog /var/adm/wtmp /var/adm/wtmpx /var/adm/utmp /var/adm/utmpx /var/adm/log/console.log /var/adm/sulog /var/cron/log /var/adm/pacct /var/adm/log/osm /var/adm/syslog.log /var/saf/_log /var/saf/ttymon1/log /var/saf/ttymon2/log /var/lp/logs/lpNet /var/lp/logs/lpsched /var/lp/logs/requests /var/spool/smtpq/LOG /var/mail/uucp; do
 	[ -f $f ] && cp /dev/null $f
 done
 # (syslogd wants its files in /var/adm/log to exist: emptied, not removed)

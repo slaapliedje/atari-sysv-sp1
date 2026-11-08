@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """fixneeded.py ELF: rewrite DT_NEEDED entries that carry an absolute host
 path (the cross wrapper hands ld resolved paths, and ASV's shared libraries
-have no SONAME) to the bare library name, in place in .dynstr."""
+have no SONAME) to the bare library name, in place in .dynstr.  The rest of
+the old path is cleared: the host's directories don't belong in a program
+that is passed around."""
 import struct, sys
 
 p = sys.argv[1]
@@ -29,6 +31,6 @@ for o in range(dyn[2], dyn[2] + dyn[3], 8):
         # a host path (any absolute path that is not ASV's own /usr/lib)
         if name.startswith('/') and not name.startswith('/usr/lib/'):
             base = name.rsplit('/', 1)[1].encode() + b'\0'
-            d[so:so + len(base)] = base
+            d[so:so + len(name)] = base + bytes(len(name) - len(base))
             print('NEEDED %s -> %s' % (name, base[:-1].decode()))
 open(p, 'wb').write(d)
