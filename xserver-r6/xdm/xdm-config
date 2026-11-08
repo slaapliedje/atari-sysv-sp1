@@ -5,6 +5,10 @@ DisplayManager.pidFile:		/usr/x11r6/lib/X11/xdm/xdm-pid
 DisplayManager.keyFile:		/usr/x11r6/lib/X11/xdm/xdm-keys
 DisplayManager.servers:		/usr/x11r6/lib/X11/xdm/Xservers
 DisplayManager.accessFile:	/usr/x11r6/lib/X11/xdm/Xaccess
+! Xatw tells xdm it is ready before it sets up the card, its input and
+! fonts, and xdm gives up on a server that has not answered in 30 s: a
+! TT reading Xatw from a cold or busy disk can take longer than that
+DisplayManager*openTimeout:	120
 ! no XDMCP: local display only
 DisplayManager.requestPort:	0
 DisplayManager*resources:	/usr/x11r6/lib/X11/xdm/Xresources

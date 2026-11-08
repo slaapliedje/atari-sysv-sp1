@@ -290,9 +290,10 @@ def halt(h):
 
 def stage_halt(a, w):
     """Boot the new disk once more and halt it: for a disk that was
-    imaged while running (its first boot then rewrites hosts.net)."""
+    imaged while running (its first boot then rewrites hosts.net).
+    With 256 MB of TT-RAM, or swapfile.init removes the swap file."""
     new = os.path.join(w, 'new.img')
-    h = Hatari(a, os.path.join(w, 'run3'), {0: new}, telnet=TELNET_PORT, display=111)
+    h = Hatari(a, os.path.join(w, 'run3'), {0: new}, telnet=TELNET_PORT, display=111, extra=['--ttram', '256'])
     try:
         if not wait_login(TELNET_PORT, 1500, h):
             raise SystemExit('halt: no login prompt')

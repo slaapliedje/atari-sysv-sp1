@@ -12,7 +12,7 @@ the unofficial Service Pack 1 already installed:
     sound and MIDI ports
   - the address, name servers and route from DHCP at boot
   - a kernel that uses all the TT-RAM in the machine, up to 256 MB,
-    with swap sized to match at the first boot
+    with a swap file to match
   - for an ATW800/2: the transputer link driver, X11R6.3 with the Xatw
     server, XView, all switched on when the card is found
   - Manx, a web browser with HTTPS (text mode and X11), and its mail
@@ -51,9 +51,10 @@ add users with `useradd`.
 
 What the boot finds out (/etc/init.d/sp1hw, every boot, one line on
 the console and the details in /etc/sp1):
-  - memory: the kernel takes the TT-RAM there is (256 MB at most); a
-    machine with more than 160 MB gets a swap file of its memory's
-    size on /home at the first boot (a few minutes, once)
+  - memory: the kernel takes the TT-RAM there is (256 MB at most).
+    The image comes with a 260 MB swap file, /home/swapfile, for that
+    much memory; a machine with 160 MB or less removes it at its first
+    boot and has the room on /home instead
   - the network card: the one that reaches a network gets DHCP.  With
     more than one (a NetUSBee and the DaynaPORT, say), each is asked
     for a lease, the NetUSBee first, then the DaynaPORT, then a Riebl

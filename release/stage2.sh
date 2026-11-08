@@ -65,6 +65,8 @@ cp /rel/files/Xstartup /usr/x11r6/lib/X11/xdm/Xstartup && chmod 775 /usr/x11r6/l
 # ... and sp1's Xservers: 1024x768 in 256 colours, which a card set up for
 # 2 MB can show too (the TT's own runs -depth 32, which needs 4 MB)
 cp /rel/files/Xservers /usr/x11r6/lib/X11/xdm/Xservers && chmod 644 /usr/x11r6/lib/X11/xdm/Xservers || die Xservers
+# ... and sp1's xdm-config: a longer wait for Xatw to answer
+cp /rel/files/xdm-config /usr/x11r6/lib/X11/xdm/xdm-config && chmod 644 /usr/x11r6/lib/X11/xdm/xdm-config || die xdm-config
 # atwconf, the screen mode in a dialog, and sp1's Xsetup_0, whose Keep
 # prompt after a change brings the mode before back by itself
 cp /rel/files/atwconf /usr/x11r6/bin/atwconf && chmod 755 /usr/x11r6/bin/atwconf || die atwconf
@@ -104,6 +106,13 @@ rm -f /etc/rc2.d/S06sp1hw; ln /etc/init.d/sp1hw /etc/rc2.d/S06sp1hw
 cp /rel/files/swapfile.init /etc/init.d/swapfile && chmod 744 /etc/init.d/swapfile || die swapfile
 rm -f /etc/rc2.d/S03swapfile /etc/rc0.d/K99swapfile
 ln /etc/init.d/swapfile /etc/rc2.d/S03swapfile; ln /etc/init.d/swapfile /etc/rc0.d/K99swapfile
+# the swap file for the most memory the kernel takes (260 MB), made here
+# and not at the first boot; swapfile removes it on a smaller machine.
+# Every block written: a swap file can have no holes
+rm -f /home/swapfile
+/usr/bin/dd if=/dev/zero of=/home/swapfile bs=1048576 count=260 2>&1 || die "swap file"
+chmod 600 /home/swapfile && chgrp root /home/swapfile || die "swap file mode"
+ls -l /home/swapfile
 cp /rel/files/tprobe /usr/local/bin/tprobe && chmod 755 /usr/local/bin/tprobe || die tprobe
 # the display manager is picked when init starts it (init reads inittab
 # before rc2 runs, so sp1hw cannot change the line for the same boot)

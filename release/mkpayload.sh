@@ -69,6 +69,7 @@ python3 -I "$here/bfs.py" "$STOCK" 122880000 get unix "$p/edt/unix.stock" >/dev/
 cp "$here/sp1hw" "$here/swapfile.init" "$here/xdm.sh" "$p/files/"
 cp "$sp1/xserver-r6/xdm/Xstartup" "$p/files/Xstartup"
 cp "$sp1/xserver-r6/xdm/Xservers" "$p/files/Xservers"
+cp "$sp1/xserver-r6/xdm/xdm-config" "$p/files/xdm-config"
 cp "$sp1/xserver-r6/xdm/Xsetup_0" "$p/files/Xsetup_0"
 for f in Xsession wms setwm.sh atwkbd.sh system.twmrc; do cp "$sp1/xserver-r6/xdm/$f" "$p/files/$f"; done
 cp "$here/console.sh" "$p/files/console.sh"

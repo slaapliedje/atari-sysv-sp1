@@ -2,16 +2,23 @@
 # /etc/init.d/swapfile - swap to match the memory (sp1 release).  System V
 # reserves swap for every page of memory a program takes, so the 128 MB
 # swap slice alone would cap programs well below a big TT-RAM board.
-# At the first boot on a machine with more memory than that, a swap
-# file of the memory's size (512 MB at most) is made on /home; it is
-# added here at every boot (S03swapfile) and removed at shutdown
-# (K99swapfile: before umountall, or /home stays busy and gets a full
-# fsck at the next boot).
+# The image comes with a 260 MB swap file on /home (the most memory the
+# kernel takes), made when the image is built: making it at the first
+# boot took the TT's disk ten minutes, and X started on a disk still
+# busy writing it out.  A machine with 160 MB or less has no use for it
+# and gets its room on /home back at its first boot; one with more and
+# no swap file (removed, or memory added later) gets one of its
+# memory's size (512 MB at most).  It is added here at every boot
+# (S03swapfile) and removed at shutdown (K99swapfile: before umountall,
+# or /home stays busy and gets a full fsck at the next boot).
 SWAPFILE=/home/swapfile
 case "$1" in
 start)
+	mem=`/usr/sbin/prtconf 2>/dev/null | sed -n 's/^Memory size: *\([0-9]*\) Megabytes.*/\1/p'`
+	if [ -f $SWAPFILE ] && [ -n "$mem" ] && [ "$mem" -le 160 ]; then
+		rm -f $SWAPFILE
+	fi
 	if [ ! -f $SWAPFILE ]; then
-		mem=`/usr/sbin/prtconf 2>/dev/null | sed -n 's/^Memory size: *\([0-9]*\) Megabytes.*/\1/p'`
 		if [ -n "$mem" ] && [ "$mem" -gt 160 ]; then
 			mb=$mem; [ $mb -gt 512 ] && mb=512
 			free=`/usr/sbin/df -t /home | sed -n '1s/.*): *\([0-9]*\) blocks.*/\1/p'`
