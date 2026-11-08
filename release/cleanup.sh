@@ -40,5 +40,9 @@ for d in / /var /home; do
 	rm -f $d/.zero
 done
 sync
+# (the kernel logged "file system full" for each)
+for f in /var/adm/log/*; do
+	[ -f $f ] && cp /dev/null $f
+done
 echo "CLEANUP DONE"
 sync; sync; sync
