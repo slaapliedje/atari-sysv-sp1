@@ -282,7 +282,9 @@ def halt(h):
     """init 0: init runs /sbin/rc0 off on the console (inittab s0), which
     unmounts everything and halts; the telnet session dies with the rest.
     (A backgrounded nohup rc0 from the telnet shell never ran.)"""
-    telnet_sh(TELNET_PORT, '/sbin/init 0', 10)
+    # (this telnet login is after cleanup.sh's: lastlog again; and rwhod
+    # may have written its status since)
+    telnet_sh(TELNET_PORT, 'cp /dev/null /var/adm/lastlog; rm -f /var/spool/rwho/whod.*; /sbin/init 0', 10)
     log('halting: init 0')
     time.sleep(120)
     h.screenshot('halted.png')

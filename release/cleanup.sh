@@ -32,5 +32,13 @@ rm -f /usr/x11r6/lib/X11/xdm/xdm-init.out /var/mail/root 2>/dev/null
 # root's X cookies from the stock image (noname:0 and its static address,
 # a dead cookie that refused root's X sessions whenever DHCP gave no address)
 rm -f /.Xauthority
+# the free space zeroed, in each file system: what the build deleted or
+# replaced (old copies of programs: the X trees' Xatw and ttpanel, say)
+# stays on the disk otherwise, in the image and its zip
+for d in / /var /home; do
+	dd if=/dev/zero of=$d/.zero bs=65536 > /dev/null 2>&1
+	rm -f $d/.zero
+done
+sync
 echo "CLEANUP DONE"
 sync; sync; sync
