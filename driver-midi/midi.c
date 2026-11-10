@@ -368,3 +368,42 @@ midiioctl(dev, cmd, arg, mode, crp, rvalp)
 	}
 	return EINVAL;
 }
+
+#ifdef MIDI_MODULE
+/*
+ * midi as a loadable module (sp1 dlm/): a character driver on external
+ * major 44, registered at boot with `modadmin -r cdev midi 44`; the first
+ * open of /dev/midi or /dev/midit loads it.  Until that open has taken
+ * the shared ACIA line over the module may be unloaded; after, it stays
+ * (the kernel has no call that gives an MFP line's handler back), and
+ * removing it takes a reboot.  Built by driver-midi/mkmod.sh; the static
+ * driver is the same file without MIDI_MODULE.
+ */
+#include <sys/conf.h>
+#include "sys/moddefs.h"
+
+static int midi_load(), midi_unload();
+
+struct mod_drv_data midi_drvdata[] = {
+	{ { 0 }, 0, 0,
+	  { midiopen, midiclose, 0, midiwrite, midiioctl, 0, 0, 0, 0, 0,
+	    0, 0, 0, 0, &mididevflag },
+	  44, 1 }
+};
+
+MOD_DRV_WRAPPER(midi, midi_load, midi_unload, 0, "TT MIDI port (midi)");
+
+static int
+midi_load()
+{
+	(void) midiinit();
+	(void) midistart();
+	return 0;
+}
+
+static int
+midi_unload()
+{
+	return (midi.open || midi.hooked) ? EBUSY : 0;
+}
+#endif	/* MIDI_MODULE */

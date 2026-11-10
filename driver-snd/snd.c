@@ -331,6 +331,14 @@ sndinit()
 int
 sndstart()
 {
+#ifdef SND_MODULE
+	/* a module loads too late for iomem_alloc's ST-RAM: the module
+	 * loader sets 64 KB aside at boot (dlm/asv/dlm_asv.c) */
+	extern caddr_t dlm_stram_take();
+
+	snd.ring = dlm_stram_take(RING);
+	if (snd.ring == 0)
+#endif
 	snd.ring = iomem_alloc(RING, ST_RAM);
 	if (snd.ring == 0) {
 		cmn_err(CE_WARN, "snd: no %d bytes of ST-RAM for the ring", RING);
@@ -530,3 +538,43 @@ sndioctl(dev, cmd, arg, mode, crp, rvalp)
 	}
 	return EINVAL;
 }
+
+#ifdef SND_MODULE
+/*
+ * snd as a loadable module (sp1 dlm/): a character driver on external
+ * major 43.  /etc/init.d/dlm loads it at boot (/etc/conf/mod_load), so
+ * its ring comes out of ST-RAM while that is still free, as the static
+ * driver's sndstart takes it; the major is registered too, so an open
+ * loads it if it is not in.  Once loaded it stays: the kernel has no call
+ * that gives an MFP line's handler back, so removing it takes a reboot.
+ * Built by driver-snd/mkmod.sh; the static driver is the same file
+ * without SND_MODULE.
+ */
+#include <sys/conf.h>
+#include "sys/moddefs.h"
+
+static int snd_load(), snd_unload();
+
+struct mod_drv_data snd_drvdata[] = {
+	{ { 0 }, 0, 0,
+	  { sndopen, sndclose, 0, sndwrite, sndioctl, 0, 0, 0, 0, 0,
+	    0, 0, 0, 0, &snddevflag },
+	  43, 1 }
+};
+
+MOD_DRV_WRAPPER(snd, snd_load, snd_unload, 0, "TT DMA sound (snd)");
+
+static int
+snd_load()
+{
+	(void) sndinit();
+	(void) sndstart();		/* the ring, and the frame interrupt */
+	return snd.ring ? 0 : ENOMEM;
+}
+
+static int
+snd_unload()
+{
+	return EBUSY;			/* the MFP line stays ours */
+}
+#endif	/* SND_MODULE */

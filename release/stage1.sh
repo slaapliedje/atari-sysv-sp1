@@ -18,7 +18,9 @@
 # The cards' drivers - dp (DaynaPORT), nu (NetUSBee Ethernet), tlk (the
 # ATW800/2's links) - are loadable modules, not in the kernel and not in
 # the loader's device table: they load when their card answers, so the
-# image's first boot on a TT never relinks the kernel for a card.
+# image's first boot on a TT never relinks the kernel for a card.  snd,
+# midi, amx and ub are modules too: the kernel keeps an empty ub driver,
+# whose rows the ub module fills (see driver-ub/ub.c, UB_MODULE).
 PATH=/sbin:/usr/sbin:/usr/bin:/usr/ccs/bin:/etc; export PATH
 # init starts the rc scripts with umask 0: without this every file made
 # here (the driver objects in /boot among them) would be writable by any user
@@ -45,17 +47,21 @@ if [ ! -f /rel/phase1.done ]; then
 	echo "== driver objects into /boot (buildsys itself waits for the probes)"
 	mv /sbin/buildsys /sbin/buildsys.real || die "buildsys aside"
 	echo "exit 0" > /sbin/buildsys; chmod 755 /sbin/buildsys
-	for d in driver-amix driver-snd driver-midi driver-ub; do
-		echo "-- $d"; flush
-		sh /rel/sp1/$d/install.sh || { mv /sbin/buildsys.real /sbin/buildsys; die "$d install"; }
-	done
+	# ub's installer as it is (device nodes, ubtool, /etc/init.d/ub,
+	# /etc/default/ub), with an empty object for the driver: the ub
+	# module loads into its rows
+	echo "-- driver-ub (the empty driver for the ub module)"; flush
+	cp /rel/sp1/dlm/spare.o /rel/sp1/driver-ub/ub.pc.o || die "ub stub"
+	sh /rel/sp1/driver-ub/install.sh || { mv /sbin/buildsys.real /sbin/buildsys; die "driver-ub install"; }
 	mv /sbin/buildsys.real /sbin/buildsys || die "buildsys back"
 	echo "-- the module loader (/boot/DLM, the spare rows DLMA..DLMH, mkksym in buildsys)"; flush
 	DLM_NOBUILD=1 sh /rel/sp1/dlm/install.sh || die "dlm install"
-	echo "-- the modules: dp, nu, tlk"
-	cp /rel/sp1/mod.d/dp /rel/sp1/mod.d/nu /rel/sp1/mod.d/tlk /etc/conf/mod.d/ || die "modules"
-	chmod 644 /etc/conf/mod.d/dp /etc/conf/mod.d/nu /etc/conf/mod.d/tlk
+	echo "-- the modules: dp, nu, tlk, snd, midi, amx, ub"
+	for m in dp nu tlk snd midi amx ub; do
+		cp /rel/sp1/mod.d/$m /etc/conf/mod.d/$m && chmod 644 /etc/conf/mod.d/$m || die "module $m"
+	done
 	cp /rel/sp1/mod.d/mod_register /etc/conf/mod_register && chmod 644 /etc/conf/mod_register || die "mod_register"
+	cp /rel/sp1/mod.d/mod_load /etc/conf/mod_load && chmod 644 /etc/conf/mod_load || die "mod_load"
 	cp /rel/sp1/dlm/dlm.init /etc/init.d/dlm && chmod 744 /etc/init.d/dlm || die "dlm.init"
 	rm -f /etc/rc2.d/S02dlm; ln /etc/init.d/dlm /etc/rc2.d/S02dlm || die "S02dlm"
 	ls -l /etc/conf/mod.d; cat /etc/conf/mod_register
@@ -71,8 +77,12 @@ if [ ! -f /rel/phase1.done ]; then
 	rm -f /dev/link0 /dev/link1
 	mknod /dev/link0 c 42 0 && mknod /dev/link1 c 42 1 || die "mknod links"
 	chgrp tlk /dev/link0 /dev/link1 && chmod 660 /dev/link0 /dev/link1 || die "link modes"
-	ls -l /dev/en0 /dev/nu0 /dev/link0 /dev/link1
-	ls -l /boot/DLM /boot/DLMA /boot/UB /boot/AMX /boot/SND /boot/MIDI
+	# sound and MIDI: anyone may play
+	rm -f /dev/audio /dev/midi /dev/midit
+	mknod /dev/audio c 43 0 && mknod /dev/midi c 44 0 && mknod /dev/midit c 44 1 || die "mknod audio midi"
+	chmod 666 /dev/audio /dev/midi /dev/midit || die "audio midi modes"
+	ls -l /dev/en0 /dev/nu0 /dev/link0 /dev/link1 /dev/audio /dev/midi /dev/midit
+	ls -l /boot/DLM /boot/DLMA /boot/UB
 	grep INCLUDE /stand/system
 	flush
 	echo "== dhcpc (the DaynaPORT, /dev/en0)"
@@ -97,14 +107,13 @@ flush
 # carry the loader and the drivers, and none of the modules' drivers;
 # buildsys by hand if the boot did not relink
 nm /stand/unix | grep dlminit > /dev/null || { echo "-- buildsys (the boot did not relink)"; /sbin/buildsys || die buildsys; }
-for n in dlminit amxinit ubinit sndinit midiinit; do
-	nm /stand/unix | grep "$n" > /dev/null || die "the kernel has no $n"
-done
-for n in dpstart nustart tlkinit; do
+nm /stand/unix | grep dlminit > /dev/null || die "the kernel has no dlminit"
+grep '^INCLUDE:UB$' /stand/system > /dev/null || die "no INCLUDE:UB (the ub module's rows)"
+for n in dpstart nustart tlkinit sndinit midiinit amxinit ubinit; do
 	nm /stand/unix | grep "$n" > /dev/null && die "the kernel carries $n (a module's driver)"
 done
 /sbin/mkksym -c /stand/unix || die "the kernel's symbol table does not check"
-echo "kernel carries dlm ub amx snd midi; dp nu tlk are modules"
+echo "kernel carries dlm and ub's empty rows; dp nu tlk snd midi amx ub are modules"
 echo "== the new disk"; flush
 partinit -I -i -b -Z -P 0:1:FILL:UNX:UNIXBOOT -o /dev/rdsk/c1d0sf || die partinit
 format -w /dev/rdsk/c1d0sf || die format

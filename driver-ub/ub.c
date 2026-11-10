@@ -1016,3 +1016,123 @@ dev_t dev;
 
 	return n ? (int)n : -1;
 }
+
+#ifdef UB_MODULE
+/*
+ * ub as a loadable module (sp1 dlm/).  The kernel keeps an empty ub
+ * driver (master.d "ub", major 46, block and character, no entry
+ * points), so cunix makes its rows and the boot sets them up as an
+ * old-style driver's: the gateway (gen_copen .., gen_strategy ..) in
+ * cdevsw and bdevsw, the entries it calls in shadowcsw and shadowbsw,
+ * nulldev and nodev there.  Loading puts this driver's entries in the
+ * two shadow rows; unloading puts the empty ones back.  It loads only
+ * where a host controller answers (ubinit's probe), and unloads only
+ * when nothing has a ub device open and the stack is down (`ubtool
+ * stop`, or no daemon).  /etc/init.d/ub loads it before it starts the
+ * daemon.  Built by driver-ub/mkmod.sh; the static driver is the same
+ * file without UB_MODULE.
+ */
+#include <sys/conf.h>
+#include "sys/moddefs.h"
+
+extern int nulldev(), nodev();
+
+static int ub_load(), ub_unload();
+static struct cdevsw ub_csw_was;
+static struct bdevsw ub_bsw_was;
+static int ub_row = -1;
+static unsigned char ub_uopen[UB_STOR_MAX];	/* a unit open, 1 << otyp */
+static int ub_ctlopen;		/* /dev/ub0 open (ub_open_count only grows:
+				 * the kernel calls close at the last close) */
+
+MOD_MISC_WRAPPER(ub, ub_load, ub_unload, "USB on the Lightning VME or the NetUSBee (ub)");
+
+/* ubopen and ubclose, keeping what is open for unload: the kernel calls an
+ * old-style driver's close at the last close of the device only */
+static int
+ub_mopen(dev, flag, otyp)
+dev_t dev;
+int flag, otyp;
+{
+	int unit = UB_UNIT(dev);
+
+	(void) ubopen(dev, flag, otyp);
+	if (UB_UERROR != 0)
+		return 0;
+	if (UB_MINOR(dev) == 0)
+		ub_ctlopen = 1;
+	else if (unit >= 0 && unit < UB_STOR_MAX && otyp >= 0 && otyp < 8)
+		ub_uopen[unit] |= 1 << otyp;
+	return 0;
+}
+
+static int
+ub_mclose(dev, flag, otyp)
+dev_t dev;
+int flag, otyp;
+{
+	int unit = UB_UNIT(dev);
+
+	if (UB_MINOR(dev) == 0)
+		ub_ctlopen = 0;
+	else if (unit >= 0 && unit < UB_STOR_MAX && otyp >= 0 && otyp < 8)
+		ub_uopen[unit] &= ~(1 << otyp);
+	return ubclose(dev, flag, otyp);
+}
+
+static int
+ub_load()
+{
+	int r = (int)(unsigned char)MAJOR[46], s;
+
+	/* the empty driver's rows; a static ub (its own entries there) or
+	 * none at all: not this module's place */
+	if (r >= cdevcnt || r >= bdevcnt || shadowcsw[r].d_open != nulldev ||
+	    shadowcsw[r].d_ioctl != nodev)
+		return EEXIST;
+	(void) ubinit();
+	if (ub_state == UB_NOCHIP)
+		return ENXIO;
+	ub_csw_was = shadowcsw[r];
+	ub_bsw_was = shadowbsw[r];
+	s = splhi();
+	shadowcsw[r].d_open = ub_mopen;
+	shadowcsw[r].d_close = ub_mclose;
+	shadowcsw[r].d_read = ubread;
+	shadowcsw[r].d_write = ubwrite;
+	shadowcsw[r].d_ioctl = ubioctl;
+	shadowbsw[r].d_open = ub_mopen;
+	shadowbsw[r].d_close = ub_mclose;
+	shadowbsw[r].d_strategy = (void (*)())ubstrategy;
+	shadowbsw[r].d_print = ubprint;
+	shadowbsw[r].d_size = ubsize;
+	ub_row = r;
+	splx(s);
+	return 0;
+}
+
+static int
+ub_unload()
+{
+	int i, s;
+
+	if (ub_ctlopen || ub_state == UB_RUNNING)
+		return EBUSY;
+	for (i = 0; i < UB_STOR_MAX; i++)
+		if (ub_uopen[i])
+			return EBUSY;
+	s = splhi();
+	shadowcsw[ub_row] = ub_csw_was;
+	shadowbsw[ub_row] = ub_bsw_was;
+	splx(s);
+	if (usb_dev != (struct usb_device *)0)
+		kmem_free((caddr_t)usb_dev, sizeof(struct usb_device) * USB_MAX_DEVICE);
+	if (usb_cfgbuf != (unsigned char *)0)
+		kmem_free((caddr_t)usb_cfgbuf, USB_CONFIG_BUFFER_SIZE);
+	if (ub_bounce != (char *)0)
+		kmem_free((caddr_t)ub_bounce, UB_BOUNCE);
+	if (ub_padraw != (unsigned char *)0)
+		kmem_free((caddr_t)ub_padraw, UB_PADRAW);
+	return 0;
+}
+#endif	/* UB_MODULE */

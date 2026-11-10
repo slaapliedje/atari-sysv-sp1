@@ -147,8 +147,34 @@ upstream fixes can be taken over.
    Cost: the module kernel is 126 KB bigger than build 30's (DLM 164 KB,
    112 KB of it the symbol table, against the drivers that moved out):
    item 5's trimmed table would win most of it back.
-4. **The rest.** ub, tlk, snd, midi, amx as modules; then STREAMS
-   modules, exec formats and filesystems (the `__amix_*` renaming) if
-   wanted. Release image built this way; the real TT test.
+4. **The rest.** Hatari, release builds 33-35 (2026-11-10): snd, midi,
+   amx and ub are modules too, so the kernel carries no sp1 driver, only
+   the loader and an empty ub driver (3091 symbols, 95 KB of the table).
+   - snd (cdev 43) loads at boot from `/etc/conf/mod_load` (dlm.init).
+     Its ring must be ST-RAM in the first 4 MB, and from rc2 the kernel's
+     `iomem_alloc` gave TT-RAM (0x106C000): `dlmstart()` (io_start, in
+     the loader) sets 64 KB of ST-RAM aside before the first process and
+     snd takes it (`dlm_stram_take`). It never unloads: the kernel has no
+     call that gives an MFP line's handler back (`mfp_intrreq` only
+     overwrites the line's stub in `vector64`).
+   - midi (cdev 44) loads at the first open; it may unload until that
+     open has taken the ACIA line over, never after.
+   - amx (misc) loads at boot; it unloads when no process is on
+     `amx_ops` (`practive` scanned at splhi) and puts trap #0 back.
+     Built `-traditional`, as ASV's headers want for struct user.
+   - ub keeps an empty driver in the kernel (master.d ub, major 46,
+     block and character, no entry points): cunix makes its rows and the
+     boot sets them up as an old-style driver's (the gateway in cdevsw
+     and bdevsw, nulldev/nodev in shadowcsw/shadowbsw). The ub module (a
+     misc module) puts its entries in the shadow rows and back - no
+     block-driver linkage needed in the loader. It loads only where a
+     controller answers, from `/etc/init.d/ub`; it unloads when /dev/ub0
+     and every unit are closed (a flag each, cleared at the last close:
+     the kernel calls an old-style close only then) and the stack is
+     down. The empty driver answers every ioctl doing nothing, so
+     `ubtool` takes a state it does not know for "no driver" and ub.init
+     starts no daemon when the module will not load.
+   Then STREAMS modules, exec formats and filesystems (the `__amix_*`
+   renaming) if wanted. The real TT test.
 
 Hardware tests on the real TT need the owner's go-ahead (kernel change).

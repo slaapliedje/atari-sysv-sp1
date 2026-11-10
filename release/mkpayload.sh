@@ -67,16 +67,18 @@ python3 -I "$sp1/kernel/patch-ttram.py" "$p/stock/KERNEL" "$p/edt/KERNEL.256" "$
 # /stand has no room for a second kernel)
 python3 -I "$here/bfs.py" "$STOCK" 122880000 get unix "$p/edt/unix.stock" >/dev/null
 # the module loader (dlm/: Ash Nazag's DLM) and the drivers that load as
-# modules when their card answers: dp (DaynaPORT), nu (NetUSBee
-# Ethernet), tlk (the ATW800/2's transputer links).  The modules are
-# checked against the stock kernel's symbols: they may use nothing else.
+# modules: dp (DaynaPORT), nu (NetUSBee Ethernet), tlk (the ATW800/2's
+# transputer links) and ub (USB) when their card answers, midi at the
+# first open of /dev/midi, snd (DMA sound) and amx (AMIX binaries) at boot.  The modules
+# are checked against the stock kernel's symbols: they may use nothing else.
 ASV_KERNEL="$p/edt/unix.stock" sh "$sp1/dlm/asv/build.sh" >/dev/null
 b=$sp1/dlm/asv/build
 mkdir -p "$p/sp1/dlm/master.d" "$p/sp1/mod.d"
 cp "$b/DLM.o" "$b/spare.o" "$b/mkksym" "$b/modadmin" "$b/install.sh" "$sp1/dlm/asv/dlm.init" "$p/sp1/dlm/"
 cp "$b/master.d/"* "$p/sp1/dlm/master.d/"
-for d in dp nu tlk; do sh "$sp1/driver-$d/mkmod.sh" "$b/exports" "$p/sp1/mod.d" >/dev/null 2>&1 || { echo "module $d" >&2; exit 1; }; done
-printf 'sdev dp 41\nsdev nu 45\ncdev tlk 42\n' > "$p/sp1/mod.d/mod_register"
+for d in dp nu tlk snd midi amix ub; do sh "$sp1/driver-$d/mkmod.sh" "$b/exports" "$p/sp1/mod.d" >/dev/null 2>&1 || { echo "module $d" >&2; exit 1; }; done
+printf 'sdev dp 41\nsdev nu 45\ncdev tlk 42\ncdev snd 43\ncdev midi 44\n' > "$p/sp1/mod.d/mod_register"
+printf 'snd\namx\n' > "$p/sp1/mod.d/mod_load"
 # what the first boot finds out, and the pieces it switches on
 cp "$here/sp1hw" "$here/swapfile.init" "$here/xdm.sh" "$p/files/"
 cp "$sp1/xserver-r6/xdm/Xstartup" "$p/files/Xstartup"

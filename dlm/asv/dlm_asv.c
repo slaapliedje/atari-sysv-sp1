@@ -12,6 +12,8 @@
  *		with modadm is pointed at one of them.
  * stext	the start of the kernel's text, which ASV's kernel has no
  *		symbol for: 0x400 (bootargs, then start at 0x440).
+ * dlmstart()	ST-RAM set aside at boot for a module's DMA (the snd
+ *		module's ring): dlm_stram_take(), dlm_stram_give().
  * stubs	the exec-format, STREAMS-module and filesystem linkages
  *		replace stock tables and are not built for ASV yet.
  *
@@ -197,3 +199,54 @@ nofsinfo()
 }
 
 struct mod_operations mod_fsops = { nofs, nofs, nofsinfo };
+
+/*
+ * dlmstart() (io_start: after memory is set up, before the first
+ * process): ST-RAM set aside for a module's DMA, 64 KB - the snd
+ * module's ring - taken while ST-RAM is still free, as the static
+ * drivers take theirs; later the kernel has none to give (the snd module
+ * loaded from rc2 got TT-RAM, 0x106C000, which the sound DMA cannot
+ * reach).  A module takes it with dlm_stram_take() and gives it back
+ * with dlm_stram_give().
+ */
+#define	DLM_STRAM	0x10000		/* bytes */
+#define	DLM_ST_RAM	0x40000000	/* iomem_alloc's attribute: ST-RAM */
+#define	DLM_ST_TOP	0x400000	/* where the ST DMA's reach ends */
+
+extern caddr_t	iomem_alloc();
+extern void	iomem_free();
+extern paddr_t	kvtophys();
+
+static caddr_t	dlm_stram;
+static int	dlm_stram_out;
+
+void
+dlmstart()
+{
+	dlm_stram = iomem_alloc(DLM_STRAM, DLM_ST_RAM);
+	if (dlm_stram != 0 &&
+	    (unsigned long)kvtophys(dlm_stram) + DLM_STRAM > DLM_ST_TOP) {
+		iomem_free(dlm_stram, DLM_STRAM);
+		dlm_stram = 0;
+	}
+	if (dlm_stram != 0)
+		printf("dlm: %d KB of ST-RAM set aside for DMA\n", DLM_STRAM / 1024);
+}
+
+caddr_t
+dlm_stram_take(size)
+	int size;
+{
+	if (dlm_stram == 0 || dlm_stram_out || size > DLM_STRAM)
+		return 0;
+	dlm_stram_out = 1;
+	return dlm_stram;
+}
+
+void
+dlm_stram_give(p)
+	caddr_t p;
+{
+	if (p != 0 && p == dlm_stram)
+		dlm_stram_out = 0;
+}

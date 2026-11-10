@@ -43,11 +43,12 @@ network is then the Pi's; NE4.img and the .ini files are not used.
 First boot
 ----------
 The first boot is like any other: the kernel on the image fits every
-TT, so it is not rebuilt for your hardware.  The drivers for the cards
-- the DaynaPORT (dp), the NetUSBee's Ethernet (nu) and the ATW800/2's
-transputer links (tlk) - are loadable modules in /etc/conf/mod.d, and
-each loads only when its card answers; `/sbin/modadmin -s` lists what
-is loaded.  (A Riebl Ethernet card uses the stock driver, which is
+TT, so it is not rebuilt for your hardware.  The service pack's drivers
+are loadable modules in /etc/conf/mod.d: the DaynaPORT (dp), the
+NetUSBee's Ethernet (nu), the ATW800/2's transputer links (tlk) and USB
+(ub) load only when their card answers, MIDI (midi) at the first open of
+/dev/midi, sound (snd) and the AMIX binaries' system calls (amx) at
+boot (/etc/conf/mod_load); `/sbin/modadmin -s` lists what is loaded.  (A Riebl Ethernet card uses the stock driver, which is
 linked in: on a TT with one, the second boot rebuilds the kernel once,
 which adds a few minutes and prints "/stand/unix is being created".)
 Log in as root at the console; root has no password - set one with

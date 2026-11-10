@@ -9,6 +9,12 @@
 pid=`/usr/bin/ps -e | /usr/bin/grep 'ubtool$' | /usr/bin/sed -e 's/^  *//' -e 's/ .*//'`
 case $1 in
 'start')
+	# ub as a module (/etc/conf/mod.d/ub, sp1 dlm/): it loads only where a
+	# host controller answers
+	if [ -f /etc/conf/mod.d/ub -a -x /sbin/modadmin ]
+	then
+		{ /sbin/modadmin -Q ub || /sbin/modadmin -l ub; } >/dev/null 2>&1 || exit 0
+	fi
 	# no host controller (ubtool status exits 1): no daemon, no memory
 	if [ "${pid}" = "" -a -x /usr/bin/ubtool -a -c /dev/ub0 ] &&
 	   /usr/bin/ubtool status >/dev/null 2>&1

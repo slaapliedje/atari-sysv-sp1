@@ -196,7 +196,8 @@ char **argv;
 		/* nothing to serve on a TT without a host controller: the
 		 * process would only cost memory and a wakeup every half
 		 * second */
-		if ((ioctl(fd, UBIOC_STATUS, 0) & 0xff) == UB_NOCHIP) {
+		r = ioctl(fd, UBIOC_STATUS, 0);
+		if (r < 0 || (r & 0xff) == UB_NOCHIP || (r & 0xff) > UB_RUNNING) {
 			printf("ubtool daemon: no USB host controller\n");
 			return 1;
 		}
@@ -207,6 +208,12 @@ char **argv;
 				fail("UBIOC_WORK");
 	} else {
 		r = ioctl(fd, UBIOC_STATUS, 0);
+		/* the ub module not loaded: the kernel's empty ub driver
+		 * answers every ioctl without doing anything */
+		if (r < 0 || (r & 0xff) > UB_RUNNING) {
+			printf("no USB driver loaded (no host controller?)\n");
+			return 1;
+		}
 		printf("state %d on the %s\n", r & 0xff, (r >> 8) == UB_BUS_LIGHTNING ? "Lightning VME" :
 		    (r >> 8) == UB_BUS_NETUSBEE ? "NetUSBee" : "no bus");
 		if ((r & 0xff) == UB_NOCHIP)

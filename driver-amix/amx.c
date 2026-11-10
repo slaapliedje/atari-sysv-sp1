@@ -735,3 +735,43 @@ amxinit()
 	amx_ops.s_sendsig = amx_sendsig;
 	svr4_syscallops.s_trapfunc[0] = amx_trap0;
 }
+
+#ifdef AMX_MODULE
+/*
+ * amx as a loadable module (sp1 dlm/): a misc module that
+ * /etc/init.d/dlm loads at boot (/etc/conf/mod_load).  It unloads only
+ * while no process runs through its gate (none is on amx_ops); trap #0
+ * then goes back to what it was.  Built by driver-amix/mkmod.sh; the
+ * static driver is the same file without AMX_MODULE.
+ */
+#include "sys/moddefs.h"
+
+static int amx_load(), amx_unload();
+static int (*amx_trap0_was)();
+
+MOD_MISC_WRAPPER(amx, amx_load, amx_unload, "AMIX binaries (amx)");
+
+static int
+amx_load()
+{
+	amx_trap0_was = svr4_syscallops.s_trapfunc[0];
+	amxinit();
+	return 0;
+}
+
+static int
+amx_unload()
+{
+	proc_t *p;
+	int s = splhi();
+
+	for (p = practive; p != (proc_t *)0; p = p->p_next)
+		if (p->p_syscallops == &amx_ops) {
+			splx(s);
+			return EBUSY;
+		}
+	svr4_syscallops.s_trapfunc[0] = amx_trap0_was;
+	splx(s);
+	return 0;
+}
+#endif	/* AMX_MODULE */
