@@ -143,9 +143,13 @@ Manx
   manx URL           the text browser (q quits, ? help)
   xmanx URL          the same under X (/usr/bin/X11)
   manxmail           IMAP/SMTP mail, see manxmail -h
-HTTPS works once a user has run `manxtrust seed` once (type for a while:
-the machine has no hardware randomness).  The CA bundle is
-/usr/local/share/manx/cacert.pem, named by /etc/profile.manx.
+HTTPS needs, once per user, a certificate store and a random seed (the
+machine has no hardware randomness).  The first https page in manx or
+xmanx offers to make both: the store takes about a minute, then you
+type random keys until the bar fills.  By hand, `manxtrust roots
+/usr/local/share/manx/cacert.pem` and `manxtrust seed` do the same, and
+manxmail uses the same ones.  /etc/profile.manx names the CA bundle for
+login shells; Manx finds it without that too.
 
 NetUSBee
 --------
