@@ -120,13 +120,16 @@ echo "$net" > /etc/sp1/network
 if [ $net = none ]; then
 	cp /etc/inet/strcf.nonet /etc/strcf
 	rm -f /etc/inet/dhcpc.dev
+	# no card to configure: its ifconfig line would only fail at boot
+	sed "s|^/usr/sbin/ifconfig en0 |#&|; s|^/usr/sbin/ifconfig nu0 |#&|" /etc/inet/rc.inet > /etc/sp1/rc.inet.new
+	cmp -s /etc/sp1/rc.inet.new /etc/inet/rc.inet || cp /etc/sp1/rc.inet.new /etc/inet/rc.inet
 elif [ $net != static ]; then
 	prepare $net
 	ifn=`ifname $net`
 	dev=`echo $ifn | sed 's/0$//'`
 	sed "s|^\([ 	]*\)cenet ip /dev/[a-z]* [a-z]* 0|\1cenet ip /dev/$dev $dev 0|" /etc/inet/strcf.net > /etc/sp1/strcf.new
 	cmp -s /etc/sp1/strcf.new /etc/strcf || cp /etc/sp1/strcf.new /etc/strcf
-	sed "s|ifconfig en0 |ifconfig $ifn |; s|ifconfig nu0 |ifconfig $ifn |" /etc/inet/rc.inet > /etc/sp1/rc.inet.new
+	sed "s|^#\(/usr/sbin/ifconfig en0 \)|\1|; s|^#\(/usr/sbin/ifconfig nu0 \)|\1|; s|ifconfig en0 |ifconfig $ifn |; s|ifconfig nu0 |ifconfig $ifn |" /etc/inet/rc.inet > /etc/sp1/rc.inet.new
 	cmp -s /etc/sp1/rc.inet.new /etc/inet/rc.inet || cp /etc/sp1/rc.inet.new /etc/inet/rc.inet
 	echo /dev/$ifn > /etc/inet/dhcpc.dev
 fi

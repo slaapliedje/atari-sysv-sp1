@@ -126,10 +126,27 @@ upstream fixes can be taken over.
    registered major; `/dev/en0` or `/dev/nu0` opens load it; DHCP and
    `ufetch` through it. dp first: Hatari emulates the DaynaPORT, not the
    NetUSBee.
-3. **Detection by module.** `sp1hw` loads what is there (each module's
-   `_load` fails with ENXIO without its hardware); the EDT probes for
-   module drivers go; the image's kernel carries no sp1 drivers, so the
-   first boot needs no relink at all.
+3. **Detection by module.** DONE in Hatari 2026-11-10 (release build 31,
+   `~/dev/asv-release/probe/smokedlm.py std|atw|atw256` and the release
+   smokes). dp, nu and tlk are modules (`driver-*/mkmod.sh`, built by
+   `release/mkpayload.sh` against the stock kernel's exports), each
+   `_load` refusing with ENXIO when its card does not answer: dp's looks
+   for the "Dayna" target (`dpfind`), nu's sets the chip going (`nu_linit`)
+   and refuses when it found none, tlk's reads the ATW800/2's CPLD
+   version register (0xFEFFFAD8, A16), the address the loader's
+   EDTP.tlk probed. The release image has no EDTP.dp/nu/tlk and no
+   DP/NU/TLK rows; stage 1 installs the loader with `DLM_NOBUILD=1` and
+   the next boot's relink (`/stand/system` newer than the kernel) links
+   it in. `sp1hw` counts a card when its module loads (`modadmin -Q`
+   or `-l`), so a TT without one says "no network card" and comments
+   out the card's `ifconfig` line. Results: the first boot never
+   relinks (the kernel's `sum` is the built one with the ATW800/2 and
+   256 MB too, the case that looped), first login in Hatari 132 s
+   instead of 322 s with the ATW800/2 and 187 s instead of 458 s with
+   256 MB as well; tlk unloads and loads again; dp is held (EBUSY) by IP.
+   Cost: the module kernel is 126 KB bigger than build 30's (DLM 164 KB,
+   112 KB of it the symbol table, against the drivers that moved out):
+   item 5's trimmed table would win most of it back.
 4. **The rest.** ub, tlk, snd, midi, amx as modules; then STREAMS
    modules, exec formats and filesystems (the `__amix_*` renaming) if
    wanted. Release image built this way; the real TT test.

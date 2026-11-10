@@ -42,12 +42,16 @@ network is then the Pi's; NE4.img and the .ini files are not used.
 
 First boot
 ----------
-The boot takes about seven minutes.  The kernel on the image was built
-for a TT with the DaynaPORT and the NetUSBee; when the loader finds a
-different set of devices the boot rebuilds the kernel first, which adds
-a few minutes and prints "/stand/unix is being created".  Log in as
-root at the console; root has no password - set one with `passwd` and
-add users with `useradd`.
+The first boot is like any other: the kernel on the image fits every
+TT, so it is not rebuilt for your hardware.  The drivers for the cards
+- the DaynaPORT (dp), the NetUSBee's Ethernet (nu) and the ATW800/2's
+transputer links (tlk) - are loadable modules in /etc/conf/mod.d, and
+each loads only when its card answers; `/sbin/modadmin -s` lists what
+is loaded.  (A Riebl Ethernet card uses the stock driver, which is
+linked in: on a TT with one, the second boot rebuilds the kernel once,
+which adds a few minutes and prints "/stand/unix is being created".)
+Log in as root at the console; root has no password - set one with
+`passwd` and add users with `useradd`.
 
 What the boot finds out (/etc/init.d/sp1hw, every boot, one line on
 the console and the details in /etc/sp1):
@@ -153,9 +157,9 @@ login shells; Manx finds it without that too.
 
 NetUSBee
 --------
-Ethernet: the driver is in the kernel as nu0; `sh
-/usr/local/lib/netusbee/nuup.sh ADDRESS NETMASK` brings it up by hand
-(or `dhcpc -n /dev/nu0` to ask DHCP).  USB: the stack starts on the
+Ethernet: nu0, the nu module, loaded by the first open of /dev/nu0
+when the card answers; `sh /usr/local/lib/netusbee/nuup.sh ADDRESS
+NETMASK` brings it up by hand (or `dhcpc -n /dev/nu0` to ask DHCP).  USB: the stack starts on the
 card at boot (/etc/default/ub; `ubtool start lightning` moves it to a
 Lightning VME); `ubtool devs` lists what it found, `ubtool hid` the
 keyboard and mouse.  Without a card the USB driver stays idle and takes
