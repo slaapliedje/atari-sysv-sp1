@@ -1375,3 +1375,59 @@ nustart()
 	en_if.if_stats.ifs_next = ifstats;
 	ifstats = &en_if.if_stats;
 }
+
+#ifdef NU_MODULE
+/*
+ * nu as a loadable module (sp1 dlm/): a STREAMS driver on external major
+ * 45, registered at boot with `modadmin -r sdev nu 45`; the first open of
+ * /dev/nu0 (the clone device, minor 45) loads it.  Unlike the static
+ * driver's open, the load fails (ENXIO) when no NetUSBee answers on the
+ * cartridge port, so whether one is there is whether the module loads.
+ * Built by driver-nu/mkmod.sh; the static driver is the same file without
+ * NU_MODULE.
+ */
+#include <sys/conf.h>
+#include "sys/moddefs.h"
+
+static int nu_load(), nu_unload();
+
+struct mod_drv_data nu_drvdata[] = {
+	{ { 0 }, 0, 0,
+	  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, nudriverinfo, 0, 0, &nuinfo, &nudevflag },
+	  45, 1 }
+};
+
+MOD_DRV_WRAPPER(nu, nu_load, nu_unload, 0, "NetUSBee Ethernet (nu)");
+
+static int
+nu_load()
+{
+	nu_padinit();
+	nu_linit();
+	if (nu_up == 0)
+		return ENXIO;
+	nustart();
+	return 0;
+}
+
+static int
+nu_unload()
+{
+	struct ifstats **pp;
+	int m, s;
+
+	for (m = 0; m < NU_NMINOR; m++)
+		if (en_min[m].min_rdq != (queue_t *)0)
+			return EBUSY;
+	s = splstr();
+	nu_up = 0;			/* nu_tick stops re-arming */
+	untimeout(nu_tid);
+	for (pp = &ifstats; *pp != (struct ifstats *)0; pp = &(*pp)->ifs_next)
+		if (*pp == &en_if.if_stats) {
+			*pp = en_if.if_stats.ifs_next;
+			break;
+		}
+	splx(s);
+	return 0;
+}
+#endif	/* NU_MODULE */

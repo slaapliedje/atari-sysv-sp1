@@ -485,3 +485,51 @@ tlkioctl(dev, cmd, arg, mode, crp, rvalp)
 	}
 	return EINVAL;
 }
+
+#ifdef TLK_MODULE
+/*
+ * tlk as a loadable module (sp1 dlm/): a character driver on external
+ * major 42, registered at boot with `modadmin -r cdev tlk 42`; sp1hw loads
+ * it, and the first open of /dev/link0 or /dev/link1 would too.  It loads
+ * only where the ATW800/2's CPLD version register answers (0xFEFFFAD8, a
+ * 16-bit read in A16 space, whatever the card's jumpers): the probe the
+ * loader's EDTP.tlk makes for the static driver.  Built by
+ * driver-tlk/mkmod.sh; the static driver is the same file without
+ * TLK_MODULE.
+ */
+#include <sys/conf.h>
+#include "sys/moddefs.h"
+
+static int tlk_load(), tlk_unload();
+
+struct mod_drv_data tlk_drvdata[] = {
+	{ { 0 }, 0, 0,
+	  { tlkopen, tlkclose, tlkread, tlkwrite, tlkioctl, 0, 0, 0, 0, 0,
+	    tlkdriverinfo, 0, 0, 0, &tlkdevflag },
+	  42, 1 }
+};
+
+MOD_DRV_WRAPPER(tlk, tlk_load, tlk_unload, 0, "ATW800/2 transputer links (tlk)");
+
+static int
+tlk_load()
+{
+	int v;
+
+	if (ioprobe(IOP_READ | IOP_SHORT, (caddr_t)0xFEFFFAD8, &v))
+		return ENXIO;
+	(void) tlkinit();
+	return 0;
+}
+
+static int
+tlk_unload()
+{
+	int i;
+
+	for (i = 0; i < NLINK; i++)
+		if (tlk[i].open)
+			return EBUSY;
+	return 0;
+}
+#endif	/* TLK_MODULE */

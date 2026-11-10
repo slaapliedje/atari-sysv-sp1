@@ -7,18 +7,25 @@
 #
 #   memory    prtconf's total; the kernel takes all the TT-RAM there is
 #             (up to 256 MB); /etc/init.d/swapfile sizes the swap to it
-#   network   the card that reaches a network: of the cards the loader
-#             found - NetUSBee (nu, /dev/nu0), DaynaPORT (dp, /dev/en0
-#             c 63 41), Riebl/Lance (the stock la driver, /dev/en0
-#             c 63 5) - each is asked for a DHCP lease in that order,
+#   network   the card that reaches a network: of the cards there -
+#             NetUSBee (nu, /dev/nu0), DaynaPORT (dp, /dev/en0 c 63 41),
+#             Riebl/Lance (the stock la driver, /dev/en0 c 63 5, when the
+#             loader found it) - each is asked for a DHCP lease in that order,
 #             wired first, and the first that gets one is used; a card
 #             with no cable or no WiFi is passed over, and the last card
 #             left is used without asking.  /etc/strcf and
 #             /etc/inet/rc.inet are pointed at it and dhcpc's boot run
-#             uses it.  /etc/inet/sp1net: "auto" (the default), "static"
-#             to keep your hand-made files, or nu, dp or la for that card.
-#   ATW800/2  the loader's EDTP.tlk probe found the card's CPLD register
-#             (a TLK row): then /etc/sp1/atw800 says yes, which makes the xd
+#             uses it.  dp and nu are loadable modules (/etc/conf/mod.d):
+#             the first open of the card's device loads its module, and
+#             the load fails when the card does not answer.  (A system
+#             with them linked into the kernel, as the drivers' own
+#             install.sh does it, works the same.)  /etc/inet/sp1net:
+#             "auto" (the default), "static" to keep your hand-made files,
+#             or nu, dp or la for that card.
+#   ATW800/2  the tlk module loads (it does only where the card's CPLD
+#             register answers), or with tlk linked in, the loader's
+#             EDTP.tlk probe found that register (a TLK row): then
+#             /etc/sp1/atw800 says yes, which makes the xd
 #             line's /usr/local/lib/sp1/xdm start X11R6.3's xdm on the
 #             card's Xatw server, the T425 is wiped at boot (S04t425wipe)
 #             and tprobe's census of the transputers goes to
@@ -53,15 +60,24 @@ en0node() {
 }
 ifname() { case $1 in nu) echo nu0;; *) echo en0;; esac; }
 prepare() { case $1 in dp) en0node 41;; la) en0node 5;; esac; }
-# the loader's NU row is there on every TT (the cartridge port never
-# bus-errors; the nu driver looks for the chip itself), so whether a
-# NetUSBee is there is what dhcpc finds behind /dev/nu0
-cands=nu
-have DP && cands="$cands dp"
+# a card's driver is there: linked in (the loader's row: NU's is there
+# on every TT, since the cartridge port never bus-errors, and nu looks for
+# the chip at the first open), or its module loads (it does only where the
+# card answers; it may be in already)
+present() {
+	have `echo $1 | tr '[a-z]' '[A-Z]'` && return 0
+	[ -f /etc/conf/mod.d/$1 -a -x /sbin/modadmin ] || return 1
+	{ /sbin/modadmin -Q $1 || /sbin/modadmin -l $1; } > /dev/null 2>&1
+}
+: > /etc/sp1/netprobe
+cands=""
+for c in nu dp; do
+	if present $c; then cands="$cands $c"
+	else echo "$c: not there" >> /etc/sp1/netprobe; fi
+done
 have LA && cands="$cands la"
 mode=`cat /etc/inet/sp1net 2>/dev/null`
 net=none; firstseen=""
-: > /etc/sp1/netprobe
 case "$mode" in
 nu|dp|la)
 	net=$mode
@@ -120,12 +136,13 @@ static) netname="network as set up by hand";; *) netname="no network card";;
 esac
 
 # ---- the ATW800/2 ----
-# the loader's probe (EDTP.tlk) found the card's CPLD register: the
-# table has a TLK row and the kernel the tlk driver.  /etc/sp1/atw800 is read by
-# the xd line's /usr/local/lib/sp1/xdm when init starts the display
-# manager (after rc2)
+# the tlk module loads only where the card's CPLD register answers (it
+# may be in already: S04t425wipe's open of /dev/link1 loads it); with tlk
+# linked in, the loader's EDTP.tlk probe put a TLK row in the table.
+# /etc/sp1/atw800 is read by the xd line's /usr/local/lib/sp1/xdm when
+# init starts the display manager (after rc2)
 atw=no
-have TLK && atw=yes
+present tlk && atw=yes
 echo $atw > /etc/sp1/atw800
 if [ $atw = yes ]; then
 	if [ -f /stand/edt_data.atw ]; then

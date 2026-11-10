@@ -24,17 +24,18 @@ need "$sp1/driver-ub/ubtool"; cp "$sp1/driver-ub/ubtool" "$p/sp1/driver-ub/ubtoo
 need "$sp1/dhcpc/dhcpc"; cp "$sp1/dhcpc/dhcpc" "$p/sp1/dhcpc/dhcpc"
 # apkg's client side
 mkdir -p "$p/sp1/amix"; cp "$sp1/amix/apkg-setup.sh" "$sp1/amix/amixify.c" "$sp1/amix/apkg-pkgadd" "$sp1/amix/apkg-pkgrm" "$p/sp1/amix/"
-# the loader probes and the stage scripts.  Two device tables: .atw has the
-# Riebl/Lance probe moved off the ATW800/2's video memory (the image's
-# default, safe everywhere), .la the stock probe address (sp1hw installs
-# it on a TT without the card, so a Riebl card is found)
-cp "$REL/edt/EDTP.dp" "$REL/edt/EDTP.nu" "$REL/edt/EDTP.tlk" "$p/edt/"
-sed 's/0xfec0fff0/0x0080fff0/; s/0xfec10000/0x00810000/' "$REL/edt/edt_data.new" > "$p/edt/edt_data.atw"
-sed 's/0x0080fff0/0xfec0fff0/; s/0x00810000/0xfec10000/' "$REL/edt/edt_data.new" > "$p/edt/edt_data.la"
+# the device tables and the stage scripts.  dp, nu and tlk are loadable
+# modules (below), so the loader probes for none of them: no EDTP files,
+# no rows, and the first boot never relinks the kernel for a card.  Two
+# tables of the stock rows: .atw has the Riebl/Lance probe moved off the
+# ATW800/2's video memory (the image's default, safe everywhere), .la the
+# stock probe address (sp1hw installs it on a TT without the card, so a
+# Riebl card is found)
+egrep -v '^(DP|NU|TLK)[ 	]' "$REL/edt/edt_data.new" | sed 's/0xfec0fff0/0x0080fff0/; s/0xfec10000/0x00810000/' > "$p/edt/edt_data.atw"
+egrep -v '^(DP|NU|TLK)[ 	]' "$REL/edt/edt_data.new" | sed 's/0x0080fff0/0xfec0fff0/; s/0x00810000/0xfec10000/' > "$p/edt/edt_data.la"
 grep -q 0xfec0fff0 "$p/edt/edt_data.la" || { echo "edt_data.la: no LA row" >&2; exit 1; }
 grep -q 0x0080fff0 "$p/edt/edt_data.atw" || { echo "edt_data.atw: LA row not moved" >&2; exit 1; }
-grep -q '^TLK' "$p/edt/edt_data.atw" || { echo "edt_data: no TLK row" >&2; exit 1; }
-grep -q '^TLK .*0xfefffad8' "$p/edt/edt_data.atw" || { echo "edt_data: TLK row not at the CPLD register" >&2; exit 1; }
+! egrep -q '^(DP|NU|TLK)[ 	]' "$p/edt/edt_data.atw" "$p/edt/edt_data.la" || { echo "edt_data: a module driver's row" >&2; exit 1; }
 cp "$here/stage1.sh" "$here/stage2.sh" "$here/cleanup.sh" "$here/vtoc-2g.dat" "$here/manx-profile" "$p/"
 # what the stock image had, to put back
 python3 -I "$sp1/tools/ufs.py" "$STOCK" 102400 get /etc/rc2.d/S75rpc "$p/S75rpc.stock"
@@ -65,6 +66,17 @@ python3 -I "$sp1/kernel/patch-ttram.py" "$p/stock/KERNEL" "$p/edt/KERNEL.256" "$
 # the stock kernel itself, for the new disk's /stand (the stock image's
 # /stand has no room for a second kernel)
 python3 -I "$here/bfs.py" "$STOCK" 122880000 get unix "$p/edt/unix.stock" >/dev/null
+# the module loader (dlm/: Ash Nazag's DLM) and the drivers that load as
+# modules when their card answers: dp (DaynaPORT), nu (NetUSBee
+# Ethernet), tlk (the ATW800/2's transputer links).  The modules are
+# checked against the stock kernel's symbols: they may use nothing else.
+ASV_KERNEL="$p/edt/unix.stock" sh "$sp1/dlm/asv/build.sh" >/dev/null
+b=$sp1/dlm/asv/build
+mkdir -p "$p/sp1/dlm/master.d" "$p/sp1/mod.d"
+cp "$b/DLM.o" "$b/spare.o" "$b/mkksym" "$b/modadmin" "$b/install.sh" "$sp1/dlm/asv/dlm.init" "$p/sp1/dlm/"
+cp "$b/master.d/"* "$p/sp1/dlm/master.d/"
+for d in dp nu tlk; do sh "$sp1/driver-$d/mkmod.sh" "$b/exports" "$p/sp1/mod.d" >/dev/null 2>&1 || { echo "module $d" >&2; exit 1; }; done
+printf 'sdev dp 41\nsdev nu 45\ncdev tlk 42\n' > "$p/sp1/mod.d/mod_register"
 # what the first boot finds out, and the pieces it switches on
 cp "$here/sp1hw" "$here/swapfile.init" "$here/xdm.sh" "$p/files/"
 cp "$sp1/xserver-r6/xdm/Xstartup" "$p/files/Xstartup"

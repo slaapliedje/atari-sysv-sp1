@@ -9,12 +9,16 @@
 # (ckmunix) runs buildsys as soon as the loader finds a device the
 # kernel was not built for - and fails, into a shell, when /boot has no
 # driver for it.  So:
-#   phase 1 (the stock boot, no new probes yet): every driver's objects
-#           into /boot and its INCLUDE line, the device nodes, dhcpc,
-#           then the loader probes into /stand, and a reboot;
-#   phase 2 (the next boot: the loader finds DP and NU, ckmunix's
-#           buildsys links the drivers in): the new disk, and the system
-#           copied onto it.
+#   phase 1 (the stock boot): every driver's objects into /boot and its
+#           INCLUDE line, the module loader and the modules, the device
+#           nodes, dhcpc, the device tables into /stand, and a reboot;
+#   phase 2 (the next boot: ckmunix's buildsys links the drivers and
+#           the module loader in): the new disk, and the system copied
+#           onto it.
+# The cards' drivers - dp (DaynaPORT), nu (NetUSBee Ethernet), tlk (the
+# ATW800/2's links) - are loadable modules, not in the kernel and not in
+# the loader's device table: they load when their card answers, so the
+# image's first boot on a TT never relinks the kernel for a card.
 PATH=/sbin:/usr/sbin:/usr/bin:/usr/ccs/bin:/etc; export PATH
 # init starts the rc scripts with umask 0: without this every file made
 # here (the driver objects in /boot among them) would be writable by any user
@@ -41,31 +45,41 @@ if [ ! -f /rel/phase1.done ]; then
 	echo "== driver objects into /boot (buildsys itself waits for the probes)"
 	mv /sbin/buildsys /sbin/buildsys.real || die "buildsys aside"
 	echo "exit 0" > /sbin/buildsys; chmod 755 /sbin/buildsys
-	for d in driver-dp driver-amix driver-snd driver-midi driver-nu driver-ub driver-tlk; do
+	for d in driver-amix driver-snd driver-midi driver-ub; do
 		echo "-- $d"; flush
 		sh /rel/sp1/$d/install.sh || { mv /sbin/buildsys.real /sbin/buildsys; die "$d install"; }
 	done
 	mv /sbin/buildsys.real /sbin/buildsys || die "buildsys back"
-	# DP and NU are hardware drivers: cunix takes them from the loader's
-	# device table (the EDT) when the probes find the cards, and an
-	# INCLUDE line for a card that is not there stops the boot's
-	# auto-configure ("INCLUDE of hardware driver not in the EDT").
-	# The installers write the line for a machine that has the card;
-	# this image must boot on any TT.
-	grep -v "^INCLUDE:DP\$" /stand/system | grep -v "^INCLUDE:NU\$" | grep -v "^INCLUDE:TLK\$" > /tmp/system && cp /tmp/system /stand/system || die "system file"
-	rm -f /dev/en0
-	mknod /dev/en0 c 63 41 || die "mknod en0"
-	chmod 644 /dev/en0
-	ls -l /boot/DP /boot/NU /boot/UB /boot/AMX /boot/SND /boot/MIDI /boot/TLK
+	echo "-- the module loader (/boot/DLM, the spare rows DLMA..DLMH, mkksym in buildsys)"; flush
+	DLM_NOBUILD=1 sh /rel/sp1/dlm/install.sh || die "dlm install"
+	echo "-- the modules: dp, nu, tlk"
+	cp /rel/sp1/mod.d/dp /rel/sp1/mod.d/nu /rel/sp1/mod.d/tlk /etc/conf/mod.d/ || die "modules"
+	chmod 644 /etc/conf/mod.d/dp /etc/conf/mod.d/nu /etc/conf/mod.d/tlk
+	cp /rel/sp1/mod.d/mod_register /etc/conf/mod_register && chmod 644 /etc/conf/mod_register || die "mod_register"
+	cp /rel/sp1/dlm/dlm.init /etc/init.d/dlm && chmod 744 /etc/init.d/dlm || die "dlm.init"
+	rm -f /etc/rc2.d/S02dlm; ln /etc/init.d/dlm /etc/rc2.d/S02dlm || die "S02dlm"
+	ls -l /etc/conf/mod.d; cat /etc/conf/mod_register
+	echo "-- the cards' device nodes"
+	# /dev/en0 and /dev/nu0: the clone device (63) for dp's 41 and nu's 45
+	rm -f /dev/en0 /dev/nu0
+	mknod /dev/en0 c 63 41 && chmod 644 /dev/en0 || die "mknod en0"
+	mknod /dev/nu0 c 63 45 && chmod 600 /dev/nu0 || die "mknod nu0"
+	# the links: root and group tlk only (after a reset a transputer
+	# answers peeks with no program running: whoever opens its link reads
+	# what was left in its memory)
+	grep '^tlk:' /etc/group > /dev/null || /usr/sbin/groupadd -g 110 tlk || die "group tlk"
+	rm -f /dev/link0 /dev/link1
+	mknod /dev/link0 c 42 0 && mknod /dev/link1 c 42 1 || die "mknod links"
+	chgrp tlk /dev/link0 /dev/link1 && chmod 660 /dev/link0 /dev/link1 || die "link modes"
+	ls -l /dev/en0 /dev/nu0 /dev/link0 /dev/link1
+	ls -l /boot/DLM /boot/DLMA /boot/UB /boot/AMX /boot/SND /boot/MIDI
 	grep INCLUDE /stand/system
 	flush
 	echo "== dhcpc (the DaynaPORT, /dev/en0)"
 	sh /rel/sp1/dhcpc/install.sh /dev/en0 || die "dhcpc install"
 	# the build's own address while dhcpc has not run (slirp's guest)
 	sed 's/^192.58.149.33/192.168.30.20/' /etc/inet/hosts.net > /tmp/hosts.net && cp /tmp/hosts.net /etc/inet/hosts.net
-	echo "== loader probes (EDT) into /stand"
-	cp /rel/edt/EDTP.dp /rel/edt/EDTP.nu /rel/edt/EDTP.tlk /stand/ || die "EDTP files"
-	chmod 555 /stand/EDTP.dp /stand/EDTP.nu /stand/EDTP.tlk
+	echo "== the device tables into /stand"
 	cp /rel/edt/edt_data.atw /rel/edt/edt_data.la /stand/ || die "edt_data variants"
 	cp /rel/edt/edt_data.atw /stand/edt_data || die edt_data
 	ls -l /stand
@@ -79,15 +93,18 @@ fi
 echo "== stage 1, phase 2 `date`"
 ls -l /stand/unix /stand/mUNIX
 flush
-# the kernel ckmunix just built must carry the drivers: their names are
-# in its symbol table
-for n in dpstart amxinit nustart ubinit sndinit midiinit; do
+# the kernel ckmunix just built (/stand/system is newer than it) must
+# carry the loader and the drivers, and none of the modules' drivers;
+# buildsys by hand if the boot did not relink
+nm /stand/unix | grep dlminit > /dev/null || { echo "-- buildsys (the boot did not relink)"; /sbin/buildsys || die buildsys; }
+for n in dlminit amxinit ubinit sndinit midiinit; do
 	nm /stand/unix | grep "$n" > /dev/null || die "the kernel has no $n"
 done
-echo "kernel carries dp nu ub amx snd midi"
-# tlk is a hardware driver too: in the kernel only where the loader's
-# probe finds the ATW800/2's link (not in this emulator)
-nm /stand/unix | grep tlkinit > /dev/null && echo "and tlk" || echo "(no tlk: no ATW800/2 here, as expected)"
+for n in dpstart nustart tlkinit; do
+	nm /stand/unix | grep "$n" > /dev/null && die "the kernel carries $n (a module's driver)"
+done
+/sbin/mkksym -c /stand/unix || die "the kernel's symbol table does not check"
+echo "kernel carries dlm ub amx snd midi; dp nu tlk are modules"
 echo "== the new disk"; flush
 partinit -I -i -b -Z -P 0:1:FILL:UNX:UNIXBOOT -o /dev/rdsk/c1d0sf || die partinit
 format -w /dev/rdsk/c1d0sf || die format

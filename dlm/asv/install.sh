@@ -1,7 +1,9 @@
 #!/sbin/sh
 # install.sh - the module loader into this system's kernel (sp1 dlm/asv).
 # Run as root from this directory (the files build.sh made, as the
-# payload carries them); then reboot.
+# payload carries them); then reboot.  DLM_NOBUILD=1 leaves the relink
+# to the next boot's auto-configure (the release build: /stand/system is
+# newer than the kernel then).
 #
 #   /boot/DLM          the loader: dlminit() starts it from io_init
 #   /boot/DLMA..DLMH   empty character drivers, externals 110-117: the
@@ -36,6 +38,7 @@ for b in /sbin/buildsys /etc/buildsys; do
 done
 [ -d /etc/conf/mod.d ] || mkdir -p /etc/conf/mod.d
 [ -d mod.d ] && cp mod.d/* /etc/conf/mod.d/
+[ -n "$DLM_NOBUILD" ] && { echo "== the loader goes in at the next relink"; exit 0; }
 echo "== buildsys"
 /sbin/buildsys || die "buildsys"
 /sbin/mkksym -c /stand/unix || die "the symbol table does not check"

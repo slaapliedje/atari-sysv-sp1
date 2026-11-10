@@ -1098,9 +1098,10 @@ dpstart()
 /*
  * dp as a loadable module (sp1 dlm/): a STREAMS driver on external major
  * 41, registered at boot with `modadmin -r sdev dp 41`; the first open of
- * /dev/en0 (the clone device, minor 41) loads it.  Built by
- * driver-dp/mkmod.sh; the static driver (master.d-dp, install.sh) is the
- * same file without DP_MODULE.
+ * /dev/en0 (the clone device, minor 41) loads it.  The load fails (ENXIO)
+ * when no DaynaPORT answers on the SCSI bus, so whether one is there is
+ * whether the module loads.  Built by driver-dp/mkmod.sh; the static
+ * driver (master.d-dp, install.sh) is the same file without DP_MODULE.
  */
 #include <sys/conf.h>
 #include <sys/kmem.h>
@@ -1123,9 +1124,14 @@ dp_load()
 {
 	unsigned long a;
 
+	if (dpjob == (struct scsijoblock *)0 && dpfind() < 0)
+		return ENXIO;
 	dp_pages = kmem_zalloc(DP_PAGES, KM_SLEEP);
-	if (dp_pages == (caddr_t)0)
+	if (dp_pages == (caddr_t)0) {
+		dpjob->sj_startf = sj_badstart;		/* the target is free again */
+		dpjob = (struct scsijoblock *)0;
 		return ENOMEM;
+	}
 	a = ((unsigned long)dp_pages + PAGEOFFSET) & ~(unsigned long)PAGEOFFSET;
 	dprx = (unsigned char *)a;			/* 3100 bytes */
 	dpdata = (unsigned char *)a + 3200;		/* 64 */
