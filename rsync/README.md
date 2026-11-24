@@ -67,13 +67,17 @@ after that only changed files move, and `/etc` alone checks in about 6 s.
   - `gethostname`, `getdomainname`, `inet_ntoa` and `strtoll`.
 
   Name lookups aren't available to static programs, so the daemon uses
-  numeric addresses and `reverse lookup = no`.
+  numeric addresses and `reverse lookup = no`. (Their `gethostbyname`
+  reads only `/etc/hosts`.)
 - **`include/stdint.h`.** ASV predates C99.
 - **`rsync-3.4.1-asv.patch`.** gcc 2.7.2 is a C89 compiler, so five
   declarations after statements are hoisted. popt had its `FORMAT`
   attribute before a declaration, and needed `snprintf` mapped to rsync's
   own and `ENOTSUP`. `lib/getaddrinfo.c` (only built on old systems) now
-  uses libc's `strdup`.
+  uses libc's `strdup`, and takes a dotted address as it is: it used to
+  hand every host to `gethostbyname`, so `rsync rsync://192.168.3.10/...`
+  failed with "getaddrinfo: ... Unknown host" unless the address was in
+  `/etc/hosts`.
 - **`-O0`.** gcc 2.7.2's optimiser miscompiles `long long` comparisons
   joined by `&&`/`||`: both halves test false, and the combination is false
   too. Built with `-O`, popt rejected every numeric option as "number too

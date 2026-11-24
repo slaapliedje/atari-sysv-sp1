@@ -163,3 +163,19 @@
  #ifndef SMB_MALLOC
  #define SMB_MALLOC(s) malloc(s)
  #endif
+@@ -302,6 +306,15 @@
+ 					&hints,
+ 					res);
+ 		} else {
++			/* a dotted address needs no lookup: a static program
++			 * (sp1's ASV build) has no resolver, and its
++			 * gethostbyname() knows only /etc/hosts */
++			struct in_addr ip;
++			if (inet_pton(AF_INET, node, &ip) > 0)
++				return getaddr_info_single_addr(service,
++						ntohl(ip.s_addr),
++						&hints,
++						res);
+ 			return getaddr_info_name(node,
+ 						service,
+ 						&hints,
