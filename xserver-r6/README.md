@@ -69,7 +69,7 @@ The session (`xdm/Xsession`) opens an xterm and `ttpanel`, a front panel
 along the bottom of the screen in the manner of CDE's and IRIX's: a button
 per program (terminal, the file manager - Atari's `wish`, not Tcl's - an
 editor, a calculator, the
-manuals, a load meter and the screen mode - `atwconf`) and a
+manuals, a load meter, the screen mode - `atwconf` - and NetHack) and a
 clock. A tab at its left end moves it: drag the grip to put the panel
 anywhere (it snaps to the screen's edges), click the grip to fold the
 panel down to the tab and back, and click the padlock above the grip to

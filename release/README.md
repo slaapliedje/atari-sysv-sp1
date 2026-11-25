@@ -28,6 +28,7 @@ python3 release/build.py --only pack
 | X session | the window manager chooser on the login screen (`$REL/wmchooser`, `/etc/X11/wms`), sp1's `Xsession` and `Xstartup`, `/etc/X11/wm` (OpenLook), `setwm`, twm's `system.twmrc`, JWM (`$REL/jwm`, built by `xserver-r6/jwm/build.sh`, and its `system.jwmrc`); init's `cx` line (`release/console.sh`): a console login on the TT's own screen in run level 4 when X is on the card |
 | time | the US zones recompiled with today's daylight-time dates (`tools/ttntp/usa.zic`; the 1991 files have the 1987 ones) and `/etc/TIMEZONE` naming the stock zone so libc reads its file (`TZ=:US/Eastern`) |
 | tools | the `rsync` and `ttntp` programs (no daemon, no clock configuration), `setboot` (the NVRAM boot preference) and `xatwrun` (a program on a second Xatw) in `/usr/local/bin`; `nuup.sh` and `strcf.nu` in `/usr/local/lib/netusbee` |
+| games | NetHack 5.0, terminal and X11 with tiles (`nethack`, `nethack -x`; the panel's NetHack button), installed by `pkgadd` from `$GAMES/dist/nethack-*.pkg` ([asv-games](https://github.com/slaapliedje/asv-games)): `/opt/nethack`, the link `/usr/bin/nethack`, scores and saves in `/var/opt/nethack` (`pkgrm NETHACK` keeps them) |
 | tests | the diagnostics of `tools/snd`, `tools/atw`, `tools/tram`, `atw800`, `driver-midi`, built static by `mktests.sh`, in `/usr/local/lib/sp1/tests` with `tests.README` |
 
 Left out on purpose: the INMOS toolset and iserver (not ours to ship),

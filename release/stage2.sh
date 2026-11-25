@@ -57,6 +57,11 @@ cp /rel/files/S99ttntp /etc/rc2.d/S99ttntp && chmod 744 /etc/rc2.d/S99ttntp || d
 sed 's/^TZ=EST5EDT$/TZ=:US\/Eastern/' /etc/TIMEZONE > /tmp/TIMEZONE.new
 grep '^TZ=:US/Eastern$' /tmp/TIMEZONE.new > /dev/null && cp /tmp/TIMEZONE.new /etc/TIMEZONE || die TIMEZONE
 rm -f /tmp/TIMEZONE.new
+echo "== NetHack (pkgadd: /opt/nethack, /usr/bin/nethack, /var/opt/nethack)"
+printf 'mail=\ninstance=overwrite\npartial=nocheck\nrunlevel=nocheck\nidepend=nocheck\nrdepend=nocheck\nspace=nocheck\nsetuid=nocheck\nconflict=nocheck\naction=nocheck\nbasedir=default\n' > /tmp/admin.nh
+pkgadd -n -a /tmp/admin.nh -d /rel/files/nethack.pkg NETHACK || die "pkgadd NETHACK"
+rm -f /tmp/admin.nh
+pkgchk NETHACK || die "pkgchk NETHACK"
 echo "== X11R6.3 and XView for the ATW800/2 (used when the card is there)"
 (cd /usr && cpio -icdum < /rel/files/xtrees.cpio) || die "X trees"
 ls /usr/x11r6/bin/Xatw /usr/x11r6/bin/xdm /usr/openwin/bin/olwm || die "X trees incomplete"
@@ -157,6 +162,7 @@ echo "== a first look"
 /usr/local/bin/vim --version 2>&1 | head -1
 /usr/local/bin/nano --version 2>&1 | head -1
 /usr/local/bin/bash -c 'echo bash $BASH_VERSION'
+pkginfo NETHACK
 echo "STAGE2 DONE"
 sync; sync
 exit 0

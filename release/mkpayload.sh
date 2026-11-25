@@ -11,6 +11,7 @@ out=${1:?usage: mkpayload.sh OUTDIR}; mkdir -p "$out"
 : "${MANX:=$HOME/dev/unix-browser}"
 : "${REL:=$HOME/dev/asv-release}"            # amix/amx.tar, edt/, dl/
 : "${STOCK:=$HOME/dev/OpenUA/data/work/asv/asv-richard/asv_boot.img}"
+: "${GAMES:=$HOME/dev/asv-games}"            # dist/nethack-*.pkg (github.com/slaapliedje/asv-games)
 p=$out/rel; rm -rf "$p"; mkdir -p "$p/sp1" "$p/files" "$p/edt" "$p/manx" "$p/stock"
 need() { [ -e "$1" ] || { echo "missing: $1" >&2; exit 1; }; }
 # the kernel drivers and dhcpc, sources + PC-built objects, without the
@@ -108,6 +109,10 @@ need "$sp1/amix/vim/work/vim-9.2.1189-amix.tar.gz"; cp "$sp1/amix/vim/work/vim-9
 need "$sp1/amix/nano/work/nano-9.2-amix.tar"; cp "$sp1/amix/nano/work/nano-9.2-amix.tar" "$f/nano.tar"
 need "$sp1/amix/mtools/work/mtools-4.0.49-asv.tar"; cp "$sp1/amix/mtools/work/mtools-4.0.49-asv.tar" "$f/mtools.tar"
 need "$sp1/rsync/work/rsync"; cp "$sp1/rsync/work/rsync" "$f/rsync"
+# NetHack, the one package of asv-games's dist/ the card installs
+nh=$(ls "$GAMES"/dist/nethack-*.pkg 2>/dev/null) || true
+[ "$(echo "$nh" | wc -w)" -eq 1 ] || { echo "want one nethack-*.pkg in $GAMES/dist, have: $nh" >&2; exit 1; }
+cp "$nh" "$f/nethack.pkg"
 need "$sp1/tools/ttntp/ttntp"; cp "$sp1/tools/ttntp/ttntp" "$f/ttntp"
 need "$REL/dl/cacert/cacert.pem"; cp "$REL/dl/cacert/cacert.pem" "$f/cacert.pem"
 for b in manx xmanx manxmail manxtrust ufetch t425wipe; do need "$MANX/build/sysv4/$b"; cp "$MANX/build/sysv4/$b" "$p/manx/"; done

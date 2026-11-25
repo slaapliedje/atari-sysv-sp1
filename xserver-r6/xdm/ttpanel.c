@@ -11,7 +11,8 @@
  * mail, paint, tool, and the command runs through /bin/sh. '#' starts a
  * comment. Without the file the panel offers a terminal, the file manager
  * (Atari's wish - not Tcl's: its desktop with wx2/wxd),
- * an editor, a calculator, the manuals, a load meter and the screen mode.
+ * an editor, a calculator, the manuals, a load meter, the screen mode and
+ * NetHack.
  *
  * A tab at the panel's left end moves it: drag its grip to put the panel
  * anywhere on the screen (it snaps to the edges), click the grip to fold
@@ -108,7 +109,8 @@ static const char *defaults =
 	"Calc     : calc  : xcalc\n"
 	"Manuals  : book  : xman\n"
 	"Load     : load  : xload\n"
-	"Screen   : screen : atwconf\n";
+	"Screen   : screen : atwconf\n"
+	"NetHack  : game  : nethack -x\n";
 
 static void trim(char *s)
 {
